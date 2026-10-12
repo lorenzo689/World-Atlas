@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://world-explorer.example/sitemap.xml
