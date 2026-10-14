@@ -3,7 +3,7 @@
 An interactive 3D atlas: a fullscreen Earth you can rotate and zoom, click any country for a quick card,
 and open detailed pages with population, economy and geography data from the World Bank.
 
-React 19 · TypeScript · Vite · Tailwind CSS v4 · shadcn/ui (Radix) · react-globe.gl / Three.js · Recharts · React Router
+React 19 · TypeScript · Vite · Tailwind CSS v4 · shadcn/ui (Radix) · Three.js (own globe scene) · Recharts · React Router
 
 ## Run it
 
@@ -38,9 +38,9 @@ Nothing is invented: missing values render as `—` or an explicit empty state, 
 - **Boundaries**: Natural Earth 1:50m via `world-atlas` (public domain).
 - **Flags**: `flag-icons` (MIT), copied to `public/flags`.
 - **Descriptions**: Wikipedia REST summary API (CC BY-SA), attributed on the page.
-- **Textures**: three-globe example imagery (NASA Blue Marble), copied to `public/textures`.
+- **Textures**: NASA Blue Marble (three-globe example imagery). Sources live in `scripts/source/textures`; `node scripts/optimize-textures.mjs` writes the WebP files in `public/textures`.
 
-`npm run data` rebuilds `public/data/{countries,boundaries}.json`, `public/flags`, `sitemap.xml` and `robots.txt`.
+`npm run data` rebuilds `public/data/{countries,boundaries}.json` (boundaries are a simplified TopoJSON topology), the pre-triangulated globe caps `public/data/geometry.{bin,json}`, `public/flags`, `sitemap.xml` and `robots.txt`. Serve `*.bin` with compression enabled.
 
 ## Structure
 
@@ -50,7 +50,8 @@ src/
               country/ (tabs, map, locator globe, flag)
               charts/ ui/ layout/
   hooks/      data loading (countries, boundaries, indicators), media queries, document meta
-  lib/        World Bank + Wikipedia clients, formatting, search, geo framing, colour scales
+  lib/        World Bank + Wikipedia clients, formatting, search, geo framing, colour scales,
+              globeScene (three.js scene, on-demand render loop, quality governor), globeLayers (merged map layers, picking), perf (?debug=1 probe)
   store/      zustand explorer state
   pages/      ExplorerPage, CountryPage
 ```

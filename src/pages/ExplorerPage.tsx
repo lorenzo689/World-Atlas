@@ -14,7 +14,10 @@ import { CountryPreview } from '@/components/globe/CountryPreview'
 import { BottomSheet, type SheetSnap } from '@/components/globe/BottomSheet'
 import { ErrorState } from '@/components/ui/feedback'
 
-const GlobeView = lazy(() => import('@/components/globe/GlobeView').then((m) => ({ default: m.GlobeView })))
+// Start fetching the (large) globe chunk immediately, in parallel with the country/boundary data,
+// instead of waiting until both have loaded and the lazy component first renders.
+const globeChunk = import('@/components/globe/GlobeView').then((m) => ({ default: m.GlobeView }))
+const GlobeView = lazy(() => globeChunk)
 
 const PANEL_WIDTH = 380
 

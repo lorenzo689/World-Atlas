@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import Globe, { type GlobeMethods } from 'react-globe.gl'
-import { MeshPhongMaterial, TextureLoader, Color, type PerspectiveCamera } from 'three'
 import type { Country, GlobeMode } from '@/types'
 import type { Boundaries, CountryFeature, Pose } from '@/lib/geo'
 import { poseForFeature, poseForPoint } from '@/lib/geo'
@@ -8,17 +6,22 @@ import { buildChoropleth, hash01, mix, NO_DATA_COLOR, REGION_COLORS } from '@/li
 import type { IndicatorMeta } from '@/lib/indicators'
 import type { LatestValue } from '@/lib/worldbank'
 import { usePrefersReducedMotion } from '@/hooks/useMisc'
-import { BaseLayers } from '@/lib/globeLayers'
+import { GlobeScene } from '@/lib/globeScene'
+import type { HighlightStyle } from '@/lib/globeLayers'
+import { PERF_DEBUG, startPerfProbe } from '@/lib/perf'
 
 const BASE = import.meta.env.BASE_URL
+// Phones and low-memory devices get the 2k colour map (a quarter of the GPU memory).
+const LOW_END =
+  typeof window !== 'undefined' &&
+  (window.matchMedia('(pointer: coarse)').matches ||
+    ((navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 8) <= 4)
 const TEX = {
-  day: `${BASE}textures/earth-blue-marble.jpg`,
-  bump: `${BASE}textures/earth-topology.png`,
-  water: `${BASE}textures/earth-water.png`,
-  sky: `${BASE}textures/night-sky.png`,
+  day: `${BASE}textures/earth-blue-marble${LOW_END ? '-2k' : ''}.webp`,
+  bump: `${BASE}textures/earth-topology.webp`,
+  water: `${BASE}textures/earth-water.webp`,
+  sky: `${BASE}textures/night-sky.webp`,
 }
-const OCEAN = '#0b1626'
-const SIDE_COLOR = 'rgba(111,168,255,0.28)'
 const DEFAULT_POSE: Pose = { lat: 22, lng: 12, altitude: 2.3 }
 
 export interface GlobeInsets {
@@ -58,29 +61,16 @@ export function GlobeView({
   insets,
   focusNonce = 0,
 }: GlobeViewProps) {
-  const globeRef = useRef<GlobeMethods | undefined>(undefined)
   const wrapRef = useRef<HTMLDivElement>(null)
-  const [size, setSize] = useState({ width: window.innerWidth, height: window.innerHeight })
-  const [hovered, setHovered] = useState<string | null>(null)
+  const tipRef = useRef<HTMLDivElement>(null)
+  const [scene, setScene] = useState<GlobeScene | null>(null)
   const [ready, setReady] = useState(false)
   const reduced = usePrefersReducedMotion()
 
   const features = boundaries.features as CountryFeature[]
   const featureByCode = useMemo(() => new Map(features.map((f) => [f.properties.code, f])), [features])
 
-  // ---- sizing ------------------------------------------------------------------------------
-  useEffect(() => {
-    const el = wrapRef.current
-    if (!el) return
-    const ro = new ResizeObserver(([entry]) => {
-      const { width, height } = entry.contentRect
-      if (width && height) setSize({ width, height })
-    })
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [])
-
-  // ---- choropleth --------------------------------------------------------------------------
+  // ---- choropleth + per-country base colour -------------------------------------------------
   const choropleth = useMemo(() => {
     if (!values) return null
     const nums: number[] = []
@@ -90,21 +80,6 @@ export function GlobeView({
     }
     return buildChoropleth(nums)
   }, [values, features])
-
-  // ---- base map: every country in two draw calls ---------------------------------------------
-  // react-globe.gl's polygons layer costs ~3 draw calls per polygon piece (1,600+ here), so it is
-  // only used for the highlighted countries; the rest is one merged mesh + one merged line set.
-  const base = useMemo(() => new BaseLayers(features), [features])
-  useEffect(() => {
-    const g = globeRef.current
-    if (!g || !ready) return
-    const scene = g.scene()
-    scene.add(base.group)
-    return () => {
-      scene.remove(base.group)
-    }
-  }, [base, ready])
-  useEffect(() => () => base.dispose(), [base])
 
   const baseColor = useCallback(
     (code: string) => {
@@ -120,89 +95,23 @@ export function GlobeView({
     [mode, countries, values, choropleth],
   )
 
-  useEffect(() => {
-    base.caps.visible = mode !== 'satellite'
-    if (mode !== 'satellite') base.setCapColors(baseColor)
-    if (mode === 'satellite') base.setBorder('#ffffff', 0.26)
-    else base.setBorder('#080d16', 0.75)
-  }, [base, mode, baseColor])
-
-  // Only the hovered / selected countries go through the (expensive) polygons layer.
-  const highlighted = useMemo(() => {
-    const out: CountryFeature[] = []
-    for (const code of [selected, hovered]) {
-      const f = code ? featureByCode.get(code) : undefined
-      if (f && !out.includes(f)) out.push(f)
-    }
-    return out
-  }, [selected, hovered, featureByCode])
-
-  const capColor = useCallback(
-    (d: object) => {
-      const code = (d as CountryFeature).properties.code
-      const isSel = code === selected
-      if (mode === 'satellite') return isSel ? 'rgba(111,168,255,0.36)' : 'rgba(111,168,255,0.26)'
-      return mix(baseColor(code), '#ffffff', isSel ? 0.38 : 0.22)
+  const highlightStyle = useCallback(
+    (code: string, isSelected: boolean): HighlightStyle => {
+      const base = {
+        lineColor: isSelected ? '#d6e8ff' : '#bed7ff',
+        lineOpacity: isSelected ? 0.95 : 0.85,
+        altitude: isSelected ? 0.022 : 0.014,
+      }
+      if (mode === 'satellite') {
+        return { ...base, capColor: '#6fa8ff', capOpacity: isSelected ? 0.36 : 0.26 }
+      }
+      return { ...base, capColor: mix(baseColor(code), '#ffffff', isSelected ? 0.38 : 0.22), capOpacity: 1 }
     },
-    [mode, selected, baseColor],
+    [mode, baseColor],
   )
 
-  const strokeColor = useCallback(
-    (d: object) =>
-      (d as CountryFeature).properties.code === selected ? 'rgba(214,232,255,0.95)' : 'rgba(190,215,255,0.85)',
-    [selected],
-  )
-
-  const altitude = useCallback(
-    (d: object) => ((d as CountryFeature).properties.code === selected ? 0.022 : 0.014),
-    [selected],
-  )
-
-  // ---- hover / click picking -----------------------------------------------------------------
-  // Done against the globe sphere + point-in-polygon instead of raycasting thousands of triangles.
-  useEffect(() => {
-    const el = wrapRef.current
-    if (!el || !ready) return
-    let raf = 0
-    let last: { x: number; y: number } | null = null
-    const run = () => {
-      raf = 0
-      const g = globeRef.current
-      if (!g || !last) return
-      const rect = el.getBoundingClientRect()
-      const hit = g.toGlobeCoords(last.x - rect.left, last.y - rect.top)
-      const code = hit ? base.pick(hit.lng, hit.lat) : null
-      setHovered((prev) => (prev === code ? prev : code))
-    }
-    const onMove = (e: PointerEvent) => {
-      if (e.buttons !== 0) return // dragging the globe
-      last = { x: e.clientX, y: e.clientY }
-      if (!raf) raf = requestAnimationFrame(run)
-    }
-    const onLeave = () => {
-      last = null
-      setHovered(null)
-    }
-    el.addEventListener('pointermove', onMove)
-    el.addEventListener('pointerleave', onLeave)
-    return () => {
-      el.removeEventListener('pointermove', onMove)
-      el.removeEventListener('pointerleave', onLeave)
-      cancelAnimationFrame(raf)
-    }
-  }, [base, ready])
-
-  const handleGlobeClick = useCallback(
-    ({ lat, lng }: { lat: number; lng: number }) => {
-      const code = base.pick(lng, lat)
-      if (code) onSelect(code)
-    },
-    [base, onSelect],
-  )
-
-  const label = useCallback(
-    (d: object) => {
-      const code = (d as CountryFeature).properties.code
+  const tooltipHtml = useCallback(
+    (code: string) => {
       const c = countries.get(code)
       if (!c) return ''
       let sub = [c.capital[0], c.subregion ?? c.region].filter(Boolean).join(' · ')
@@ -210,139 +119,136 @@ export function GlobeView({
         const v = values?.get(code)
         sub = v ? `${metric.format(v.value)} · ${v.year}` : 'No data reported'
       }
-      return `<div class="globe-tip"><img src="${BASE}flags/${esc(code)}.svg" alt="" /><div>${esc(c.name)}<small>${esc(sub)}</small></div></div>`
+      return `<img src="${BASE}flags/${esc(code)}.svg" alt="" /><div>${esc(c.name)}<small>${esc(sub)}</small></div>`
     },
     [countries, mode, values, metric],
   )
 
-  // ---- ready: renderer tweaks, lights, initial camera ----------------------------------------
-  const handleReady = useCallback(() => {
-    const g = globeRef.current
-    if (!g) return
-    g.renderer().setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
-    const controls = g.controls()
-    controls.autoRotateSpeed = 0.35
-    controls.enableDamping = true
-    controls.dampingFactor = 0.08
-    controls.minDistance = 108
-    controls.maxDistance = 520
-    const start = initialPose ?? DEFAULT_POSE
-    if (initialPose || reduced) {
-      g.pointOfView(start, 0)
-    } else {
-      g.pointOfView({ ...start, altitude: 5.5 }, 0)
-      g.pointOfView(start, 2600)
-    }
-    setReady(true)
-    onReady()
-  }, [initialPose, onReady, reduced])
+  // Latest values for the scene callbacks (the scene is created once and must not see stale props).
+  const live = useRef({ onSelect, onPoseChange, onReady, highlightStyle, tooltipHtml, selected })
+  live.current = { onSelect, onPoseChange, onReady, highlightStyle, tooltipHtml, selected }
+  const hoverRef = useRef<string | null>(null)
+  const tipCode = useRef<string | null>(null)
+  const initial = useRef({ initialPose, reduced, mode })
 
-  // ---- surface material per mode -------------------------------------------------------------
-  // Satellite gets specular ocean glints; the other modes use a flat, dark ocean.
-  const satellite = mode === 'satellite'
-  const globeMaterial = useMemo(() => {
-    const m = new MeshPhongMaterial()
-    if (satellite) {
-      m.specularMap = new TextureLoader().load(TEX.water)
-      m.specular = new Color('#35527a')
-      m.shininess = 14
-    } else {
-      m.color = new Color(OCEAN)
-      m.specular = new Color('#0d1b2e')
-      m.shininess = 4
-    }
-    return m
-  }, [satellite])
-
-  // ---- auto-rotate while idle ----------------------------------------------------------------
+  // ---- scene lifecycle ----------------------------------------------------------------------
   useEffect(() => {
-    const g = globeRef.current
-    if (!g || !ready) return
-    const controls = g.controls()
-    let timer: number | undefined
-    const resume = () => {
-      window.clearTimeout(timer)
-      timer = window.setTimeout(() => {
-        controls.autoRotate = !reduced && !selected
-      }, 5000)
-    }
-    const stop = () => {
-      controls.autoRotate = false
-      window.clearTimeout(timer)
-    }
-    controls.autoRotate = !reduced && !selected
-    controls.addEventListener('start', stop)
-    controls.addEventListener('end', resume)
+    const el = wrapRef.current
+    if (!el) return
+    const { initialPose: start0, reduced: red, mode: mode0 } = initial.current
+    const s = new GlobeScene(
+      el,
+      {
+        textures: TEX,
+        features,
+        borders: boundaries.borders,
+        precomputed: boundaries.geometry,
+        satellite: mode0 === 'satellite',
+        reducedMotion: red,
+        fixedQuality: PERF_DEBUG && !/[?&]adaptive=1/.test(window.location.search),
+      },
+      {
+        onPose: (p) => live.current.onPoseChange(p),
+        onClick: (code) => live.current.onSelect(code),
+        onHover: (code, x, y) => {
+          hoverRef.current = code
+          const { selected: sel, highlightStyle: style, tooltipHtml: html } = live.current
+          if (code && code !== sel) s.layers.hover.style(style(code, false))
+          else s.layers.hover.group.visible = false
+          const tip = tipRef.current
+          if (!tip) return
+          if (!code) {
+            tip.style.opacity = '0'
+            tipCode.current = null
+            return
+          }
+          if (tipCode.current !== code) {
+            tip.innerHTML = `<div class="globe-tip">${html(code)}</div>`
+            tipCode.current = code
+          }
+          tip.style.opacity = '1'
+          tip.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px) translate(-50%, -140%)`
+        },
+        onReady: () => {
+          if (!start0 && !red) s.pointOfView(DEFAULT_POSE, 2600)
+          setReady(true)
+          live.current.onReady()
+        },
+      },
+    )
+    const target = start0 ?? DEFAULT_POSE
+    s.pointOfView(start0 || red ? target : { ...target, altitude: 5.5 }, 0)
+    const ro = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect
+      if (width && height) s.setSize(width, height)
+    })
+    ro.observe(el)
+    const r = el.getBoundingClientRect()
+    s.setSize(r.width || window.innerWidth, r.height || window.innerHeight)
+    setScene(s)
     return () => {
-      controls.removeEventListener('start', stop)
-      controls.removeEventListener('end', resume)
-      window.clearTimeout(timer)
+      ro.disconnect()
+      setScene(null)
+      setReady(false)
+      s.dispose()
     }
-  }, [ready, selected, reduced])
+  }, [features, boundaries.borders])
 
-  // ---- fly to selection ----------------------------------------------------------------------
+  // ---- base map colours / mode --------------------------------------------------------------
   useEffect(() => {
-    const g = globeRef.current
-    if (!g || !ready || !selected) return
+    if (!scene) return
+    const { layers } = scene
+    scene.setSatellite(mode === 'satellite')
+    layers.caps.visible = mode !== 'satellite'
+    if (mode !== 'satellite') layers.setCapColors(baseColor)
+    if (mode === 'satellite') layers.setBorder('#ffffff', 0.26)
+    else layers.setBorder('#080d16', 0.75)
+    scene.requestRender()
+  }, [scene, mode, baseColor])
+
+  // ---- selection highlight ------------------------------------------------------------------
+  useEffect(() => {
+    if (!scene) return
+    const { layers } = scene
+    layers.selected.set(selected)
+    if (selected) layers.selected.style(highlightStyle(selected, true))
+    // keep the hover slot consistent with the new selection / colours
+    const h = hoverRef.current
+    layers.hover.set(h && h !== selected ? h : null)
+    if (h && h !== selected) layers.hover.style(highlightStyle(h, false))
+    scene.requestRender()
+  }, [scene, selected, highlightStyle])
+
+  // ---- insets, auto-rotate ------------------------------------------------------------------
+  useEffect(() => {
+    scene?.setInsets(insets.right, insets.bottom)
+  }, [scene, insets.right, insets.bottom])
+
+  useEffect(() => {
+    scene?.setAutoRotate(!reduced && !selected)
+  }, [scene, reduced, selected])
+
+  // ---- fly to selection ---------------------------------------------------------------------
+  useEffect(() => {
+    if (!scene || !ready || !selected) return
     const f = featureByCode.get(selected)
     const pose = f ? poseForFeature(f) : poseForPoint(countries.get(selected)?.latlng ?? null)
-    if (pose) g.pointOfView(pose, reduced ? 0 : 1400)
-  }, [selected, ready, featureByCode, countries, reduced, focusNonce])
+    if (pose) scene.pointOfView(pose, reduced ? 0 : 1400)
+  }, [scene, selected, ready, featureByCode, countries, reduced, focusNonce])
 
-  // ---- keep the focused country centred in the free area beside the panel ------------------
-  const offsetRef = useRef({ x: 0, y: 0 })
+  // ---- perf probe (?debug=1): overlay + window.__perf for scripts/perf.mjs -------------------
   useEffect(() => {
-    const g = globeRef.current
-    if (!g || !ready) return
-    const cam = g.camera() as PerspectiveCamera
-    const target = { x: insets.right / 2, y: insets.bottom / 2 }
-    let raf = 0
-    const step = () => {
-      const o = offsetRef.current
-      o.x += (target.x - o.x) * (reduced ? 1 : 0.12)
-      o.y += (target.y - o.y) * (reduced ? 1 : 0.12)
-      if (Math.abs(target.x - o.x) < 0.4) o.x = target.x
-      if (Math.abs(target.y - o.y) < 0.4) o.y = target.y
-      cam.setViewOffset(size.width, size.height, o.x, o.y, size.width, size.height)
-      if (o.x !== target.x || o.y !== target.y) raf = requestAnimationFrame(step)
-    }
-    step()
-    return () => cancelAnimationFrame(raf)
-  }, [insets.right, insets.bottom, size.width, size.height, ready, reduced])
+    if (!PERF_DEBUG || !scene || !ready) return
+    return startPerfProbe(() => scene.renderer)
+  }, [scene, ready])
 
   return (
-    <div
-      ref={wrapRef}
-      className="absolute inset-0"
-      style={{ cursor: hovered ? 'pointer' : 'grab' }}
-      aria-hidden="true"
-    >
-      <Globe
-        ref={globeRef}
-        width={size.width}
-        height={size.height}
-        backgroundImageUrl={TEX.sky}
-        globeMaterial={globeMaterial}
-        globeImageUrl={satellite ? TEX.day : null}
-        bumpImageUrl={satellite ? TEX.bump : null}
-        showAtmosphere
-        atmosphereColor="#5b9bff"
-        atmosphereAltitude={0.17}
-        polygonsData={highlighted}
-        polygonCapColor={capColor}
-        polygonSideColor={SIDE_COLOR}
-        polygonStrokeColor={strokeColor}
-        polygonAltitude={altitude}
-        polygonCapCurvatureResolution={6}
-        polygonsTransitionDuration={0}
-        polygonLabel={label}
-        onPolygonClick={(p) => onSelect((p as CountryFeature).properties.code)}
-        onGlobeClick={handleGlobeClick}
-        onZoom={(pov) => onPoseChange({ lat: pov.lat, lng: pov.lng, altitude: pov.altitude })}
-        onGlobeReady={handleReady}
-        rendererConfig={{ antialias: true, powerPreference: 'high-performance' }}
+    <div ref={wrapRef} className="absolute inset-0" aria-hidden="true">
+      <div
+        ref={tipRef}
+        className="pointer-events-none absolute left-0 top-0 z-10 opacity-0 transition-opacity duration-100"
+        style={{ willChange: 'transform' }}
       />
     </div>
   )
 }
-

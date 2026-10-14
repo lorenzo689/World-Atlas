@@ -1,3 +1,4 @@
+import type { PrecomputedGeometry } from '@/lib/globeLayers'
 import { geoArea, geoBounds, geoCentroid } from 'd3-geo'
 import type { Feature, FeatureCollection, Geometry, MultiPolygon, Polygon } from 'geojson'
 
@@ -6,7 +7,12 @@ export interface CountryProps {
   name: string
 }
 export type CountryFeature = Feature<Geometry, CountryProps>
-export type Boundaries = FeatureCollection<Geometry, CountryProps>
+export type Boundaries = FeatureCollection<Geometry, CountryProps> & {
+  /** Every border / coastline segment exactly once (shared borders are not duplicated). */
+  borders?: number[][][]
+  /** Build-time cap triangulation (see PrecomputedGeometry). */
+  geometry?: PrecomputedGeometry | null
+}
 
 export interface Pose {
   lat: number

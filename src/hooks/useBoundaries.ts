@@ -1,14 +1,44 @@
 import { useEffect, useState } from 'react'
-import type { Boundaries } from '@/lib/geo'
+import { feature, mesh } from 'topojson-client'
+import type { GeometryCollection, Topology } from 'topojson-specification'
+import type { FeatureCollection, Geometry } from 'geojson'
+import type { Boundaries, CountryProps } from '@/lib/geo'
+import type { PrecomputedGeometry } from '@/lib/globeLayers'
 import type { LoadState } from '@/types'
 
 let cache: Promise<Boundaries> | null = null
 
+async function fetchGeometry(base: string): Promise<PrecomputedGeometry | null> {
+  try {
+    const [meta, bin] = await Promise.all([
+      fetch(`${base}data/geometry.json`).then((r) => (r.ok ? r.json() : Promise.reject(new Error('meta')))),
+      fetch(`${base}data/geometry.bin`).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error('bin')))),
+    ])
+    const { vertices, indices, ranges } = meta as {
+      vertices: number
+      indices: number
+      ranges: PrecomputedGeometry['ranges']
+    }
+    return {
+      lnglat: new Float32Array(bin, 0, vertices * 2),
+      indices: new Uint32Array(bin, vertices * 2 * 4, indices),
+      ranges,
+    }
+  } catch {
+    return null // falls back to in-browser tessellation
+  }
+}
+
 function load(): Promise<Boundaries> {
   if (!cache) {
-    cache = fetch(`${import.meta.env.BASE_URL}data/boundaries.json`).then((r) => {
+    const base = import.meta.env.BASE_URL
+    const geometry = fetchGeometry(base)
+    cache = fetch(`${base}data/boundaries.json`).then(async (r) => {
       if (!r.ok) throw new Error(`Boundary data failed to load (${r.status})`)
-      return r.json() as Promise<Boundaries>
+      const topology = (await r.json()) as Topology
+      const countries = topology.objects.countries as GeometryCollection<CountryProps>
+      const fc = feature(topology, countries) as FeatureCollection<Geometry, CountryProps>
+      return { ...fc, borders: mesh(topology, countries).coordinates, geometry: await geometry } as Boundaries
     })
     cache.catch(() => {
       cache = null

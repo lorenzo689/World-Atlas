@@ -1,0 +1,14 @@
+{
+  "_comment": "Checked by `npm run perf`. 'always' limits hold on any hardware (incl. software GL); 'gpu' limits are only enforced with --gpu on real hardware (software GL renders count as long tasks).",
+  "always": {
+    "drawCalls": 60,
+    "transferKB": 3072
+  },
+  "gpu": {
+    "readyMs": 3000,
+    "longTaskMsPerPhase": 200,
+    "frameP95Ms": 20,
+    "frameMaxMs": 100,
+    "heapMB": 250
+  }
+}
