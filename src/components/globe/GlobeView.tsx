@@ -8,6 +8,7 @@ import { buildChoropleth, hash01, mix, NO_DATA_COLOR, REGION_COLORS } from '@/li
 import type { IndicatorMeta } from '@/lib/indicators'
 import type { LatestValue } from '@/lib/worldbank'
 import { usePrefersReducedMotion } from '@/hooks/useMisc'
+import { BaseLayers } from '@/lib/globeLayers'
 
 const BASE = import.meta.env.BASE_URL
 const TEX = {
@@ -17,6 +18,7 @@ const TEX = {
   sky: `${BASE}textures/night-sky.png`,
 }
 const OCEAN = '#0b1626'
+const SIDE_COLOR = 'rgba(111,168,255,0.28)'
 const DEFAULT_POSE: Pose = { lat: 22, lng: 12, altitude: 2.3 }
 
 export interface GlobeInsets {
@@ -89,60 +91,113 @@ export function GlobeView({
     return buildChoropleth(nums)
   }, [values, features])
 
-  // ---- accessors ---------------------------------------------------------------------------
-  const capColor = useCallback(
-    (d: object) => {
-      const code = (d as CountryFeature).properties.code
-      const isSel = code === selected
-      const isHover = code === hovered
-      if (mode === 'satellite') {
-        if (isSel) return 'rgba(111,168,255,0.36)'
-        if (isHover) return 'rgba(111,168,255,0.26)'
-        return 'rgba(255,255,255,0.012)'
-      }
-      let base: string
+  // ---- base map: every country in two draw calls ---------------------------------------------
+  // react-globe.gl's polygons layer costs ~3 draw calls per polygon piece (1,600+ here), so it is
+  // only used for the highlighted countries; the rest is one merged mesh + one merged line set.
+  const base = useMemo(() => new BaseLayers(features), [features])
+  useEffect(() => {
+    const g = globeRef.current
+    if (!g || !ready) return
+    const scene = g.scene()
+    scene.add(base.group)
+    return () => {
+      scene.remove(base.group)
+    }
+  }, [base, ready])
+  useEffect(() => () => base.dispose(), [base])
+
+  const baseColor = useCallback(
+    (code: string) => {
       if (mode === 'political') {
         const c = countries.get(code)
         const region = REGION_COLORS[c?.region ?? ''] ?? '#6d7a8c'
         // Slight per-country variation so neighbours in the same region stay distinguishable.
-        base = mix(region, hash01(code) > 0.5 ? '#ffffff' : '#000000', 0.04 + hash01(code + 'x') * 0.14)
-      } else {
-        const v = values?.get(code)
-        base = v && choropleth ? choropleth.color(v.value) : NO_DATA_COLOR
+        return mix(region, hash01(code) > 0.5 ? '#ffffff' : '#000000', 0.04 + hash01(code + 'x') * 0.14)
       }
-      if (isSel) return mix(base, '#ffffff', 0.38)
-      if (isHover) return mix(base, '#ffffff', 0.22)
-      return base
+      const v = values?.get(code)
+      return v && choropleth ? choropleth.color(v.value) : NO_DATA_COLOR
     },
-    [mode, selected, hovered, countries, values, choropleth],
+    [mode, countries, values, choropleth],
+  )
+
+  useEffect(() => {
+    base.caps.visible = mode !== 'satellite'
+    if (mode !== 'satellite') base.setCapColors(baseColor)
+    if (mode === 'satellite') base.setBorder('#ffffff', 0.26)
+    else base.setBorder('#080d16', 0.75)
+  }, [base, mode, baseColor])
+
+  // Only the hovered / selected countries go through the (expensive) polygons layer.
+  const highlighted = useMemo(() => {
+    const out: CountryFeature[] = []
+    for (const code of [selected, hovered]) {
+      const f = code ? featureByCode.get(code) : undefined
+      if (f && !out.includes(f)) out.push(f)
+    }
+    return out
+  }, [selected, hovered, featureByCode])
+
+  const capColor = useCallback(
+    (d: object) => {
+      const code = (d as CountryFeature).properties.code
+      const isSel = code === selected
+      if (mode === 'satellite') return isSel ? 'rgba(111,168,255,0.36)' : 'rgba(111,168,255,0.26)'
+      return mix(baseColor(code), '#ffffff', isSel ? 0.38 : 0.22)
+    },
+    [mode, selected, baseColor],
   )
 
   const strokeColor = useCallback(
-    (d: object) => {
-      const code = (d as CountryFeature).properties.code
-      if (code === selected) return 'rgba(214,232,255,0.95)'
-      if (code === hovered) return 'rgba(190,215,255,0.85)'
-      return mode === 'satellite' ? 'rgba(255,255,255,0.26)' : 'rgba(8,13,22,0.75)'
-    },
-    [mode, selected, hovered],
+    (d: object) =>
+      (d as CountryFeature).properties.code === selected ? 'rgba(214,232,255,0.95)' : 'rgba(190,215,255,0.85)',
+    [selected],
   )
 
   const altitude = useCallback(
-    (d: object) => {
-      const code = (d as CountryFeature).properties.code
-      if (code === selected) return 0.022
-      if (code === hovered) return 0.014
-      return mode === 'satellite' ? 0.002 : 0.004
-    },
-    [mode, selected, hovered],
+    (d: object) => ((d as CountryFeature).properties.code === selected ? 0.022 : 0.014),
+    [selected],
   )
 
-  const sideColor = useCallback(
-    (d: object) => {
-      const code = (d as CountryFeature).properties.code
-      return code === selected || code === hovered ? 'rgba(111,168,255,0.28)' : 'rgba(0,0,0,0)'
+  // ---- hover / click picking -----------------------------------------------------------------
+  // Done against the globe sphere + point-in-polygon instead of raycasting thousands of triangles.
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!el || !ready) return
+    let raf = 0
+    let last: { x: number; y: number } | null = null
+    const run = () => {
+      raf = 0
+      const g = globeRef.current
+      if (!g || !last) return
+      const rect = el.getBoundingClientRect()
+      const hit = g.toGlobeCoords(last.x - rect.left, last.y - rect.top)
+      const code = hit ? base.pick(hit.lng, hit.lat) : null
+      setHovered((prev) => (prev === code ? prev : code))
+    }
+    const onMove = (e: PointerEvent) => {
+      if (e.buttons !== 0) return // dragging the globe
+      last = { x: e.clientX, y: e.clientY }
+      if (!raf) raf = requestAnimationFrame(run)
+    }
+    const onLeave = () => {
+      last = null
+      setHovered(null)
+    }
+    el.addEventListener('pointermove', onMove)
+    el.addEventListener('pointerleave', onLeave)
+    return () => {
+      el.removeEventListener('pointermove', onMove)
+      el.removeEventListener('pointerleave', onLeave)
+      cancelAnimationFrame(raf)
+    }
+  }, [base, ready])
+
+  const handleGlobeClick = useCallback(
+    ({ lat, lng }: { lat: number; lng: number }) => {
+      const code = base.pick(lng, lat)
+      if (code) onSelect(code)
     },
-    [selected, hovered],
+    [base, onSelect],
   )
 
   const label = useCallback(
@@ -273,16 +328,16 @@ export function GlobeView({
         showAtmosphere
         atmosphereColor="#5b9bff"
         atmosphereAltitude={0.17}
-        polygonsData={features}
+        polygonsData={highlighted}
         polygonCapColor={capColor}
-        polygonSideColor={sideColor}
+        polygonSideColor={SIDE_COLOR}
         polygonStrokeColor={strokeColor}
         polygonAltitude={altitude}
-        polygonCapCurvatureResolution={4}
-        polygonsTransitionDuration={reduced ? 0 : 250}
+        polygonCapCurvatureResolution={6}
+        polygonsTransitionDuration={0}
         polygonLabel={label}
-        onPolygonHover={(p) => setHovered(p ? (p as CountryFeature).properties.code : null)}
         onPolygonClick={(p) => onSelect((p as CountryFeature).properties.code)}
+        onGlobeClick={handleGlobeClick}
         onZoom={(pov) => onPoseChange({ lat: pov.lat, lng: pov.lng, altitude: pov.altitude })}
         onGlobeReady={handleReady}
         rendererConfig={{ antialias: true, powerPreference: 'high-performance' }}
