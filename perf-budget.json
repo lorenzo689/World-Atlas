@@ -9,6 +9,7 @@
     "longTaskMsPerPhase": 200,
     "frameP95Ms": 20,
     "frameMaxMs": 100,
-    "heapMB": 250
+    "heapMB": 250,
+    "tickMaxMs": 50
   }
 }

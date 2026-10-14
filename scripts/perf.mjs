@@ -88,6 +88,11 @@ const load = await page.evaluate(() => {
     .slice(0, 8)
   return { readyMs: window.__perf.readyAt, transferKB: Math.round(bytes / 1024), requests: res.length, biggest }
 })
+const gl = await page.evaluate(() => {
+  const c = document.createElement('canvas').getContext('webgl')
+  const e = c?.getExtension('WEBGL_debug_renderer_info')
+  return e ? c.getParameter(e.UNMASKED_RENDERER_WEBGL) : 'unknown'
+})
 // let the intro fly-in and texture uploads settle
 await wait(4000)
 
@@ -150,16 +155,17 @@ const f = (n, d = 1) => (typeof n === 'number' ? n.toFixed(d) : '-')
 console.log(`\nPerf run "${label}"  ${gpu ? 'GPU' : 'software GL'}  ${width}x${height} @${dpr}x  cpu x${cpu}`)
 console.log(`load: ready ${f(load.readyMs, 0)} ms (wall ${wallReady}), ${load.transferKB} KB in ${load.requests} requests`)
 for (const b of load.biggest) console.log(`      ${String(b.kb).padStart(6)} KB  ${b.url}`)
-console.log('\nphase    fps  p50ms  p95ms  maxms  longtasks(ms)  calls   tris  geoms  tex  heapMB')
+console.log(`GL renderer: ${gl}${/swiftshader|software|llvmpipe/i.test(gl) ? '  (SOFTWARE: frame times are not meaningful)' : ''}`)
+console.log('\nphase  renders/s  frame p50 p95 max (chained)  tick p95 max   longtasks(ms)  calls   tris  geoms  tex  heapMB')
 for (const [name, s] of Object.entries(phases)) {
   console.log(
-    `${name.padEnd(8)} ${f(s.fps, 0).padStart(4)} ${f(s.frameP50).padStart(6)} ${f(s.frameP95).padStart(6)} ${f(s.frameMax, 0).padStart(6)}` +
+    `${name.padEnd(8)} ${f(s.fps, 0).padStart(9)}  ${f(s.frameP50).padStart(9)} ${f(s.frameP95).padStart(5)} ${f(s.frameMax, 0).padStart(5)}  ${f(s.tickP95).padStart(11)} ${f(s.tickMax, 0).padStart(4)}` +
       `  ${String(s.longTasks).padStart(4)} (${f(s.longTaskMs, 0).padStart(5)})  ${String(s.drawCalls).padStart(5)} ${String(Math.round(s.triangles / 1000) + 'k').padStart(6)} ${String(s.geometries).padStart(5)} ${String(s.textures).padStart(4)} ${f(s.heapMB, 0).padStart(6)}`,
   )
 }
 
 mkdirSync('perf-results', { recursive: true })
-const result = { label, when: new Date().toISOString(), gpu, width, height, dpr, cpu, load, phases, errors }
+const result = { gl, label, when: new Date().toISOString(), gpu, width, height, dpr, cpu, load, phases, errors }
 writeFileSync(`perf-results/${label}.json`, JSON.stringify(result, null, 2))
 
 // ---- budgets -----------------------------------------------------------------------------

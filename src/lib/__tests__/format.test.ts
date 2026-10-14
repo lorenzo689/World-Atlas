@@ -14,7 +14,9 @@ describe('format helpers', () => {
     expect(formatNumber(1234567)).toBe('1,234,567')
     expect(formatCompact(83_491_249)).toBe('83.49M')
     expect(formatPercent(2.171, 1)).toBe('2.2%')
-    expect(formatCurrencyCompact(4_500_000_000_000)).toBe('$4.50T')
+    // compact notation drops trailing zeros ($4.5T, not $4.50T): cleaner axis ticks, 2 digits max
+    expect(formatCurrencyCompact(4_500_000_000_000)).toBe('$4.5T')
+    expect(formatCurrencyCompact(4_567_000_000_000)).toBe('$4.57T')
     expect(formatArea(357114)).toBe('357,114 km²')
   })
 
