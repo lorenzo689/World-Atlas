@@ -185,6 +185,9 @@ export class GlobeScene {
       antialias: rawDpr < 1.5, // MSAA is wasted fill-rate on dense displays
       powerPreference: 'high-performance',
     })
+    // Shader error checks call getProgramInfoLog right after linking, which blocks until the driver
+    // has compiled the program (≈1.5 s for 9 programs on integrated GPUs). Keep them in dev only.
+    this.renderer.debug.checkShaderErrors = import.meta.env.DEV
     this.renderer.setPixelRatio(this.dpr)
     this.canvas = this.renderer.domElement
     this.canvas.style.display = 'block'
@@ -263,10 +266,11 @@ export class GlobeScene {
     // textures: sky + (day when satellite) gate "ready"; bump/specular stream in afterwards
     const needed: Promise<Texture>[] = [this.texture(opts.textures.sky, true).then((t) => this.setSky(t))]
     if (this.satellite) needed.push(this.loadSatellite())
-    Promise.all(needed).then(() => {
+    Promise.all(needed).then(async () => {
+      if (this.disposed) return
+      await this.warmUp()
       if (this.disposed) return
       this.needsRender = true
-      this.warmUp()
       this.wake(1000)
       if (!this.readySent) {
         this.readySent = true
@@ -323,19 +327,24 @@ export class GlobeScene {
     })
   }
 
-  /** Compile every program once (incl. hidden highlight/cap materials) so first hover doesn't hitch. */
-  private warmUp() {
+  /**
+   * Compile every program once (incl. hidden highlight/cap materials) so the first hover doesn't
+   * hitch. Async: programs compile in parallel without blocking the main thread.
+   */
+  private async warmUp() {
     const l = this.layers
     const prev = [l.caps.visible, l.hover.group.visible, l.selected.group.visible]
     l.caps.visible = true
     l.hover.group.visible = true
     l.selected.group.visible = true
     try {
-      this.renderer.compile(this.scene, this.camera)
+      // compileAsync collects the materials synchronously, so visibility can be restored right away
+      const done = this.renderer.compileAsync(this.scene, this.camera)
+      ;[l.caps.visible, l.hover.group.visible, l.selected.group.visible] = prev as [boolean, boolean, boolean]
+      await done
     } catch {
-      /* compile is best effort */
+      ;[l.caps.visible, l.hover.group.visible, l.selected.group.visible] = prev as [boolean, boolean, boolean]
     }
-    ;[l.caps.visible, l.hover.group.visible, l.selected.group.visible] = prev as [boolean, boolean, boolean]
   }
 
   // ---- public API ------------------------------------------------------------------------------
@@ -447,9 +456,14 @@ export class GlobeScene {
   }
 
   // ---- loop ------------------------------------------------------------------------------------
+  private chained = false // true when this tick was scheduled by the previous tick (loop already running)
+
   private tick = (now: number) => {
+    const chained = this.chained
+    this.chained = false
     this.raf = 0
     if (this.disposed) return
+    const t0 = performance.now()
     let moving = false
 
     if (this.tween) {
@@ -480,12 +494,15 @@ export class GlobeScene {
     if (this.needsRender || moving) {
       this.needsRender = false
       this.renderer.render(this.scene, this.camera)
-      perfFrame()
+      perfFrame(chained, performance.now() - t0)
       this.sampleFrame(now, moving)
     }
 
     const keep = moving || this.controls.autoRotate || this.pointerDown || now < this.busyUntil || this.needsRender
-    if (keep) this.raf = requestAnimationFrame(this.tick)
+    if (keep) {
+      this.chained = true
+      this.raf = requestAnimationFrame(this.tick)
+    }
   }
 
   // ---- quality governor ------------------------------------------------------------------------

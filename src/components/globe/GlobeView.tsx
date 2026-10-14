@@ -239,7 +239,12 @@ export function GlobeView({
   // ---- perf probe (?debug=1): overlay + window.__perf for scripts/perf.mjs -------------------
   useEffect(() => {
     if (!PERF_DEBUG || !scene || !ready) return
-    return startPerfProbe(() => scene.renderer)
+    window.__globePose = () => scene.getPose()
+    const stop = startPerfProbe(() => scene.renderer)
+    return () => {
+      stop()
+      delete window.__globePose
+    }
   }, [scene, ready])
 
   return (

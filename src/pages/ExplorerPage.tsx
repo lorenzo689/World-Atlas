@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { useExplorer } from '@/store/explorer'
 import { useCountries } from '@/hooks/useCountries'
-import { useBoundaries } from '@/hooks/useBoundaries'
+import { prefetchBoundaries, useBoundaries } from '@/hooks/useBoundaries'
 import { useLatestForAll } from '@/hooks/useIndicator'
 import { useDocumentMeta, useIsDesktop } from '@/hooks/useMisc'
 import { INDICATORS } from '@/lib/indicators'
@@ -13,6 +13,9 @@ import { ModeSwitcher, DataPanel } from '@/components/globe/Controls'
 import { CountryPreview } from '@/components/globe/CountryPreview'
 import { BottomSheet, type SheetSnap } from '@/components/globe/BottomSheet'
 import { ErrorState } from '@/components/ui/feedback'
+
+// Boundaries + pre-triangulated geometry start loading as soon as this module is evaluated.
+prefetchBoundaries()
 
 // Start fetching the (large) globe chunk immediately, in parallel with the country/boundary data,
 // instead of waiting until both have loaded and the lazy component first renders.

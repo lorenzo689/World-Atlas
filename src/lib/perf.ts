@@ -11,6 +11,9 @@ export interface PerfSnapshot {
   frameP50: number
   frameP95: number
   frameMax: number
+  /** CPU time per rendered tick (controls + render submit), all renders incl. on-demand ones. */
+  tickP95: number
+  tickMax: number
   longTasks: number
   longTaskMs: number
   drawCalls: number
@@ -33,14 +36,21 @@ export interface PerfApi {
 declare global {
   interface Window {
     __perf?: PerfApi
+    /** Current camera pose; only with ?debug=1 (used by scripts/smoke.mjs). */
+    __globePose?: () => { lat: number; lng: number; altitude: number }
   }
 }
 
-let frameHook: (() => void) | null = null
+let frameHook: ((chained: boolean, tickMs: number) => void) | null = null
 
-/** Call once per rendered frame. No-op unless the probe is running (?debug=1). */
-export function perfFrame() {
-  frameHook?.()
+/**
+ * Call once per rendered frame. No-op unless the probe is running (?debug=1).
+ * `chained`: this frame directly followed the previous one (the loop was already running), so the
+ * gap since the last render is a real frame time. Renders that wake an idle loop are not.
+ * `tickMs`: CPU time of the whole tick (controls + render submit).
+ */
+export function perfFrame(chained: boolean, tickMs: number) {
+  frameHook?.(chained, tickMs)
 }
 
 const percentile = (sorted: number[], p: number) =>
@@ -52,6 +62,7 @@ const percentile = (sorted: number[], p: number) =>
  */
 export function startPerfProbe(getRenderer: () => WebGLRenderer | undefined): () => void {
   let frameTimes: number[] = []
+  let ticks: number[] = []
   let renders = 0
   const recent: number[] = [] // rolling window for the overlay only; independent of reset()
   let longTasks = 0
@@ -61,12 +72,13 @@ export function startPerfProbe(getRenderer: () => WebGLRenderer | undefined): ()
 
   // The globe renders on demand, so frame times are the gaps between actual renders. Gaps over
   // 250 ms are idle periods, not slow frames: they count as a render but not as a frame time.
-  frameHook = () => {
+  frameHook = (chained, tickMs) => {
     const now = performance.now()
     const dt = now - last
     last = now
     renders++
-    if (dt < 250) {
+    ticks.push(tickMs)
+    if (chained && dt < 250) {
       frameTimes.push(dt)
       recent.push(dt)
       if (recent.length > 120) recent.shift()
@@ -98,6 +110,8 @@ export function startPerfProbe(getRenderer: () => WebGLRenderer | undefined): ()
       frameP50: percentile(sorted, 0.5),
       frameP95: percentile(sorted, 0.95),
       frameMax: sorted[sorted.length - 1] ?? 0,
+      tickP95: percentile([...ticks].sort((a, b) => a - b), 0.95),
+      tickMax: ticks.length ? Math.max(...ticks) : 0,
       longTasks,
       longTaskMs,
       drawCalls: info?.render.calls ?? 0,
@@ -110,6 +124,7 @@ export function startPerfProbe(getRenderer: () => WebGLRenderer | undefined): ()
   }
   const reset = () => {
     frameTimes = []
+    ticks = []
     renders = 0
     longTasks = 0
     longTaskMs = 0

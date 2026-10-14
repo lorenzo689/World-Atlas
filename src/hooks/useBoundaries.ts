@@ -47,6 +47,11 @@ function load(): Promise<Boundaries> {
   return cache
 }
 
+/** Start loading the boundary + geometry files without waiting for a component to ask. */
+export function prefetchBoundaries() {
+  load().catch(() => {})
+}
+
 /** Country boundaries (Natural Earth 1:50m via world-atlas), shared across the app. */
 export function useBoundaries(): LoadState<Boundaries> & { retry: () => void } {
   const [state, setState] = useState<LoadState<Boundaries>>({ status: 'loading' })
