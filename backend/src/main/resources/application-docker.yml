@@ -1,0 +1,4 @@
+# Profile used inside docker compose (`--profile app`): hosts are the compose service names,
+# which are injected through environment variables (see docker-compose.yml).
+server:
+  shutdown: graceful

@@ -7,6 +7,14 @@ import { useDocumentMeta } from '@/hooks/useMisc'
 
 const ExplorerPage = lazy(() => import('@/pages/ExplorerPage'))
 const CountryPage = lazy(() => import('@/pages/CountryPage'))
+// full-stack features (need the Spring Boot backend)
+const LoginPage = lazy(() => import('@/pages/LoginPage'))
+const QuizPage = lazy(() => import('@/pages/QuizPage'))
+const MultiplayerPage = lazy(() => import('@/pages/MultiplayerPage'))
+const LeaderboardPage = lazy(() => import('@/pages/LeaderboardPage'))
+const AtlasPage = lazy(() => import('@/pages/AtlasPage'))
+const DataPage = lazy(() => import('@/pages/DataPage'))
+const SharedViewPage = lazy(() => import('@/pages/SharedViewPage'))
 
 function NotFound() {
   useDocumentMeta({ title: 'Page not found · World Explorer', description: 'This page does not exist.' })
@@ -38,6 +46,13 @@ export default function App() {
             <Routes>
               <Route path="/" element={<ExplorerPage />} />
               <Route path="/countries/:code/:tab?" element={<CountryPage />} />
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/quiz" element={<QuizPage />} />
+              <Route path="/play/:code?" element={<MultiplayerPage />} />
+              <Route path="/leaderboard" element={<LeaderboardPage />} />
+              <Route path="/atlas" element={<AtlasPage />} />
+              <Route path="/data" element={<DataPage />} />
+              <Route path="/views/:slug" element={<SharedViewPage />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>

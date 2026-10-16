@@ -3,7 +3,27 @@
 An interactive 3D atlas: a fullscreen Earth you can rotate and zoom, click any country for a quick card,
 and open detailed pages with population, economy and geography data from the World Bank.
 
-React 19 · TypeScript · Vite · Tailwind CSS v4 · shadcn/ui (Radix) · Three.js (own globe scene) · Recharts · React Router
+With the Spring Boot backend it becomes a full-stack app:
+
+- **Geo quiz** – find countries on the globe, capitals, flags, population duels; daily challenge; leaderboards
+- **Multiplayer** – live rooms over WebSocket, quick-match, chat
+- **Data platform** – World Bank indicators ingested through Kafka into PostgreSQL; rankings, trends,
+  distributions, correlations
+- **Personal atlas** – favourites, travel log, full-text searchable notes, shareable globe views
+
+**Frontend:** React 19 · TypeScript · Vite · Tailwind CSS v4 · shadcn/ui (Radix) · Three.js (own globe scene) · Recharts · React Router · STOMP
+**Backend:** Spring Boot 4.1 · Java 25 · PostgreSQL · Redis · Kafka · Elasticsearch · Flyway · JWT · WebSocket · Testcontainers
+
+## Full stack in three commands
+
+```bash
+docker compose up -d                    # PostgreSQL (5433), Redis, Kafka, Elasticsearch
+cd backend && ./mvnw spring-boot:run    # API on :8080 (Swagger: /swagger-ui.html)
+npm run dev                             # frontend on :5173, proxies /api and /ws to the backend
+```
+
+How the backend works, module by module, with the main request flows: [docs/BACKEND-GUIDE.md](docs/BACKEND-GUIDE.md) (German).
+Without the backend the globe and country pages still work (data comes straight from the World Bank).
 
 ## Run it
 

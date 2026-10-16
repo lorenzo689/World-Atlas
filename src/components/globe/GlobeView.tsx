@@ -43,6 +43,8 @@ interface GlobeViewProps {
   insets: GlobeInsets
   /** Increment to re-fly to the current selection even if it did not change. */
   focusNonce?: number
+  /** Hover tooltips with the country name (off in the quiz, where they would give the answer away). */
+  tooltips?: boolean
 }
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
@@ -60,6 +62,7 @@ export function GlobeView({
   initialPose,
   insets,
   focusNonce = 0,
+  tooltips = true,
 }: GlobeViewProps) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const tipRef = useRef<HTMLDivElement>(null)
@@ -125,8 +128,8 @@ export function GlobeView({
   )
 
   // Latest values for the scene callbacks (the scene is created once and must not see stale props).
-  const live = useRef({ onSelect, onPoseChange, onReady, highlightStyle, tooltipHtml, selected })
-  live.current = { onSelect, onPoseChange, onReady, highlightStyle, tooltipHtml, selected }
+  const live = useRef({ onSelect, onPoseChange, onReady, highlightStyle, tooltipHtml, selected, tooltips })
+  live.current = { onSelect, onPoseChange, onReady, highlightStyle, tooltipHtml, selected, tooltips }
   const hoverRef = useRef<string | null>(null)
   const tipCode = useRef<string | null>(null)
   const initial = useRef({ initialPose, reduced, mode })
@@ -157,7 +160,7 @@ export function GlobeView({
           else s.layers.hover.group.visible = false
           const tip = tipRef.current
           if (!tip) return
-          if (!code) {
+          if (!code || !live.current.tooltips) {
             tip.style.opacity = '0'
             tipCode.current = null
             return

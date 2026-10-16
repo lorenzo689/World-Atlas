@@ -7,6 +7,7 @@ import { formatArea, formatCompact, formatNumber } from '@/lib/format'
 import { Flag } from '@/components/country/Flag'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { AtlasActions } from '@/components/globe/AtlasActions'
 
 interface CountryPreviewProps {
   country: Country
@@ -52,6 +53,8 @@ export function CountryPreview({ country, neighbours, onClose, onSelectNeighbour
         {[country.subregion, country.region].filter((v, i, a) => v && a.indexOf(v) === i).join(' · ')}
         {!country.independent && ' · Dependent territory'}
       </p>
+
+      <AtlasActions code={country.code} />
 
       <dl className="mt-3 divide-y divide-border">
         <Fact label="Capital">{country.capital.length ? country.capital.join(', ') : '—'}</Fact>

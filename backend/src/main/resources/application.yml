@@ -1,0 +1,132 @@
+spring:
+  application:
+    name: world-explorer
+  threads:
+    virtual:
+      enabled: true          # request handling, @Async and schedulers run on virtual threads
+
+  datasource:
+    url: jdbc:postgresql://localhost:5433/worldexplorer
+    username: worldexplorer
+    password: worldexplorer
+    hikari:
+      maximum-pool-size: 20
+
+  jpa:
+    open-in-view: false      # no lazy loading in controllers: services return DTOs
+    hibernate:
+      ddl-auto: validate     # schema is owned by Flyway
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 500
+        order_inserts: true
+
+  flyway:
+    locations: classpath:db/migration
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      repositories:
+        enabled: false       # Redis is used through templates, not Spring Data repositories
+
+  cache:
+    type: redis
+    redis:
+      time-to-live: 1h
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      acks: all
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JacksonJsonSerializer
+      properties:
+        enable.idempotence: true
+        linger.ms: 20
+        compression.type: lz4
+    consumer:
+      group-id: world-explorer
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JacksonJsonDeserializer
+        spring.json.trusted.packages: "dev.worldexplorer.*"
+        max.poll.records: 1000
+
+  elasticsearch:
+    uris: http://localhost:9200
+    connection-timeout: 5s
+    socket-timeout: 30s
+
+  mvc:
+    problemdetails:
+      enabled: true
+
+  jackson:
+    deserialization:
+      # Jackson 3 rejects missing primitive fields by default; treat them as 0/false instead
+      fail-on-null-for-primitives: false
+
+  web:
+    locale: en               # API messages (e.g. validation) in English regardless of the server's locale
+    locale-resolver: fixed
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,caches,scheduledtasks
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: world-explorer
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
+
+logging:
+  pattern:
+    correlation: "[%X{requestId:-}] "
+  level:
+    org.apache.kafka: WARN
+    org.springframework.kafka: INFO
+
+app:
+  jwt:
+    # Dev-only default. Override with APP_JWT_SECRET (>= 32 bytes) everywhere else.
+    secret: ${APP_JWT_SECRET:dev-secret-dev-secret-dev-secret-dev-secret-0123456789}
+    access-token-ttl: 15m
+    refresh-token-ttl: 14d
+  admin-emails:
+    - admin@worldexplorer.dev
+  cors:
+    allowed-origins:
+      - http://localhost:5173
+      - http://localhost:4173
+  ingestion:
+    world-bank-base-url: https://api.worldbank.org/v2
+    from-year: 1990
+    bootstrap-on-startup: true
+    schedule-enabled: true
+    run-timeout: 10m
+  quiz:
+    default-rounds: 10
+    session-ttl: 1h
+  multiplayer:
+    round-duration: 15s
+    result-pause: 4s
+    countdown: 3s
+    max-players: 8
+    room-ttl: 2h
+  rate-limit:
+    auth-per-minute: 20
+    api-per-minute: 600

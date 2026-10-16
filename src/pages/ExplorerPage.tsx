@@ -8,6 +8,8 @@ import { INDICATORS } from '@/lib/indicators'
 import { buildChoropleth } from '@/lib/color'
 import { SearchBox } from '@/components/layout/SearchBox'
 import { Brand } from '@/components/layout/Brand'
+import { UserMenu } from '@/components/layout/UserMenu'
+import { SaveViewButton } from '@/components/globe/SaveViewButton'
 import { WebGLBoundary, hasWebGL } from '@/components/layout/WebGLBoundary'
 import { ModeSwitcher, DataPanel } from '@/components/globe/Controls'
 import { CountryPreview } from '@/components/globe/CountryPreview'
@@ -165,6 +167,7 @@ export default function ExplorerPage() {
           <div className="pointer-events-auto hidden shrink-0 md:block">
             <ModeSwitcher mode={mode} onChange={setMode} />
           </div>
+          <UserMenu className="pointer-events-auto shrink-0" />
         </div>
         <div className="pointer-events-auto md:hidden">
           <ModeSwitcher mode={mode} onChange={setMode} />
@@ -182,6 +185,13 @@ export default function ExplorerPage() {
             scale={scale}
             onRetry={latest.retry}
           />
+        </div>
+      )}
+
+      {/* Save the current view to the personal atlas (accounts only) */}
+      {ready && !(showPanel && !isDesktop) && (
+        <div className="absolute bottom-6 right-4 z-20 sm:right-6" style={{ right: showPanel && isDesktop ? PANEL_WIDTH + 40 : undefined }}>
+          <SaveViewButton />
         </div>
       )}
 

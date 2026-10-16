@@ -1,0 +1,20 @@
+{
+  "number_of_replicas": 0,
+  "analysis": {
+    "filter": {
+      "autocomplete_filter": { "type": "edge_ngram", "min_gram": 2, "max_gram": 15 }
+    },
+    "analyzer": {
+      "folding": {
+        "type": "custom",
+        "tokenizer": "standard",
+        "filter": ["lowercase", "asciifolding"]
+      },
+      "autocomplete": {
+        "type": "custom",
+        "tokenizer": "standard",
+        "filter": ["lowercase", "asciifolding", "autocomplete_filter"]
+      }
+    }
+  }
+}
