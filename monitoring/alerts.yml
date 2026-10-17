@@ -1,0 +1,27 @@
+groups:
+  - name: world-explorer
+    rules:
+      - alert: WorldExplorerBackendDown
+        expr: sum(up{job="world-explorer"}) == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: Backend metrics endpoint unavailable
+      - alert: WorldExplorerOutboxLag
+        expr: outbox_oldest_age_seconds{job="world-explorer"} > 120
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: Oldest event has waited over two minutes
+      - alert: WorldExplorerOutboxExhausted
+        expr: outbox_failed{job="world-explorer"} > 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: An outbox event requires operator retry
+      - alert: WorldExplorerServerErrors
+        expr: sum(rate(http_server_requests_seconds_count{job="world-explorer",status=~"5.."}[5m])) / clamp_min(sum(rate(http_server_requests_seconds_count{job="world-explorer"}[5m])), 0.001) > 0.01
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: More than 1% of API requests failed with 5xx

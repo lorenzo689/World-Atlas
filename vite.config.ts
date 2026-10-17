@@ -14,12 +14,14 @@ const proxy = {
 }
 
 export default defineConfig({
+  base: process.env.VITE_STATIC_DEMO === 'true' ? '/World-Atlas/' : '/',
   plugins: [react(), tailwindcss()],
   server: { proxy },
   preview: { proxy },
   resolve: { alias: { '@': path.resolve(import.meta.dirname, 'src') } },
   test: {
     environment: 'jsdom',
+    testTimeout: 10000,
     setupFiles: ['./src/test/setup.ts'],
     css: false,
     globals: false,

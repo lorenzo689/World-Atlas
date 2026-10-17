@@ -58,7 +58,7 @@ export function UserMenu({ className }: { className?: string }) {
           role="menu"
           className="glass animate-rise absolute right-0 top-12 z-50 w-60 overflow-hidden rounded-2xl p-1.5 text-sm"
         >
-          {LINKS.filter((l) => (!('account' in l) || isAccount(user)) && (!('user' in l) || !!user)).map(({ to, label, icon: Icon }) => (
+          {LINKS.filter((l) => import.meta.env.VITE_STATIC_DEMO !== 'true' && (!('account' in l) || isAccount(user)) && (!('user' in l) || !!user)).map(({ to, label, icon: Icon }) => (
             <Link
               key={to}
               to={to}
@@ -69,7 +69,7 @@ export function UserMenu({ className }: { className?: string }) {
               {t(label)}
             </Link>
           ))}
-          {isAdmin(user) && (
+          {import.meta.env.VITE_STATIC_DEMO !== 'true' && isAdmin(user) && (
             <Link to="/admin" role="menuitem" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-foreground/90 hover:bg-white/5">
               <ShieldCheck className="size-4 text-primary" /> {t('nav.admin')}
             </Link>
@@ -91,7 +91,7 @@ export function UserMenu({ className }: { className?: string }) {
             ))}
           </div>
           <div className="my-1 border-t border-border" />
-          {user ? (
+          {import.meta.env.VITE_STATIC_DEMO === 'true' ? <p className="px-3 py-2 text-xs text-muted-foreground">Historical map demo · CShapes 2.0</p> : user ? (
             <>
               <p className="flex items-center gap-3 px-3 py-2 text-xs text-muted-foreground">
                 <UserIcon className="size-4" />

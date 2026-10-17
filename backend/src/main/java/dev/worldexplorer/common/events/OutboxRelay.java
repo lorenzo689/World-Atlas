@@ -28,7 +28,7 @@ public class OutboxRelay {
 
     private static final Logger log = LoggerFactory.getLogger(OutboxRelay.class);
     private static final int BATCH = 200;
-    private static final int MAX_ATTEMPTS = 20;
+    public static final int MAX_ATTEMPTS = 20;
 
     record Row(UUID id, String topic, String key, String type, String payload) {}
 
@@ -44,7 +44,13 @@ public class OutboxRelay {
         this.kafka = kafka;
         this.json = json;
         Gauge.builder("outbox.pending", this, OutboxRelay::pending)
-                .description("Domain events waiting to be sent to Kafka")
+                .description("Domain events eligible for delivery to Kafka")
+                .register(meters);
+        Gauge.builder("outbox.failed", this, OutboxRelay::failed)
+                .description("Domain events that exhausted delivery attempts and need operator action")
+                .register(meters);
+        Gauge.builder("outbox.oldest.age.seconds", this, OutboxRelay::oldestAgeSeconds)
+                .description("Age of the oldest unsent retryable event in seconds")
                 .register(meters);
     }
 
@@ -60,7 +66,7 @@ public class OutboxRelay {
     int relayBatch() {
         List<Row> rows = jdbc.sql("""
                         select id, topic, msg_key, type, payload from outbox_event
-                        where sent_at is null and attempts < :max
+                        where sent_at is null and attempts < :max and next_attempt_at <= now()
                         order by created_at
                         limit :batch
                         for update skip locked
@@ -80,8 +86,12 @@ public class OutboxRelay {
             } catch (Exception e) {
                 if (e instanceof InterruptedException) Thread.currentThread().interrupt();
                 log.warn("Outbox event {} ({}) not sent: {}", row.id(), row.topic(), e.getMessage());
-                jdbc.sql("update outbox_event set attempts = attempts + 1, last_error = :err where id = :id")
-                        .param("id", row.id()).param("err", String.valueOf(e.getMessage())).update();
+                jdbc.sql("""
+                        update outbox_event
+                        set attempts = attempts + 1, last_error = :err,
+                            next_attempt_at = now() + (least(60, power(2, least(attempts, 6))) * interval '1 second')
+                        where id = :id
+                        """).param("id", row.id()).param("err", String.valueOf(e.getMessage())).update();
                 break; // keep the order: stop at the first failure, retry later
             }
         }
@@ -96,7 +106,28 @@ public class OutboxRelay {
 
     double pending() {
         try {
-            return jdbc.sql("select count(*) from outbox_event where sent_at is null").query(Long.class).single();
+            return jdbc.sql("select count(*) from outbox_event where sent_at is null and attempts < :max")
+                    .param("max", MAX_ATTEMPTS).query(Long.class).single();
+        } catch (Exception e) {
+            return Double.NaN;
+        }
+    }
+
+    double failed() {
+        try {
+            return jdbc.sql("select count(*) from outbox_event where sent_at is null and attempts >= :max")
+                    .param("max", MAX_ATTEMPTS).query(Long.class).single();
+        } catch (Exception e) {
+            return Double.NaN;
+        }
+    }
+
+    double oldestAgeSeconds() {
+        try {
+            return jdbc.sql("""
+                    select coalesce(extract(epoch from now() - min(created_at)), 0)
+                    from outbox_event where sent_at is null and attempts < :max
+                    """).param("max", MAX_ATTEMPTS).query(Double.class).single();
         } catch (Exception e) {
             return Double.NaN;
         }

@@ -48,30 +48,31 @@ function Splash() {
 }
 
 export default function App() {
+  const staticDemo = import.meta.env.VITE_STATIC_DEMO === 'true'
   useEffect(() => {
-    void restoreSession()
-  }, [])
+    if (!staticDemo) void restoreSession()
+  }, [staticDemo])
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={import.meta.env.BASE_URL}>
       <TooltipProvider delayDuration={200}>
         <CountriesProvider>
           <Suspense fallback={<Splash />}>
             <Routes>
               <Route path="/" element={<ExplorerPage />} />
-              <Route path="/countries/:code/:tab?" element={<CountryPage />} />
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/quiz" element={<QuizPage />} />
-              <Route path="/play/:code?" element={<MultiplayerPage />} />
-              <Route path="/leaderboard" element={<LeaderboardPage />} />
-              <Route path="/atlas" element={<AtlasPage />} />
-              <Route path="/data" element={<DataPage />} />
-              <Route path="/achievements" element={<AchievementsPage />} />
-              <Route path="/challenge/:slug" element={<ChallengePage />} />
-              <Route path="/compare" element={<ComparePage />} />
-              <Route path="/admin" element={<AdminPage />} />
-              <Route path="/verify" element={<VerifyEmailPage />} />
-              <Route path="/reset-password" element={<ResetPasswordPage />} />
-              <Route path="/views/:slug" element={<SharedViewPage />} />
+              {!staticDemo && <Route path="/countries/:code/:tab?" element={<CountryPage />} />}
+              {!staticDemo && <Route path="/login" element={<LoginPage />} />}
+              {!staticDemo && <Route path="/quiz" element={<QuizPage />} />}
+              {!staticDemo && <Route path="/play/:code?" element={<MultiplayerPage />} />}
+              {!staticDemo && <Route path="/leaderboard" element={<LeaderboardPage />} />}
+              {!staticDemo && <Route path="/atlas" element={<AtlasPage />} />}
+              {!staticDemo && <Route path="/data" element={<DataPage />} />}
+              {!staticDemo && <Route path="/achievements" element={<AchievementsPage />} />}
+              {!staticDemo && <Route path="/challenge/:slug" element={<ChallengePage />} />}
+              {!staticDemo && <Route path="/compare" element={<ComparePage />} />}
+              {!staticDemo && <Route path="/admin" element={<AdminPage />} />}
+              {!staticDemo && <Route path="/verify" element={<VerifyEmailPage />} />}
+              {!staticDemo && <Route path="/reset-password" element={<ResetPasswordPage />} />}
+              {!staticDemo && <Route path="/views/:slug" element={<SharedViewPage />} />}
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>

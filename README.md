@@ -3,6 +3,19 @@
 An interactive 3D atlas: a fullscreen Earth you can rotate and zoom, click any country for a quick card,
 and open detailed pages with population, economy and geography data from the World Bank.
 
+The globe also has an **interactive historical timeline**: scroll year by year from 1886 to 2019
+to see the boundaries and available dated flags at the start of each year, then return to today's
+map. See [historical data and licensing](docs/HISTORY.md).
+
+Compare two historical years side by side, follow the same camera, open sourced event shortcuts,
+and share the comparison URL. The [engineering case study](docs/PORTFOLIO.md) covers data
+provenance, reliability, security evidence and the measured geometry-file reduction.
+
+**Static demo:** The GitHub Pages workflow builds the historical globe at
+`https://lorenzo689.github.io/World-Atlas/` after Pages is enabled for this repository. It has
+no login and resets to the 1989/1991 comparison on a fresh visit. The Spring Boot features
+require the separate deployment in [docs/DEPLOY.md](docs/DEPLOY.md).
+
 With the Spring Boot backend it becomes a full-stack app:
 
 - **Geo quiz** – find countries on the globe, capitals, flags, population duels; daily challenge; leaderboards;
@@ -50,6 +63,11 @@ Optional tooling: `docker compose --profile monitoring up -d` (Prometheus, Grafa
 dev mailbox: `GET /api/dev/mails`.
 
 ## Tests
+
+The admin console includes an event delivery view. It shows queued and exhausted transactional
+outbox events; after fixing the underlying error, an admin can retry one exhausted event.
+Prometheus exposes `outbox_pending` and `outbox_failed` gauges. Kafka consumer failures are
+parked on per-topic `.dlt` topics, visible in Kafka UI.
 
 ```bash
 npm test                         # frontend unit/component tests (vitest, testing-library)

@@ -381,9 +381,17 @@ export interface AdminUser {
   createdAt: string
   lastLoginAt: string | null
 }
+export interface OutboxStatus {
+  pending: number
+  failed: number
+  oldestPending: string | null
+  failures: { id: string; topic: string; key: string; attempts: number; lastError: string | null; createdAt: string }[]
+}
 export const adminApi = {
   users: () => api<AdminUser[]>('/admin/users?size=100'),
   setRoles: (id: string, roles: string[]) => api<AdminUser>(`/admin/users/${id}/roles`, { method: 'PUT', body: { roles } }),
+  outbox: () => api<OutboxStatus>('/admin/events/outbox'),
+  retryOutbox: (id: string) => api<void>(`/admin/events/outbox/${encodeURIComponent(id)}/retry`, { method: 'POST' }),
 }
 
 // ---- multiplayer ---------------------------------------------------------------------------

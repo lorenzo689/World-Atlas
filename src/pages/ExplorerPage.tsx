@@ -3,7 +3,7 @@ import { useExplorer } from '@/store/explorer'
 import { useCountries } from '@/hooks/useCountries'
 import { prefetchBoundaries, useBoundaries } from '@/hooks/useBoundaries'
 import { useIndicatorAtYear, useLatestForAll } from '@/hooks/useIndicator'
-import { useT } from '@/i18n'
+import { useLang, useT } from '@/i18n'
 import { useDocumentMeta, useIsDesktop } from '@/hooks/useMisc'
 import { INDICATORS } from '@/lib/indicators'
 import { buildChoropleth } from '@/lib/color'
@@ -14,8 +14,15 @@ import { SaveViewButton } from '@/components/globe/SaveViewButton'
 import { WebGLBoundary, hasWebGL } from '@/components/layout/WebGLBoundary'
 import { ModeSwitcher, DataPanel } from '@/components/globe/Controls'
 import { CountryPreview } from '@/components/globe/CountryPreview'
+import { HistoricalPreview } from '@/components/globe/HistoricalPreview'
+import { HistoricalTimeline } from '@/components/globe/HistoricalTimeline'
+import { HistoricalSearchBox } from '@/components/globe/HistoricalSearchBox'
 import { BottomSheet, type SheetSnap } from '@/components/globe/BottomSheet'
 import { ErrorState } from '@/components/ui/feedback'
+import { loadHistory, snapshotForYear, type HistoryData } from '@/lib/history'
+import { changedEntities, HISTORY_EVENTS, readHistoryLink } from '@/lib/historyCompare'
+import type { Pose } from '@/lib/geo'
+import type { GlobeMode } from '@/types'
 
 // Boundaries + pre-triangulated geometry start loading as soon as this module is evaluated.
 prefetchBoundaries()
@@ -32,6 +39,7 @@ const MAX_YEAR = new Date().getFullYear() - 1
 
 export default function ExplorerPage() {
   const t = useT()
+  const lang = useLang((s) => s.lang)
   const isDesktop = useIsDesktop()
   const { byCode, status: countriesStatus, reload } = useCountries()
   const boundaries = useBoundaries()
@@ -43,12 +51,20 @@ export default function ExplorerPage() {
   const setMetric = useExplorer((s) => s.setMetric)
   const select = useExplorer((s) => s.select)
   const setView = useExplorer((s) => s.setView)
+  useEffect(() => { if (import.meta.env.VITE_STATIC_DEMO === 'true') setMode('political') }, [setMode])
   // Read once on mount: restores the camera when coming back from a country page.
   const [initialPose] = useState(() => useExplorer.getState().view)
 
   // time slider (data mode): null = latest value per country
   const [year, setYear] = useState<number | null>(null)
+  const [historyYear, setHistoryYear] = useState<number | null>(() => readHistoryLink(window.location.search).year ?? (import.meta.env.VITE_STATIC_DEMO === 'true' ? 1989 : null))
+  const [compareYear, setCompareYear] = useState<number | null>(() => readHistoryLink(window.location.search).compare ?? (import.meta.env.VITE_STATIC_DEMO === 'true' && !window.location.search ? 1991 : null))
+  const [historyData, setHistoryData] = useState<HistoryData | null>(null)
+  const [historyError, setHistoryError] = useState(false)
+  const [historyAttempt, setHistoryAttempt] = useState(0)
+  const [historicalSelected, setHistoricalSelected] = useState<string | null>(null)
   const [ready, setReady] = useState(false)
+  const [comparePose, setComparePose] = useState<Pose | null>(initialPose)
   const webgl = useMemo(hasWebGL, [])
   const [focusNonce, setFocusNonce] = useState(0)
   const [snap, setSnap] = useState<SheetSnap>('peek')
@@ -78,6 +94,35 @@ export default function ExplorerPage() {
   }, [values, byCode])
 
   const country = selected ? byCode.get(selected) : undefined
+  useEffect(() => {
+    if (historyYear == null || historyData) return
+    let active = true
+    loadHistory().then(
+      (data) => { if (active) { setHistoryData(data); setHistoryError(false) } },
+      () => { if (active) setHistoryError(true) },
+    )
+    return () => { active = false }
+  }, [historyYear, historyData, historyAttempt])
+
+  const history = useMemo(
+    () => historyYear != null && historyData ? snapshotForYear(historyData, historyYear) : null,
+    [historyYear, historyData],
+  )
+  const comparison = useMemo(
+    () => compareYear != null && historyData ? snapshotForYear(historyData, compareYear) : null,
+    [compareYear, historyData],
+  )
+  const changed = useMemo(() => history && comparison ? changedEntities(history, comparison) : new Set<string>(), [history, comparison])
+  const changePaint = useCallback((code: string) => changed.has(code) ? '#f6c177' : '#34445b', [changed])
+  useEffect(() => {
+    const url = new URL(window.location.href)
+    if (historyYear == null) url.searchParams.delete('year')
+    else url.searchParams.set('year', String(historyYear))
+    if (historyYear == null || compareYear == null) url.searchParams.delete('compare')
+    else url.searchParams.set('compare', String(compareYear))
+    window.history.replaceState(null, '', url)
+  }, [historyYear, compareYear])
+  const historicalEntity = historicalSelected ? history?.entities.get(historicalSelected) : undefined
   const neighbours = useMemo(
     () => (country ? country.borders.map((b) => byCode.get(b)).filter((c): c is NonNullable<typeof c> => !!c) : []),
     [country, byCode],
@@ -92,15 +137,40 @@ export default function ExplorerPage() {
     [select],
   )
 
+  const changeHistoryYear = useCallback((next: number | null) => {
+    setHistoryYear(next)
+    if (next == null) setCompareYear(null)
+    setHistoricalSelected(null)
+    select(null)
+    setSnap('peek')
+    if (next != null) setMode('political')
+  }, [select, setMode])
+
+  const changeMode = useCallback((next: GlobeMode) => {
+    if (next === 'data' && historyYear != null) changeHistoryYear(null)
+    setMode(next)
+  }, [historyYear, changeHistoryYear, setMode])
+
+  const onGlobeSelect = useCallback((code: string) => {
+    if (historyYear != null) {
+      setHistoricalSelected(code)
+      setSnap('peek')
+      setFocusNonce((n) => n + 1)
+    } else onSelect(code)
+  }, [historyYear, onSelect])
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !(e.target instanceof HTMLInputElement)) select(null)
+      if (e.key === 'Escape' && !(e.target instanceof HTMLInputElement)) {
+        select(null)
+        setHistoricalSelected(null)
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [select])
 
-  const showPanel = !!country
+  const showPanel = historyYear != null ? !!historicalEntity : !!country
   const insets = useMemo(
     () => ({
       right: showPanel && isDesktop ? PANEL_WIDTH + 32 : 0,
@@ -131,22 +201,41 @@ export default function ExplorerPage() {
           <WebGLBoundary>
             <Suspense fallback={null}>
               <GlobeView
-                boundaries={boundaries.data}
+                boundaries={history?.boundaries ?? boundaries.data}
                 countries={byCode}
                 mode={mode}
                 values={values}
                 metric={metric}
-                selected={selected}
-                onSelect={onSelect}
+                selected={historyYear != null ? historicalSelected : selected}
+                onSelect={onGlobeSelect}
+                historicalEntities={historyYear != null ? history?.entities : null}
                 onReady={() => setReady(true)}
-                onPoseChange={setView}
+                onPoseChange={(pose) => { setView(pose); if (comparison) setComparePose(pose) }}
                 initialPose={initialPose}
                 insets={insets}
                 focusNonce={focusNonce}
+                paint={comparison ? changePaint : null}
               />
             </Suspense>
           </WebGLBoundary>
         )
+      )}
+
+      {comparison && history && (
+        <div className="absolute inset-y-0 right-0 z-[5] w-1/2 overflow-hidden border-l border-primary/60 bg-background" aria-label={`${lang === 'de' ? 'Vergleichsjahr' : 'Comparison year'} ${compareYear}`}>
+          <WebGLBoundary><Suspense fallback={null}>
+            <GlobeView boundaries={comparison.boundaries} countries={byCode} mode="political" values={null} metric={metric}
+              selected={historicalSelected} onSelect={onGlobeSelect} historicalEntities={comparison.entities}
+              onReady={() => {}} onPoseChange={() => {}} initialPose={initialPose} externalPose={comparePose} insets={{ right: 0, bottom: 0 }}
+              focusNonce={focusNonce} paint={changePaint} />
+          </Suspense></WebGLBoundary>
+          <span className="glass pointer-events-none absolute left-3 top-32 rounded-full px-3 py-1 font-serif text-lg">{compareYear}</span>
+        </div>
+      )}
+      {comparison && history && <span className="glass pointer-events-none absolute left-4 top-32 z-10 rounded-full px-3 py-1 font-serif text-lg">{historyYear}</span>}
+
+      {historyYear != null && !history && (
+        <div className="pointer-events-none absolute inset-0 z-10 bg-background/90" aria-busy="true" />
       )}
 
       {/* Vignette keeps overlay text legible against bright oceans */}
@@ -171,23 +260,24 @@ export default function ExplorerPage() {
       <header className="pointer-events-none absolute inset-x-0 top-0 z-30 flex flex-col gap-3 p-4 sm:p-6">
         <div className="flex items-center gap-3 sm:gap-6">
           <Brand className="pointer-events-auto shrink-0" />
-          <SearchBox
-            className="pointer-events-auto mx-auto w-full max-w-md"
-            onSelect={(c) => onSelect(c.code)}
-          />
-          <div className="pointer-events-auto hidden shrink-0 md:block">
-            <ModeSwitcher mode={mode} onChange={setMode} />
+          {historyYear != null ? (
+            <HistoricalSearchBox entities={history?.entities ?? new Map()} onSelect={onGlobeSelect} className="pointer-events-auto mx-auto w-full max-w-md" />
+          ) : (
+            <SearchBox className="pointer-events-auto mx-auto w-full max-w-md" onSelect={(c) => onSelect(c.code)} />
+          )}
+          <div className="pointer-events-auto hidden shrink-0 md:block" style={{ display: import.meta.env.VITE_STATIC_DEMO === 'true' ? 'none' : undefined }}>
+            <ModeSwitcher mode={mode} onChange={changeMode} />
           </div>
           <UserMenu className="pointer-events-auto shrink-0" />
         </div>
-        <div className="pointer-events-auto md:hidden">
-          <ModeSwitcher mode={mode} onChange={setMode} />
+        <div className="pointer-events-auto md:hidden" style={{ display: import.meta.env.VITE_STATIC_DEMO === 'true' ? 'none' : undefined }}>
+          <ModeSwitcher mode={mode} onChange={changeMode} />
         </div>
       </header>
 
       {/* Data layer */}
-      {mode === 'data' && !(showPanel && !isDesktop) && (
-        <div className="absolute bottom-6 left-4 z-20 sm:left-6">
+      <div className="absolute bottom-4 left-4 z-20 flex flex-col gap-3 sm:bottom-6 sm:left-6" style={{ bottom: showPanel && !isDesktop ? '38vh' : undefined }}>
+        {mode === 'data' && historyYear == null && !(showPanel && !isDesktop) && (
           <DataPanel
             metricKey={metricKey}
             onMetricChange={setMetric}
@@ -201,25 +291,55 @@ export default function ExplorerPage() {
             maxYear={MAX_YEAR}
             yearStatus={atYear.status}
           />
-        </div>
-      )}
+        )}
+        <HistoricalTimeline
+          year={historyYear}
+          onChange={changeHistoryYear}
+          loading={historyYear != null && !history && !historyError}
+          error={historyError}
+          onRetry={() => { setHistoryError(false); setHistoryAttempt((n) => n + 1) }}
+          onReset={import.meta.env.VITE_STATIC_DEMO === 'true' ? () => { window.location.href = import.meta.env.BASE_URL } : undefined}
+          resetLabel={lang === 'de' ? 'Demo zurücksetzen' : 'Reset demo'}
+        />
+        {historyYear != null && history && <section className="glass max-h-[30vh] w-[min(31rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl p-3 text-xs" aria-label={lang === 'de' ? 'Historische Ereignisse und Vergleich' : 'Historical events and comparison'}>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" className="rounded-full border border-primary px-3 py-1 text-primary" onClick={() => setCompareYear(compareYear == null ? Math.max(1886, historyYear - 1) : null)}>{compareYear == null ? (lang === 'de' ? 'Jahre vergleichen' : 'Compare years') : (lang === 'de' ? 'Vergleich schließen' : 'Close comparison')}</button>
+            <button type="button" className="rounded-full border border-input px-3 py-1" onClick={() => navigator.clipboard.writeText(window.location.href)}>{lang === 'de' ? 'Link kopieren' : 'Copy link'}</button>
+            {comparison && <span className="text-amber-300">{changed.size} {lang === 'de' ? 'veränderte Staaten/Perioden' : 'changed states/periods'}</span>}
+          </div>
+          {compareYear != null && <label className="mt-2 block">{lang === 'de' ? 'Vergleichsjahr' : 'Comparison year'}: {compareYear}<input className="mt-1 w-full accent-amber-300" type="range" min="1886" max="2019" value={compareYear} onChange={(e) => setCompareYear(Number(e.target.value))} /></label>}
+          <div className="mt-2 flex flex-wrap gap-2">{HISTORY_EVENTS.map((event) => <button key={event.id} type="button" className="rounded-xl border border-input px-2 py-1 text-left hover:border-primary" onClick={() => { changeHistoryYear(event.before); setCompareYear(event.after) }} title={event.detail[lang]}>{event.date.slice(0, 4)} · {event.title[lang]}</button>)}</div>
+          {compareYear != null && <p className="mt-2 text-muted-foreground">{lang === 'de' ? 'Gelb markiert Datensatzperioden, die sich zwischen den Stichtagen unterscheiden; es ist keine geometrische Grenzdifferenz. Quellenereignisse können innerhalb eines Jahres liegen. Kartenstand jeweils 1. Januar.' : 'Amber marks source periods that differ between snapshots; it is not a geometric border diff. Events may occur during a year. Map date is 1 January.'}</p>}
+          {compareYear != null && HISTORY_EVENTS.filter((event) => event.before === historyYear && event.after === compareYear).map((event) => <a key={event.id} className="mt-1 block text-primary underline" href={event.source} target="_blank" rel="noreferrer">{event.detail[lang]} · {lang === 'de' ? 'Quelle' : 'Source'} ↗</a>)}
+        </section>}
+      </div>
 
       {/* Save the current view to the personal atlas (accounts only) */}
-      {ready && !(showPanel && !isDesktop) && (
+      {ready && import.meta.env.VITE_STATIC_DEMO !== 'true' && historyYear == null && !(showPanel && !isDesktop) && (
         <div className="absolute bottom-6 right-4 z-20 sm:right-6" style={{ right: showPanel && isDesktop ? PANEL_WIDTH + 40 : undefined }}>
           <SaveViewButton />
         </div>
       )}
 
       {/* Hint */}
-      {!showPanel && mode !== 'data' && ready && (
+      {!showPanel && mode !== 'data' && historyYear == null && ready && (
         <p className="eyebrow animate-fade pointer-events-none absolute inset-x-0 bottom-8 z-10 text-center">
           {isDesktop ? t('explore.hintDesktop') : t('explore.hintTouch')}
         </p>
       )}
 
       {/* Country preview */}
-      {country &&
+      {historyYear != null && historicalEntity && history &&
+        (isDesktop ? (
+          <aside key={historicalEntity.code} aria-label={historicalEntity.name} className="glass scrollbar-thin animate-rise absolute bottom-4 right-4 top-[88px] z-20 overflow-y-auto rounded-[28px]" style={{ width: PANEL_WIDTH }}>
+            <HistoricalPreview entity={historicalEntity} year={historyYear} onClose={() => setHistoricalSelected(null)} />
+          </aside>
+        ) : (
+          <BottomSheet snap={snap} onSnapChange={setSnap} onDismiss={() => setHistoricalSelected(null)} label={historicalEntity.name}>
+            <HistoricalPreview entity={historicalEntity} year={historyYear} onClose={() => setHistoricalSelected(null)} />
+          </BottomSheet>
+        ))}
+      {historyYear == null && country &&
         (isDesktop ? (
           <aside
             key={country.code}
@@ -252,7 +372,7 @@ export default function ExplorerPage() {
         ))}
 
       <p className="sr-only" role="status" aria-live="polite">
-        {country ? t('explore.selected', { name: country.name }) : ''}
+        {historicalEntity ? t('explore.selected', { name: historicalEntity.name }) : country ? t('explore.selected', { name: country.name }) : ''}
       </p>
     </main>
   )

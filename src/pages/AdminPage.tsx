@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Navigate } from 'react-router-dom'
-import { ExternalLink, ShieldCheck } from 'lucide-react'
-import { adminApi, dataApi, type AdminUser, type IndicatorInfo } from '@/lib/backend'
+import { ExternalLink, RotateCcw, ShieldCheck } from 'lucide-react'
+import { adminApi, dataApi, type AdminUser, type IndicatorInfo, type OutboxStatus } from '@/lib/backend'
 import { isAdmin, useAuth } from '@/store/auth'
 import { useDocumentMeta } from '@/hooks/useMisc'
 import { useLang, useT } from '@/i18n'
@@ -21,6 +21,7 @@ export default function AdminPage() {
         <OverviewCard />
         <IngestionCardLoader />
       </div>
+      <OutboxCard />
       <UsersCard />
       <Card className="mt-6">
         <p className="eyebrow mb-3">{t('admin.tools')}</p>
@@ -43,6 +44,66 @@ export default function AdminPage() {
         <p className="mt-3 text-xs text-muted-foreground">{t('admin.toolsHint')}</p>
       </Card>
     </PageShell>
+  )
+}
+
+function OutboxCard() {
+  const t = useT()
+  const lang = useLang((s) => s.lang)
+  const [status, setStatus] = useState<OutboxStatus | null>(null)
+  const [error, setError] = useState<unknown>(null)
+  const [retrying, setRetrying] = useState<string | null>(null)
+
+  const load = () => adminApi.outbox().then((next) => { setStatus(next); setError(null) }).catch(setError)
+  useEffect(() => {
+    load()
+    const interval = setInterval(load, 5000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const retry = async (id: string) => {
+    setRetrying(id)
+    try {
+      await adminApi.retryOutbox(id)
+      await load()
+    } catch (e) {
+      setError(e)
+    } finally {
+      setRetrying(null)
+    }
+  }
+
+  return (
+    <Card className="mt-6">
+      <p className="eyebrow mb-4">{t('admin.outboxTitle')}</p>
+      {status && (
+        <>
+          <div className="grid gap-4 text-sm sm:grid-cols-3">
+            <div><p className="text-muted-foreground">{t('admin.outboxPending')}</p><p className="tabular text-2xl">{status.pending}</p></div>
+            <div><p className="text-muted-foreground">{t('admin.outboxFailed')}</p><p className={cn('tabular text-2xl', status.failed > 0 && 'text-amber-300')}>{status.failed}</p></div>
+            <div><p className="text-muted-foreground">{t('admin.outboxOldest')}</p><p>{status.oldestPending ? new Date(status.oldestPending).toLocaleString(lang) : '—'}</p></div>
+          </div>
+          <p className="mt-3 text-xs text-muted-foreground">{t('admin.outboxHint')}</p>
+          {status.failures.length > 0 && (
+            <ul className="mt-4 divide-y divide-border text-sm">
+              {status.failures.map((event) => (
+                <li key={event.id} className="flex flex-wrap items-center gap-3 py-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium">{event.topic} <span className="text-xs text-muted-foreground">· {event.attempts} {t('admin.outboxAttempts')}</span></p>
+                    <p className="truncate text-xs text-muted-foreground" title={event.lastError ?? undefined}>{event.lastError ?? '—'}</p>
+                    <p className="text-xs text-muted-foreground">{new Date(event.createdAt).toLocaleString(lang)}</p>
+                  </div>
+                  <button type="button" disabled={retrying !== null} onClick={() => retry(event.id)} className="inline-flex items-center gap-1 rounded-full border border-input px-3 py-1.5 text-xs hover:bg-white/5 disabled:opacity-40">
+                    <RotateCcw className="size-3" /> {t('admin.outboxRetry')}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+      <ErrorText error={error} />
+    </Card>
   )
 }
 

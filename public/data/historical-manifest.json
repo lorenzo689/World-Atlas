@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "snapshotConvention": "1 January, inclusive source periods",
+  "source": {
+    "title": "CShapes 2.0",
+    "url": "https://icr.ethz.ch/data/cshapes/",
+    "license": "CC BY-NC-SA 4.0",
+    "sha256": "384b1ea90b9419f30a858d7ec237c85a22c60d1b35b5f85f215a1204f9989d42"
+  },
+  "flags": {
+    "source": "https://commons.wikimedia.org/wiki/Data:FlagsData.tab",
+    "filesAreHotlinked": true
+  },
+  "years": [
+    1886,
+    2019
+  ],
+  "periods": 710,
+  "geometry": {
+    "vertices": 797035,
+    "indices": 2999970,
+    "indexEncoding": "local-u16"
+  },
+  "files": {
+    "historical-topology.json": {
+      "bytes": 3704556,
+      "sha256": "ab083d9399545cc6c716de7aa9135af5c118813d46933d1680bcd9ccc388d8a0"
+    },
+    "historical-geometry.json": {
+      "bytes": 20508,
+      "sha256": "ab6f6f71557a63da80dabea2244bd495bc116b690b0e531cf5518a6c5c66cd94"
+    },
+    "historical-geometry.bin": {
+      "bytes": 12376220,
+      "sha256": "f6979446c2812b82fb6b7b7f988e7de1b553301f5b876abaaf9af5e908b85775"
+    },
+    "historical-flags.json": {
+      "bytes": 43699,
+      "sha256": "8643d60d453c6694011325ab0c4e86d9877d454a847a5ae93af16e78f858b6bd"
+    }
+  }
+}

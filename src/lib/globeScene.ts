@@ -108,7 +108,7 @@ export class GlobeScene {
   readonly scene = new Scene()
   readonly camera: PerspectiveCamera
   readonly controls: OrbitControls
-  readonly layers: BaseLayers
+  layers: BaseLayers
 
   private canvas: HTMLCanvasElement
   private globe: Mesh
@@ -278,6 +278,17 @@ export class GlobeScene {
       }
     })
     this.wake(500)
+  }
+
+  /** Swap the map without recreating WebGL, textures, controls or the current camera pose. */
+  replaceMap(features: CountryFeature[], borders?: number[][][], precomputed?: PrecomputedGeometry | null) {
+    this.scene.remove(this.layers.group)
+    this.layers.dispose()
+    this.layers = new BaseLayers(features, borders, precomputed)
+    this.scene.add(this.layers.group)
+    this.hoverCode = null
+    this.cb.onHover(null, 0, 0)
+    this.requestRender()
   }
 
   // ---- textures --------------------------------------------------------------------------------

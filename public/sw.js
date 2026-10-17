@@ -9,13 +9,14 @@
  *
  * Bump VERSION to drop all old caches.
  */
-const VERSION = 'v1'
+const VERSION = 'v3'
 const STATIC = `we-static-${VERSION}`
 const SHELL = `we-shell-${VERSION}`
-const CACHE_FIRST = [/^\/assets\//, /^\/textures\//, /^\/flags\//, /^\/data\//, /^\/icons\//, /\.(?:woff2?|webp|svg|png)$/]
+const BASE = new URL(self.registration.scope).pathname
+const CACHE_FIRST = [/\/(?:assets|textures|flags|data|icons)\//, /\.(?:woff2?|webp|svg|png)$/]
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(SHELL).then((c) => c.add('/')).then(() => self.skipWaiting()))
+  event.waitUntil(caches.open(SHELL).then((c) => c.add(BASE)).then(() => self.skipWaiting()))
 })
 
 self.addEventListener('activate', (event) => {
@@ -39,10 +40,10 @@ self.addEventListener('fetch', (event) => {
       fetch(req)
         .then((res) => {
           const copy = res.clone()
-          caches.open(SHELL).then((c) => c.put('/', copy))
+          caches.open(SHELL).then((c) => c.put(BASE, copy))
           return res
         })
-        .catch(() => caches.match('/').then((r) => r ?? Response.error())),
+        .catch(() => caches.match(BASE).then((r) => r ?? Response.error())),
     )
     return
   }

@@ -77,6 +77,11 @@ class AuthAndAtlasIT extends IntegrationTest {
         String admin = register("roles-admin-" + java.util.UUID.randomUUID() + "@test.dev");
         // only the configured bootstrap address is admin
         assertThat(get("/api/admin/users", admin).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(get("/api/admin/events/outbox", null).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(get("/api/admin/events/outbox", guest("Operator")).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(get("/api/admin/events/outbox", admin).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(post("/api/admin/events/outbox/00000000-0000-0000-0000-000000000001/retry", admin, null).getStatusCode())
+                .isEqualTo(HttpStatus.FORBIDDEN);
     }
 
     private org.springframework.http.ResponseEntity<JsonNode> refreshWithCookie(String cookie) {

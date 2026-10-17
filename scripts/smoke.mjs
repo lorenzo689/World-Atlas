@@ -45,7 +45,7 @@ const browser = await chromium.launch({
   headless: true,
   args: ['--ignore-gpu-blocklist', '--enable-gpu-rasterization'],
 })
-const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, hasTouch: true })
+const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, hasTouch: true, locale: 'en-US' })
 const page = await ctx.newPage()
 const errors = []
 page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`))
