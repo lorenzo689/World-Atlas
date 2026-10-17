@@ -110,6 +110,22 @@
 }
 
 /* globe.gl hover tooltip */
+.globe-place-labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.globe-place-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  white-space: nowrap;
+  color: #f4f7ff;
+  font: 500 11px/1.2 'Inter Variable', system-ui, sans-serif;
+  text-shadow: 0 1px 3px #071224, 0 0 8px #071224;
+  will-change: transform;
+}
 .globe-tip {
   display: flex;
   align-items: center;

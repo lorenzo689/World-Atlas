@@ -176,6 +176,9 @@ export function GlobeView({
         borders: firstBoundaries.borders,
         precomputed: firstBoundaries.geometry,
         satellite: mode0 === 'satellite',
+        detailEnabled: historicalEntities === null,
+        detailLowEnd: LOW_END,
+        imageDetailEnabled: !LOW_END && historicalEntities === null,
         reducedMotion: red,
         fixedQuality: PERF_DEBUG && !/[?&]adaptive=1/.test(window.location.search),
       },
@@ -232,7 +235,9 @@ export function GlobeView({
     hoverRef.current = null
     tipCode.current = null
     scene.replaceMap(features, boundaries.borders, boundaries.geometry)
-  }, [scene, boundaries, features])
+    scene.setMapDetailEnabled(historicalEntities === null)
+    scene.setImageDetailEnabled(!LOW_END && historicalEntities === null)
+  }, [scene, boundaries, features, historicalEntities])
 
   // ---- base map colours / mode --------------------------------------------------------------
   useEffect(() => {

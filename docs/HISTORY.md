@@ -7,6 +7,10 @@ The globe has two map timelines:
   deliberately separate from the World Bank indicator timeline.
 - **Today:** the existing Natural Earth map and current country metadata.
 
+Modern 1:10m close-zoom borders, administrative lines, physical details and place labels are disabled
+for historical years. They cannot be safely projected onto dated CShapes states. The satellite
+texture is January 2004 imagery used as a visual background, not a dated land-cover layer.
+
 The comparison control shows two selected snapshots side by side. Amber marks countries whose
 source period identifier differs or whose state appears/disappears; it is not a polygon-difference
 calculation. The right globe follows the left camera. Curated event buttons choose dates on either

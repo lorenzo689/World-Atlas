@@ -12,10 +12,13 @@
     "typecheck": "tsc --noEmit",
     "data": "node scripts/build-data.mjs",
     "data:history": "node scripts/build-history.mjs",
+    "data:detail": "node scripts/build-map-detail.mjs",
+    "data:detail:verify": "node scripts/verify-map-detail.mjs",
     "data:history:verify": "node scripts/verify-history.mjs",
     "perf": "node scripts/perf.mjs",
     "smoke": "node scripts/smoke.mjs",
     "smoke:history": "node scripts/history-smoke.mjs",
+    "smoke:detail": "node scripts/detail-smoke.mjs",
     "e2e": "node scripts/e2e.mjs",
     "icons": "node scripts/build-icons.mjs"
   },

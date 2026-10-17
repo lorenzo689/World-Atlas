@@ -16,11 +16,13 @@ The underlying records are [ADR 0001](adr/0001-historical-snapshots.md) and [ADR
 | Period changes highlighted in amber | Fast and reproducible comparison from the source identifiers | The color is **not** an exact geometric border difference. |
 | Static GitHub Pages demo plus separate full-stack deployment | The map can be viewed without an account or server | GitHub Pages cannot run Spring Boot, Kafka, Redis, PostgreSQL or Elasticsearch. |
 | Transactional outbox with scheduled retry | Business writes survive a Kafka outage | At-least-once delivery requires idempotent consumers and an operator path for exhausted events. |
+| Camera-local close-zoom detail | Modern 1:10m borders and NASA image tiles improve close views without increasing initial transfer | Extra requests and GPU memory appear only at close zoom; historical states keep their separate border source. |
 
 ## Reproduction and evidence
 
 - `npm run data:history` pins the source SHA-256 and regenerates the map. `npm run data:history:verify` checks every annual snapshot, overlapping state periods, geometry ranges, flag metadata and output hashes against `historical-manifest.json`.
 - `npm test`, `npm run build` and `npm run smoke:history` cover the frontend and real-browser historical flow. `cd backend && ./mvnw verify` runs backend unit and Testcontainers integration tests.
+- `npm run data:detail:verify` checks generated map tiles; `npm run smoke:detail` checks zero detail requests at world zoom, close-zoom vector/image loading, labels and draw-call ceiling. See [map detail implementation](MAP-DETAIL.md).
 - The geometry artifact went from 18,376,160 to 12,376,220 bytes by storing indices relative to each country period as unsigned 16-bit values. This is a **33% transfer-size reduction** for that file; it is not a measured first-paint improvement.
 - `scripts/drill-outbox.ps1` stops local Kafka, creates an actual outbox event through the guest API, checks it stays durable with bounded retries, restarts Kafka in `finally`, and waits for delivery. The [17 October 2026 drill record](DRILL-2026-10-17.md) shows delivery after four attempts. Run it only against the local Compose stack with the updated backend.
 - Prometheus rules in `monitoring/alerts.yml` identify backend outage, outbox lag, exhausted events and elevated HTTP 5xx rate. They are visible in Prometheus; external notification routing requires Alertmanager configuration.

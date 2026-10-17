@@ -7,6 +7,10 @@ The globe also has an **interactive historical timeline**: scroll year by year f
 to see the boundaries and available dated flags at the start of each year, then return to today's
 map. See [historical data and licensing](docs/HISTORY.md).
 
+Zooming into today's map streams [higher-detail boundaries, rivers, lakes, administrative lines,
+place labels and NASA image tiles](docs/MAP-DETAIL.md) only for the visible area. Historical years
+keep their own dated CShapes boundaries and do not overlay current administrative data.
+
 Compare two historical years side by side, follow the same camera, open sourced event shortcuts,
 and share the comparison URL. The [engineering case study](docs/PORTFOLIO.md) covers data
 provenance, reliability, security evidence and the measured geometry-file reduction.
@@ -106,10 +110,10 @@ Nothing is invented: missing values render as `—` or an explicit empty state, 
 - **Statistics**: [World Bank Open Data](https://data.worldbank.org) API (CC BY 4.0), fetched live in the browser and cached per session.
 - **Country metadata**: [mledoze/countries](https://github.com/mledoze/countries) (ODbL), snapshotted in `scripts/source/countries.json`.
   (REST Countries v3.1 is deprecated and v5 needs an API key, so it isn't used.)
-- **Boundaries**: Natural Earth 1:50m via `world-atlas` (public domain).
+- **Boundaries**: Natural Earth 1:50m world view and 1:10m close-zoom tiles via `world-atlas` (public domain).
 - **Flags**: `flag-icons` (MIT), copied to `public/flags`.
 - **Descriptions**: Wikipedia REST summary API (CC BY-SA), attributed on the page.
-- **Textures**: NASA Blue Marble (three-globe example imagery). Sources live in `scripts/source/textures`; `node scripts/optimize-textures.mjs` writes the WebP files in `public/textures`.
+- **Textures**: NASA Blue Marble Next Generation January 2004 with topography and bathymetry. `node scripts/optimize-textures.mjs` checks the pinned original and writes 4K/2K base maps plus close-zoom WebP tiles.
 
 `npm run data` rebuilds `public/data/{countries,boundaries}.json` (boundaries are a simplified TopoJSON topology), the pre-triangulated globe caps `public/data/geometry.{bin,json}`, `public/flags`, `sitemap.xml` and `robots.txt`. Serve `*.bin` with compression enabled.
 

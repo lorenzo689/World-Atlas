@@ -5,5 +5,7 @@ dist
 perf-results
 .vscode*.tsbuildinfo
 scripts/source/historical/CShapes-2.0.geojson
+scripts/source/detail/
+scripts/source/textures/earth-blue-marble-hires.jpg
 backend/run.log
 backend/run-error.log

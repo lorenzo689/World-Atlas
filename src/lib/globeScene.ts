@@ -24,6 +24,8 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import type { CountryFeature, Pose } from '@/lib/geo'
 import { BaseLayers, GLOBE_RADIUS, polarToXYZ, xyzToPolar, type PrecomputedGeometry } from '@/lib/globeLayers'
 import { perfFrame } from '@/lib/perf'
+import { MapDetail } from '@/lib/mapDetail'
+import { ImageDetail } from '@/lib/imageDetail'
 
 const OCEAN = '#0b1626'
 const MIN_DPR = 1
@@ -52,6 +54,9 @@ export interface SceneOptions {
   borders?: number[][][]
   precomputed?: PrecomputedGeometry | null
   satellite: boolean
+  detailEnabled?: boolean
+  detailLowEnd?: boolean
+  imageDetailEnabled?: boolean
   /** Disable the frame-time governor (reproducible perf runs). */
   fixedQuality?: boolean
   reducedMotion?: boolean
@@ -109,6 +114,8 @@ export class GlobeScene {
   readonly camera: PerspectiveCamera
   readonly controls: OrbitControls
   layers: BaseLayers
+  private detail: MapDetail
+  private imageDetail: ImageDetail
 
   private canvas: HTMLCanvasElement
   private globe: Mesh
@@ -210,6 +217,9 @@ export class GlobeScene {
     this.globe.rotation.y = -Math.PI / 2 // prime meridian along +z
     this.globe.raycast = () => {}
     this.scene.add(this.globe)
+    this.imageDetail = new ImageDetail(this.globe, () => this.requestRender())
+    this.imageDetail.setSatellite(this.satellite)
+    this.imageDetail.setEnabled(opts.imageDetailEnabled !== false)
 
     // atmosphere
     const glowGeo = new SphereGeometry(GLOBE_RADIUS, 48, 24)
@@ -241,6 +251,9 @@ export class GlobeScene {
     // countries
     this.layers = new BaseLayers(opts.features, opts.borders, opts.precomputed)
     this.scene.add(this.layers.group)
+    this.detail = new MapDetail(this.scene, this.camera, container, () => this.requestRender(), opts.detailLowEnd)
+    this.detail.setSatellite(this.satellite)
+    this.detail.setEnabled(opts.detailEnabled !== false)
 
     // controls
     const c = (this.controls = new OrbitControls(this.camera, this.canvas))
@@ -289,6 +302,14 @@ export class GlobeScene {
     this.hoverCode = null
     this.cb.onHover(null, 0, 0)
     this.requestRender()
+  }
+
+  setMapDetailEnabled(enabled: boolean) {
+    this.detail.setEnabled(enabled)
+  }
+
+  setImageDetailEnabled(enabled: boolean) {
+    this.imageDetail.setEnabled(enabled)
   }
 
   // ---- textures --------------------------------------------------------------------------------
@@ -360,6 +381,8 @@ export class GlobeScene {
 
   // ---- public API ------------------------------------------------------------------------------
   setSatellite(on: boolean) {
+    this.detail.setSatellite(on)
+    this.imageDetail.setSatellite(on)
     if (on === this.satellite) return
     this.satellite = on
     this.globe.material = on ? this.satMaterial : this.flatMaterial
@@ -375,6 +398,8 @@ export class GlobeScene {
     this.camera.aspect = width / height
     this.camera.updateProjectionMatrix()
     this.applyViewOffset()
+    this.detail.update(this.getPose(), true)
+    this.imageDetail.update(this.getPose(), true)
     this.wake(200)
   }
 
@@ -502,6 +527,10 @@ export class GlobeScene {
 
     if (this.controls.update()) moving = true
 
+    this.detail.update(this.getPose())
+    this.imageDetail.update(this.getPose())
+    this.layers.borders.visible = !this.detail.coversBorders()
+
     if (this.needsRender || moving) {
       this.needsRender = false
       this.renderer.render(this.scene, this.camera)
@@ -556,6 +585,7 @@ export class GlobeScene {
   private setLite(on: boolean) {
     if (this.lite === on) return
     this.lite = on
+    this.imageDetail.setLite(on)
     const m = this.satMaterial
     if (on) {
       m.bumpMap = null
@@ -673,6 +703,8 @@ export class GlobeScene {
     this.canvas.removeEventListener('pointerleave', this.onPointerLeave)
     this.canvas.removeEventListener('wheel', this.onWheel)
     this.layers.dispose()
+    this.detail.dispose()
+    this.imageDetail.dispose()
     this.globe.geometry.dispose()
     this.atmosphere.geometry.dispose()
     ;(this.atmosphere.material as ShaderMaterial).dispose()
