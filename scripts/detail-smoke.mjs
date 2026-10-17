@@ -36,6 +36,12 @@ try {
   })
   await page.goto(`${url}/?debug=1`, { waitUntil: 'commit' })
   await page.waitForFunction(() => window.__perf?.ready && window.__globePose, null, { timeout: 120000 })
+  // GitHub Pages opens its historical demo by default; switch to today's map first.
+  const staticDemo = !!(await page.getByPlaceholder('Search historical countries…').count())
+  if (staticDemo) {
+    await page.getByRole('button', { name: 'Today' }).click()
+    await page.getByPlaceholder('Search countries, capitals…').waitFor()
+  }
   await page.waitForTimeout(3500)
   if (detailRequests.length) throw new Error(`Detail loaded at world zoom: ${detailRequests.length} requests`)
   const idlePose = await page.evaluate(() => window.__globePose())
@@ -58,7 +64,14 @@ try {
     await page.waitForTimeout(100)
   }
   await page.waitForTimeout(4500)
-  await page.waitForFunction(() => window.__globeDetail?.().bordersReady, null, { timeout: 20000 })
+  try {
+    await page.waitForFunction(() => window.__globeDetail?.().bordersReady, null, { timeout: 20000 })
+  } catch {
+    const state = await page.evaluate(() => ({ pose: window.__globePose?.(), detail: window.__globeDetail?.(), url: location.href, inputs: [...document.querySelectorAll('input')].map((input) => ({ value: input.value, placeholder: input.placeholder })) }))
+    mkdirSync('perf-results', { recursive: true })
+    await page.screenshot({ path: 'perf-results/live-fail.png' })
+    throw new Error(`Detailed borders did not become ready: ${JSON.stringify(state)}, responses=${JSON.stringify(detailRequests.slice(-12))}, errors=${JSON.stringify(errors)}`)
+  }
   const altitude = await page.evaluate(() => window.__globePose().altitude)
   const detail = await page.evaluate(() => window.__globeDetail())
   const snapshot = await page.evaluate(() => window.__perf.snapshot())
@@ -68,7 +81,7 @@ try {
   const failures = detailRequests.filter((request) => request.status !== 200)
   if (altitude >= 0.38) throw new Error(`Zoom did not reach detail level: ${altitude}`)
   if (detail.baseBordersVisible || detail.autoRotate) throw new Error(`Incorrect border/rotation state: ${JSON.stringify(detail)}`)
-  if (!borders || !images || !labels) throw new Error(`Missing detail: borders=${borders}, imagery=${images}, labels=${labels}`)
+  if (!borders || (!staticDemo && !images) || !labels) throw new Error(`Missing detail: borders=${borders}, imagery=${images}, labels=${labels}`)
   if (failures.length) throw new Error(`Detail HTTP failures: ${JSON.stringify(failures.slice(0, 3))}`)
   if (snapshot.drawCalls > 65) throw new Error(`Too many draw calls: ${snapshot.drawCalls}`)
   if (errors.length) throw new Error(`Browser errors: ${errors.join('; ')}`)

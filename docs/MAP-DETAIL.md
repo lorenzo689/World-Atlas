@@ -16,6 +16,8 @@ The image source is NASA Earth Observatory's [January 2004 Blue Marble Next Gene
 
 The historic 1886–2019 view intentionally disables modern high-resolution boundaries, administrative divisions, river/lake overlays, labels and image tiles. Its borders continue to come only from CShapes 2.0. The 4K NASA image remains a visual background, not a historical reconstruction of land cover.
 
+GitHub Pages opens the static historical demo in 1989 and uses political mode. The browser smoke switches to **Today** to verify the modern vector detail there; the satellite image path is checked by the regular CI browser test.
+
 ## Rebuild and verify
 
 ```bash
