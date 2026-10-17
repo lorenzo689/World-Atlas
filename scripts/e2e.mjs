@@ -175,7 +175,7 @@ await check('achievements page lists badges and the streak', async () => {
 await check('time slider changes the data layer', async () => {
   await page.goto(url, { waitUntil: 'domcontentloaded' })
   await page.getByRole('radio', { name: 'Data' }).click()
-  const slider = page.getByRole('slider', { name: 'Year' })
+  const slider = page.locator('#year-slider')
   await slider.waitFor({ timeout: 20_000 })
   await slider.fill('2005')
   await page.getByText(/^2005$/).first().waitFor({ timeout: 30_000 })

@@ -6,6 +6,7 @@ $name = 'Drill' + [guid]::NewGuid().ToString('N').Substring(0, 12)
 $sql = "select coalesce((select attempts::text || ':' || (sent_at is not null)::text from outbox_event where payload like '%$name%' order by created_at desc limit 1), 'missing')"
 try {
   docker compose stop kafka | Out-Host
+  if ($LASTEXITCODE -ne 0) { throw 'Could not stop local Kafka' }
   $body = @{ displayName = $name } | ConvertTo-Json -Compress
   Invoke-RestMethod -Method Post -Uri 'http://localhost:8080/api/auth/guest' -ContentType 'application/json' -Body $body -TimeoutSec 20 | Out-Null
   Start-Sleep -Seconds 15
@@ -16,7 +17,8 @@ try {
   Write-Host "Outage: event remains unsent after 15 s with $attempts retries"
 }
 finally {
-  docker compose up -d --wait kafka | Out-Host
+  docker compose start kafka | Out-Host
+  if ($LASTEXITCODE -ne 0) { throw 'Could not restart local Kafka' }
 }
 $deadline = (Get-Date).AddMinutes(3)
 do {
