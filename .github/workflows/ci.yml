@@ -40,3 +40,42 @@ jobs:
           path: |
             backend/target/surefire-reports
             backend/target/failsafe-reports
+
+  e2e:
+    # Full stack in a real browser: infrastructure from docker-compose.yml, the backend jar, `vite preview`
+    # (proxying /api and /ws) and Chrome driven by scripts/e2e.mjs.
+    needs: [frontend, backend]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+          cache: maven
+      - run: docker compose up -d --wait postgres redis kafka elasticsearch
+      - name: Build and start the backend
+        working-directory: backend
+        run: |
+          ./mvnw -B -q -DskipTests package
+          nohup java -jar target/world-explorer-backend-*.jar \
+            --app.rate-limit.auth-per-minute=100000 --app.rate-limit.api-per-minute=1000000 \
+            --app.ingestion.bootstrap-on-startup=false > ../backend.log 2>&1 &
+          for i in $(seq 1 90); do curl -sf localhost:8080/api/health && break; sleep 2; done
+          curl -sf localhost:8080/api/health
+      - run: npm ci
+      - run: npm run build
+      - name: End-to-end test
+        run: CHROME_PATH=$(which google-chrome) npm run e2e -- --screenshots e2e-screenshots
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-artifacts
+          path: |
+            e2e-screenshots
+            backend.log

@@ -17,7 +17,21 @@ public record AppProperties(
         Quiz quiz,
         Multiplayer multiplayer,
         RateLimit rateLimit,
+        Auth auth,
         @DefaultValue List<String> adminEmails) {
+
+    /**
+     * @param publicUrl          where the frontend runs; used for links in e-mails
+     * @param cookieSecure       send the refresh-token cookie only over HTTPS (true in production)
+     * @param requireVerifiedEmail personal atlas only after the e-mail address was confirmed
+     * @param devMailbox         expose sent e-mails at /api/dev/mails (local development only!)
+     */
+    public record Auth(
+            @DefaultValue("http://localhost:5173") String publicUrl,
+            @DefaultValue("false") boolean cookieSecure,
+            @DefaultValue("false") boolean requireVerifiedEmail,
+            @DefaultValue("false") boolean devMailbox,
+            @DefaultValue("World Explorer <no-reply@worldexplorer.dev>") String mailFrom) {}
 
     public record Jwt(
             String secret,

@@ -3,17 +3,19 @@ import { Link } from 'react-router-dom'
 import { Heart, NotebookPen } from 'lucide-react'
 import { atlasApi, type CountryState, type TravelStatus } from '@/lib/backend'
 import { isAccount, useAuth } from '@/store/auth'
+import { useT, type MessageKey } from '@/i18n'
 import { cn } from '@/lib/utils'
 
-const OPTIONS: { id: TravelStatus | null; label: string }[] = [
-  { id: null, label: 'Not yet' },
-  { id: 'WISHLIST', label: 'Wishlist' },
-  { id: 'VISITED', label: 'Visited' },
-  { id: 'LIVED', label: 'Lived' },
+const OPTIONS: { id: TravelStatus | null; label: MessageKey }[] = [
+  { id: null, label: 'atlas.status.NONE' },
+  { id: 'WISHLIST', label: 'atlas.status.WISHLIST' },
+  { id: 'VISITED', label: 'atlas.status.VISITED' },
+  { id: 'LIVED', label: 'atlas.status.LIVED' },
 ]
 
 /** "My atlas" quick actions in the country panel: favourite + travel status (signed-in accounts only). */
 export function AtlasActions({ code }: { code: string }) {
+  const t = useT()
   const user = useAuth((s) => s.user)
   const [state, setState] = useState<CountryState | null>(null)
 
@@ -51,12 +53,12 @@ export function AtlasActions({ code }: { code: string }) {
   return (
     <div className="mt-4 rounded-2xl border border-border p-3">
       <div className="flex items-center justify-between">
-        <p className="eyebrow">My atlas</p>
+        <p className="eyebrow">{t('nav.atlas')}</p>
         <div className="flex items-center gap-1">
           <Link
             to="/atlas"
             className="flex items-center gap-1 rounded-full px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
-            title="Notes"
+            title={t('atlas.tab.notes')}
           >
             <NotebookPen className="size-3.5" /> {state.notes}
           </Link>
@@ -64,7 +66,7 @@ export function AtlasActions({ code }: { code: string }) {
             type="button"
             onClick={toggleFavorite}
             aria-pressed={state.favorite}
-            aria-label={state.favorite ? 'Remove from favourites' : 'Add to favourites'}
+            aria-label={state.favorite ? t('atlas.removeFavorite') : t('atlas.addFavorite')}
             className="rounded-full p-1.5 hover:bg-white/5"
           >
             <Heart className={cn('size-4', state.favorite ? 'fill-primary text-primary' : 'text-muted-foreground')} />
@@ -82,7 +84,7 @@ export function AtlasActions({ code }: { code: string }) {
               state.travel === o.id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
             )}
           >
-            {o.label}
+            {t(o.label)}
           </button>
         ))}
       </div>

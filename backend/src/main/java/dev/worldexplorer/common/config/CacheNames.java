@@ -8,6 +8,7 @@ public final class CacheNames {
     public static final String INDICATOR_LATEST = "indicator-latest";
     public static final String INDICATOR_STATS = "indicator-stats";
     public static final String INDICATOR_CATALOG = "indicator-catalog";
+    public static final String INDICATOR_AT = "indicator-at";
 
     private CacheNames() {}
 }

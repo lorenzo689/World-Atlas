@@ -31,8 +31,7 @@ public class AnswerChecker {
 
     /** Human-readable correct answer, e.g. "Nairobi" for a capital question. */
     public String correctLabel(Question q) {
-        Country c = countries.find(q.answer()).orElse(null);
-        if (c == null) return q.answer();
-        return q.type() == QuestionType.CAPITAL ? c.getCapital() : c.getName();
+        if (q.type() != QuestionType.LOCATE) return q.answerLabel();
+        return countries.find(q.target()).map(Country::getName).orElse(q.target());
     }
 }

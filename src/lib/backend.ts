@@ -70,6 +70,15 @@ export interface CountrySeries {
   name: string
   points: Point[]
 }
+export interface ProfileValue {
+  key: string
+  label: string
+  unit: string
+  year: number
+  value: number
+  rank: number | null
+  of: number
+}
 export interface IngestionRun {
   id: string
   indicatorKey: string
@@ -92,6 +101,9 @@ export const dataApi = {
   stats: (key: string) => api<IndicatorStats>(`/indicators/${key}/stats`, { auth: false }),
   trend: (key: string) => api<TrendPoint[]>(`/indicators/${key}/trend`, { auth: false }),
   correlation: (x: string, y: string) => api<Correlation>(`/indicators/correlation?x=${x}&y=${y}`, { auth: false }),
+  atYear: (key: string, year: number) =>
+    api<{ indicatorKey: string; values: Record<string, Point> }>(`/indicators/${key}/at/${year}`, { auth: false }),
+  profile: (code: string) => api<ProfileValue[]>(`/indicators/countries/${code}`, { auth: false }),
   runs: () => api<IngestionRun[]>('/admin/ingestion/runs?limit=40'),
   ingest: (key?: string) => api<unknown>(key ? `/admin/ingestion/${key}` : '/admin/ingestion', { method: 'POST' }),
 }
@@ -211,16 +223,21 @@ export const atlasApi = {
 
 // ---- quiz ----------------------------------------------------------------------------------
 export type QuestionType = 'LOCATE' | 'CAPITAL' | 'FLAG' | 'POPULATION'
-export type QuizMode = 'CLASSIC' | 'DAILY'
+export type QuizMode = 'CLASSIC' | 'DAILY' | 'CHALLENGE'
 export interface Option {
+  /** neutral id ("A"–"D") – never a country code, so it does not give the answer away */
   id: string
   label: string
+  /** country code where it reveals nothing beyond the label (country-name options), for translation */
+  code: string | null
 }
 export interface PublicQuestion {
   index: number
   total: number
   type: QuestionType
   prompt: string
+  /** the country named in the prompt (LOCATE, CAPITAL) so the prompt can be translated */
+  subject: string | null
   options: Option[]
   hasFlag: boolean
   timeLimitSeconds: number
@@ -238,6 +255,7 @@ export interface AnswerResult {
   score: number
   correctAnswer: string
   correctLabel: string
+  correctCountry: string
   distanceKm: number | null
   finished: boolean
   nextIndex: number | null
@@ -250,6 +268,7 @@ export interface ReviewItem {
   answer: string | null
   correctAnswer: string
   correctLabel: string
+  correctCountry: string
   correct: boolean
   points: number
   distanceKm: number | null
@@ -267,6 +286,7 @@ export interface QuizSummary {
   weeklyRank: number | null
   allTimeRank: number | null
   dailyRank: number | null
+  challenge: string | null
   review: ReviewItem[]
 }
 export interface PlayerStats {
@@ -295,13 +315,75 @@ export interface Leaderboard {
 }
 
 export const quizApi = {
-  start: (body: { mode: QuizMode; region?: string | null; rounds?: number; types?: QuestionType[] }) =>
+  start: (body: { mode: QuizMode; region?: string | null; rounds?: number; types?: QuestionType[]; challenge?: string }) =>
     api<{ id: string; mode: QuizMode; total: number; ranked: boolean; region: string | null }>('/quiz', { body }),
   question: (id: string) => api<QuestionView>(`/quiz/${id}/question`),
   answer: (id: string, index: number, answer: string) => api<AnswerResult>(`/quiz/${id}/answer`, { body: { index, answer } }),
   summary: (id: string) => api<QuizSummary>(`/quiz/${id}`),
   stats: () => api<PlayerStats>('/quiz/me/stats'),
   leaderboard: (period: Period, limit = 20) => api<Leaderboard>(`/leaderboard?period=${period}&limit=${limit}`),
+}
+
+// ---- duels ---------------------------------------------------------------------------------
+export interface ChallengeResult {
+  rank: number
+  userId: string
+  name: string
+  score: number
+  correct: number
+  total: number
+  durationMs: number
+  finishedAt: string
+}
+export interface Challenge {
+  slug: string
+  creatorName: string
+  region: string | null
+  rounds: number
+  createdAt: string
+  results: ChallengeResult[]
+  played: boolean
+}
+export const challengeApi = {
+  create: (body: { region?: string | null; rounds?: number }) => api<Challenge>('/challenges', { body }),
+  get: (slug: string) => api<Challenge>(`/challenges/${slug}`),
+}
+
+// ---- achievements --------------------------------------------------------------------------
+export interface AchievementDto {
+  code: string
+  title: string
+  description: string
+  icon: string
+  unlocked: boolean
+  unlockedAt: string | null
+}
+export interface AchievementOverview {
+  achievements: AchievementDto[]
+  unlocked: number
+  currentStreak: number
+  bestStreak: number
+  lastDaily: string | null
+  knowledge: { region: string; countries: number; total: number }[]
+}
+export const achievementApi = {
+  mine: () => api<AchievementOverview>('/achievements'),
+}
+
+// ---- admin ---------------------------------------------------------------------------------
+export interface AdminUser {
+  id: string
+  displayName: string
+  email: string | null
+  roles: string[]
+  guest: boolean
+  emailVerified: boolean
+  createdAt: string
+  lastLoginAt: string | null
+}
+export const adminApi = {
+  users: () => api<AdminUser[]>('/admin/users?size=100'),
+  setRoles: (id: string, roles: string[]) => api<AdminUser>(`/admin/users/${id}/roles`, { method: 'PUT', body: { roles } }),
 }
 
 // ---- multiplayer ---------------------------------------------------------------------------

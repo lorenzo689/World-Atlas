@@ -5,14 +5,33 @@ and open detailed pages with population, economy and geography data from the Wor
 
 With the Spring Boot backend it becomes a full-stack app:
 
-- **Geo quiz** – find countries on the globe, capitals, flags, population duels; daily challenge; leaderboards
-- **Multiplayer** – live rooms over WebSocket, quick-match, chat
+- **Geo quiz** – find countries on the globe, capitals, flags, population duels; daily challenge; leaderboards;
+  **duels** (share a link, everybody plays the same questions once)
+- **Multiplayer** – live rooms over WebSocket, quick-match, chat, live answer markers on the globe
 - **Data platform** – World Bank indicators ingested through Kafka into PostgreSQL; rankings, trends,
-  distributions, correlations
-- **Personal atlas** – favourites, travel log, full-text searchable notes, shareable globe views
+  distributions, correlations, a **1990–2025 time slider** on the globe
+- **Personal atlas** – favourites, **travel map** (visited / lived / wishlist painted on the globe, shareable
+  image), full-text searchable notes, shareable globe views
+- **Achievements** – 18 badges, daily streak, per-region knowledge; pushed live over WebSocket
+- **Compare** two countries on the globe and across indicators
+- **German / English** UI incl. localised country names, **PWA** (installable, offline shell), keyboard and
+  screen-reader support
+- **Admin console** – system overview, ingestion, users and roles
 
 **Frontend:** React 19 · TypeScript · Vite · Tailwind CSS v4 · shadcn/ui (Radix) · Three.js (own globe scene) · Recharts · React Router · STOMP
-**Backend:** Spring Boot 4.1 · Java 25 · PostgreSQL · Redis · Kafka · Elasticsearch · Flyway · JWT · WebSocket · Testcontainers
+**Backend:** Spring Boot 4.1 · Java 25 · PostgreSQL · Redis · Kafka · Elasticsearch · Flyway · JWT + HttpOnly refresh cookie · WebSocket · Testcontainers · OpenTelemetry
+
+```mermaid
+flowchart LR
+  B[Browser<br/>React + three.js] -- HTTP /api, WebSocket /ws --> S[Spring Boot 4.1<br/>Java 25]
+  S --> PG[(PostgreSQL<br/>system of record)]
+  S --> R[(Redis<br/>cache, sessions, timers,<br/>leaderboards, rate limits)]
+  S -- outbox relay --> K{{Kafka}}
+  K --> S
+  S --> ES[(Elasticsearch<br/>search + analytics)]
+  S -. fetch .-> WB[World Bank API]
+  S -. metrics / traces .-> O[Prometheus · Grafana · Jaeger]
+```
 
 ## Full stack in three commands
 
@@ -23,7 +42,21 @@ npm run dev                             # frontend on :5173, proxies /api and /w
 ```
 
 How the backend works, module by module, with the main request flows: [docs/BACKEND-GUIDE.md](docs/BACKEND-GUIDE.md) (German).
+Going public (HTTPS, one server): [docs/DEPLOY.md](docs/DEPLOY.md) (German).
 Without the backend the globe and country pages still work (data comes straight from the World Bank).
+
+Optional tooling: `docker compose --profile monitoring up -d` (Prometheus, Grafana dashboard, Jaeger),
+`--profile tools` (Kafka UI, Mailpit). In development the e-mails (verification, password reset) are kept in a
+dev mailbox: `GET /api/dev/mails`.
+
+## Tests
+
+```bash
+npm test                         # frontend unit/component tests (vitest, testing-library)
+cd backend && ./mvnw verify      # backend unit + integration tests (Testcontainers needs Docker)
+npm run build && npm run e2e     # browser end-to-end test against the running full stack
+docker run --rm -i -e BASE_URL=http://host.docker.internal:8080 grafana/k6:1.3.0 run - < loadtest/quiz.js
+```
 
 ## Run it
 
@@ -34,6 +67,7 @@ npm run build      # type-check + production build into dist/
 npm run preview    # serve the production build
 npm test           # vitest
 npm run data       # regenerate public/data + public/flags (see below)
+npm run icons      # regenerate the PWA icons from public/favicon.svg
 ```
 
 ## What's in it
@@ -73,13 +107,15 @@ src/
   lib/        World Bank + Wikipedia clients, formatting, search, geo framing, colour scales,
               globeScene (three.js scene, on-demand render loop, quality governor), globeLayers (merged map layers, picking), perf (?debug=1 probe)
   store/      zustand explorer state
-  pages/      ExplorerPage, CountryPage
+  pages/      ExplorerPage, CountryPage, Quiz, Multiplayer, Leaderboard, Atlas, Data, Compare, Achievements, Admin ...
+  i18n/       en.ts / de.ts dictionaries, useT(), localised country names (Intl.DisplayNames)
 ```
 
 ## Known limitations
 
 - SEO metadata is set client-side (SPA); crawlers that don't run JS will see the generic shell. Pre-rendering would be the next step.
 - `sitemap.xml` uses a placeholder origin (`world-explorer.example`); edit `scripts/build-data.mjs` before deploying.
+- The service worker caches static assets only; API data, quiz sessions and WebSockets always need the network.
 - 14 small territories have no polygon in the 1:50m dataset (e.g. Gibraltar, Réunion). They are searchable and the camera flies to their coordinates, but no shape is highlighted.
 - Country borders follow the Natural Earth dataset and carry no political endorsement.
 - The WebGL chunk is large (~1.9 MB, three.js); it is lazy-loaded so country pages stay light.

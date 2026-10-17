@@ -3,4 +3,4 @@ dist
 *.local
 .DS_Store
 perf-results
-.vscode
+.vscode*.tsbuildinfo

@@ -67,36 +67,40 @@ public class QuestionGenerator {
         return indexed;
     }
 
+    private static final String[] LETTERS = {"A", "B", "C", "D"};
+
     private Question locate(int i, Country c, RandomGenerator rnd) {
         return new Question(i, QuestionType.LOCATE, "Find " + c.getName() + " on the globe", c.getCode(), c.getCode(), List.of());
     }
 
     private Question capital(int i, Country c, List<Country> pool, RandomGenerator rnd) {
-        List<Option> options = options(c, pool, rnd, 4, x -> x.getCapital() != null, Country::getCapital);
+        List<Country> picked = choices(c, pool, rnd, 4, x -> x.getCapital() != null);
         return new Question(i, QuestionType.CAPITAL, "What is the capital of " + c.getName() + "?", c.getCode(),
-                c.getCode(), options);
+                letterOf(picked, c), toOptions(picked, Country::getCapital, false));
     }
 
     private Question flag(int i, Country c, List<Country> pool, RandomGenerator rnd) {
-        List<Option> options = options(c, pool, rnd, 4, x -> true, Country::getName);
-        return new Question(i, QuestionType.FLAG, "Which country does this flag belong to?", c.getCode(), c.getCode(), options);
+        List<Country> picked = choices(c, pool, rnd, 4, x -> true);
+        return new Question(i, QuestionType.FLAG, "Which country does this flag belong to?", c.getCode(),
+                letterOf(picked, c), toOptions(picked, Country::getName, true));
     }
 
     private Question population(int i, Country c, List<Country> pool, RandomGenerator rnd) {
         Country other = pickOther(c, pool, rnd, x -> population.containsKey(x.getCode())
                 && Math.abs(Math.log(population.get(x.getCode()) / population.get(c.getCode()))) > 0.05);
-        String answer = population.get(c.getCode()) >= population.get(other.getCode()) ? c.getCode() : other.getCode();
-        List<Option> options = new ArrayList<>(List.of(new Option(c.getCode(), c.getName()), new Option(other.getCode(), other.getName())));
-        Collections.shuffle(options, rnd);
-        return new Question(i, QuestionType.POPULATION, "Which country has more inhabitants?", c.getCode(), answer, options);
+        Country bigger = population.get(c.getCode()) >= population.get(other.getCode()) ? c : other;
+        List<Country> picked = new ArrayList<>(List.of(c, other));
+        Collections.shuffle(picked, rnd);
+        return new Question(i, QuestionType.POPULATION, "Which country has more inhabitants?", c.getCode(),
+                letterOf(picked, bigger), toOptions(picked, Country::getName, true));
     }
 
     /**
      * The correct option plus distractors. Distractors are preferably from the same subregion (harder:
      * "Ljubljana, Zagreb, Sarajevo" instead of "Ljubljana, Lima, Tokyo").
      */
-    private List<Option> options(Country correct, List<Country> pool, RandomGenerator rnd, int n,
-            Predicate<Country> eligible, java.util.function.Function<Country, String> label) {
+    private List<Country> choices(Country correct, List<Country> pool, RandomGenerator rnd, int n,
+            Predicate<Country> eligible) {
         List<Country> near = new ArrayList<>(pool.stream()
                 .filter(x -> !x.getCode().equals(correct.getCode()) && eligible.test(x)
                         && x.getSubregion() != null && x.getSubregion().equals(correct.getSubregion()))
@@ -111,7 +115,22 @@ public class QuestionGenerator {
         for (Country x : near) if (picked.size() < n) picked.add(x);
         for (Country x : far) if (picked.size() < n) picked.add(x);
         Collections.shuffle(picked, rnd);
-        return picked.stream().map(x -> new Option(x.getCode(), label.apply(x))).toList();
+        return picked;
+    }
+
+    /** Options get the ids A, B, C, D in display order. */
+    private static List<Option> toOptions(List<Country> picked, java.util.function.Function<Country, String> label,
+            boolean exposeCode) {
+        List<Option> out = new ArrayList<>();
+        for (int k = 0; k < picked.size(); k++) {
+            Country x = picked.get(k);
+            out.add(new Option(LETTERS[k], label.apply(x), exposeCode ? x.getCode() : null));
+        }
+        return out;
+    }
+
+    private static String letterOf(List<Country> picked, Country correct) {
+        return LETTERS[picked.indexOf(correct)];
     }
 
     private static Country pick(List<Country> pool, Set<String> used, RandomGenerator rnd, Predicate<Country> ok) {

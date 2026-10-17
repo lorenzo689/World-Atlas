@@ -17,7 +17,7 @@ class WorldBankClientTest {
     private final WorldBankClient client = new WorldBankClient(RestClient.builder(),
             new AppProperties(null, null,
                     new AppProperties.Ingestion("http://localhost", 1990, false, false, Duration.ofMinutes(1)),
-                    null, null, null, List.of()),
+                    null, null, null, null, List.of()),
             JsonMapper.builder().build(), new SimpleMeterRegistry());
 
     @Test

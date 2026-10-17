@@ -6,8 +6,11 @@ import {
   Group,
   LineBasicMaterial,
   LineSegments,
+  CanvasTexture,
   Mesh,
   MeshBasicMaterial,
+  Points,
+  PointsMaterial,
 } from 'three'
 import ConicPolygonGeometry from 'three-conic-polygon-geometry'
 import { geoContains } from 'd3-geo'
@@ -156,6 +159,10 @@ export class BaseLayers {
   readonly borders: LineSegments
   readonly hover: HighlightSlot
   readonly selected: HighlightSlot
+  /** a second, persistent highlight (country comparison) */
+  readonly secondary: HighlightSlot
+  /** pins on the surface (e.g. where other players clicked) – one draw call for all of them */
+  readonly markers: Points
   private ranges = new Map<string, [number, number]>() // code -> vertex [start, count]
   private pieces: Piece[] = []
   private piecesByCode = new Map<string, Piece[]>()
@@ -253,7 +260,26 @@ export class BaseLayers {
 
     this.hover = new HighlightSlot(this, indexRanges)
     this.selected = new HighlightSlot(this, indexRanges)
-    this.group.add(this.caps, this.borders, this.selected.group, this.hover.group)
+    this.secondary = new HighlightSlot(this, indexRanges)
+
+    this.markers = new Points(
+      new BufferGeometry(),
+      new PointsMaterial({
+        size: 14,
+        sizeAttenuation: false, // constant size in pixels, whatever the zoom
+        vertexColors: true,
+        map: dotTexture(),
+        transparent: true,
+        alphaTest: 0.3,
+        depthWrite: false,
+      }),
+    )
+    this.markers.frustumCulled = false
+    this.markers.raycast = () => {}
+    this.markers.renderOrder = 4
+    this.markers.visible = false
+
+    this.group.add(this.caps, this.borders, this.secondary.group, this.selected.group, this.hover.group, this.markers)
   }
 
   /** Outline of one country (all rings), built on demand and cached. */
@@ -285,6 +311,33 @@ export class BaseLayers {
       }
     }
     return g
+  }
+
+  /** Replaces all markers. Each marker is a coloured dot slightly above the surface. */
+  setMarkers(markers: { lat: number; lng: number; color: string }[]) {
+    const pos: number[] = []
+    const col: number[] = []
+    for (const m of markers) {
+      polarToXYZ(m.lat, m.lng, GLOBE_RADIUS * 1.03, pos)
+      this.tmp.set(m.color)
+      col.push(this.tmp.r, this.tmp.g, this.tmp.b)
+    }
+    const g = this.markers.geometry
+    g.setAttribute('position', new Float32BufferAttribute(pos, 3))
+    g.setAttribute('color', new Float32BufferAttribute(col, 3))
+    g.computeBoundingSphere()
+    this.markers.visible = markers.length > 0
+  }
+
+  /** Centroid-ish point of a country (largest piece's bounding-box centre) for markers. */
+  centerOf(code: string): { lat: number; lng: number } | null {
+    const pieces = this.piecesByCode.get(code)
+    if (!pieces?.length) return null
+    let best = pieces[0]
+    for (const p of pieces) {
+      if ((p.maxLng - p.minLng) * (p.maxLat - p.minLat) > (best.maxLng - best.minLng) * (best.maxLat - best.minLat)) best = p
+    }
+    return { lat: (best.minLat + best.maxLat) / 2, lng: (best.minLng + best.maxLng) / 2 }
   }
 
   /** Recolour every country's cap (rewrites one attribute). */
@@ -333,6 +386,10 @@ export class BaseLayers {
   dispose() {
     this.hover.dispose()
     this.selected.dispose()
+    this.secondary.dispose()
+    this.markers.geometry.dispose()
+    ;(this.markers.material as PointsMaterial).map?.dispose()
+    ;(this.markers.material as PointsMaterial).dispose()
     this.caps.geometry.dispose()
     ;(this.caps.material as MeshBasicMaterial).dispose()
     this.borders.geometry.dispose()
@@ -340,4 +397,21 @@ export class BaseLayers {
     for (const g of this.outlines.values()) g.dispose()
     this.outlines.clear()
   }
+}
+
+/** A soft round dot with a dark outline, used as the point sprite for markers. */
+function dotTexture(): CanvasTexture | null {
+  if (typeof document === 'undefined') return null
+  const c = document.createElement('canvas')
+  c.width = c.height = 64
+  const g = c.getContext('2d')
+  if (!g) return null
+  g.beginPath()
+  g.arc(32, 32, 26, 0, Math.PI * 2)
+  g.fillStyle = '#ffffff'
+  g.fill()
+  g.lineWidth = 8
+  g.strokeStyle = 'rgba(6,16,31,0.85)'
+  g.stroke()
+  return new CanvasTexture(c)
 }

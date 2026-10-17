@@ -57,10 +57,13 @@ public class QuizService {
     private final FlagStore flags;
     private final MeterRegistry meters;
     private final AppProperties.Quiz config;
+    private final ChallengeService challenges;
 
     public QuizService(QuestionFactory questions, AnswerChecker checker, RedisJson store, RedisLock lock,
             StringRedisTemplate redis, LeaderboardService leaderboards, QuizResultRepository results,
-            EventPublisher events, FlagStore flags, MeterRegistry meters, AppProperties props) {
+            EventPublisher events, FlagStore flags, MeterRegistry meters, AppProperties props,
+            ChallengeService challenges) {
+        this.challenges = challenges;
         this.questions = questions;
         this.checker = checker;
         this.store = store;
@@ -78,9 +81,23 @@ public class QuizService {
         List<Question> qs;
         boolean ranked;
         String dailyDate = null;
+        UUID challengeId = null;
         String region = req.region() == null || req.region().isBlank() ? null : req.region().trim();
 
-        if (req.mode() == QuizMode.DAILY) {
+        if (req.mode() == QuizMode.CHALLENGE) {
+            if (req.challenge() == null) throw ApiException.badRequest("missing_challenge", "Which duel do you want to play?");
+            QuizChallenge c = challenges.find(req.challenge());
+            // one attempt per player and duel
+            Boolean first = redis.opsForValue().setIfAbsent("quiz:challenge:" + c.getId() + ":" + user.id(), "1",
+                    Duration.ofDays(365));
+            if (!Boolean.TRUE.equals(first)) {
+                throw ApiException.conflict("challenge_played", "You already played this duel.");
+            }
+            qs = questions.seeded(ALL_TYPES, c.getRegion(), c.getRounds(), c.getSeed());
+            ranked = false;
+            region = c.getRegion();
+            challengeId = c.getId();
+        } else if (req.mode() == QuizMode.DAILY) {
             LocalDate today = LocalDate.now(ZoneOffset.UTC);
             dailyDate = today.toString();
             // one attempt per player and day: SET NX succeeds only the first time
@@ -103,7 +120,7 @@ public class QuizService {
         }
 
         QuizSession session = new QuizSession(UUID.randomUUID(), user.id(), user.name(), req.mode(), region, dailyDate,
-                ranked, qs, 0, null, List.of(), 0, Instant.now(), null);
+                ranked, qs, 0, null, List.of(), 0, Instant.now(), null, challengeId);
         save(session);
         return new StartResponse(session.id(), session.mode(), qs.size(), ranked, region);
     }
@@ -146,7 +163,7 @@ public class QuizService {
             save(next);
             if (next.finished()) complete(next);
             return new AnswerResult(r.correct(), r.late(), r.points(), next.score(), q.answer(), checker.correctLabel(q),
-                    r.distanceKm(), next.finished(), next.finished() ? null : next.current());
+                    q.answerCountry(), r.distanceKm(), next.finished(), next.finished() ? null : next.current());
         });
     }
 
@@ -158,7 +175,7 @@ public class QuizService {
         for (AnswerRecord a : s.answers()) {
             Question q = s.questions().get(a.index());
             review.add(new ReviewItem(q.index(), q.type(), q.prompt(), q.target(), a.answer(), q.answer(),
-                    checker.correctLabel(q), a.correct(), a.points(), a.distanceKm(), a.elapsedMs()));
+                    checker.correctLabel(q), q.answerCountry(), a.correct(), a.points(), a.distanceKm(), a.elapsedMs()));
         }
         boolean daily = s.mode() == QuizMode.DAILY;
         return new Summary(s.id(), s.mode(), s.region(), s.ranked(), s.score(), s.correctCount(), s.questions().size(),
@@ -166,6 +183,7 @@ public class QuizService {
                 s.ranked() && !daily ? leaderboards.rank(LeaderboardService.Period.WEEKLY, s.userId()) : null,
                 s.ranked() && !daily ? leaderboards.rank(LeaderboardService.Period.ALLTIME, s.userId()) : null,
                 daily ? leaderboards.rank(LeaderboardService.Period.DAILY, s.userId()) : null,
+                s.challengeId() == null ? null : challenges.slugOf(s.challengeId()),
                 review);
     }
 
@@ -182,7 +200,7 @@ public class QuizService {
     private void complete(QuizSession s) {
         long duration = Duration.between(s.startedAt(), s.finishedAt()).toMillis();
         results.save(new QuizResult(s.id(), s.userId(), s.playerName(), s.mode(), s.region(), s.score(),
-                s.correctCount(), s.questions().size(), duration, s.finishedAt()));
+                s.correctCount(), s.questions().size(), duration, s.finishedAt(), s.challengeId()));
         if (s.ranked()) {
             leaderboards.recordGame(s.userId(), s.playerName(), s.score(), s.mode() == QuizMode.DAILY,
                     s.dailyDate() == null ? null : LocalDate.parse(s.dailyDate()));

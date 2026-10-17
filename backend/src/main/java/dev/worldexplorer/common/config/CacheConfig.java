@@ -31,7 +31,8 @@ public class CacheConfig {
                 .withCacheConfiguration(CacheNames.COUNTRY_DETAIL, typed(json, CountryDetail.class, Duration.ofHours(6)))
                 .withCacheConfiguration(CacheNames.INDICATOR_LATEST, typed(json, LatestValues.class, Duration.ofHours(12)))
                 .withCacheConfiguration(CacheNames.INDICATOR_STATS, typed(json, IndicatorStats.class, Duration.ofHours(12)))
-                .withCacheConfiguration(CacheNames.INDICATOR_CATALOG, typed(json, Catalog.class, Duration.ofMinutes(30)));
+                .withCacheConfiguration(CacheNames.INDICATOR_CATALOG, typed(json, Catalog.class, Duration.ofMinutes(30)))
+                .withCacheConfiguration(CacheNames.INDICATOR_AT, typed(json, LatestValues.class, Duration.ofHours(12)));
     }
 
     private static <T> RedisCacheConfiguration typed(JsonMapper json, Class<T> type, Duration ttl) {

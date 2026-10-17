@@ -1,0 +1,6 @@
+# Structured logs (Elastic Common Schema JSON, one object per line) – what log collectors such as
+# Loki, Elasticsearch or CloudWatch want. Request id and trace id are included as fields.
+logging:
+  structured:
+    format:
+      console: ecs

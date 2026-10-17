@@ -1,0 +1,8 @@
+# Export traces to an OTLP collector (Jaeger in `docker compose --profile monitoring`).
+# Start with: SPRING_PROFILES_ACTIVE=tracing  (combinable: tracing,json-logs)
+management:
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          endpoint: ${OTLP_TRACES_ENDPOINT:http://localhost:4318/v1/traces}

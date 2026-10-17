@@ -10,7 +10,10 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
+import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -36,8 +39,9 @@ import tools.jackson.databind.json.JsonMapper;
 public class SecurityConfig {
 
     @Bean
-    SecurityFilterChain api(HttpSecurity http, JwtAuthenticationConverter jwtConverter, JsonMapper json)
-            throws Exception {
+    SecurityFilterChain api(HttpSecurity http, JwtAuthenticationConverter jwtConverter, JsonMapper json,
+            AppProperties props) throws Exception {
+        boolean requireVerified = props.auth().requireVerifiedEmail();
         http.csrf(c -> c.disable())
                 .cors(c -> {})
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -49,16 +53,19 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/**").hasRole("ADMIN")
                         .requestMatchers("/api/health").permitAll()
                         // auth
-                        .requestMatchers("/api/auth/me").authenticated()
+                        .requestMatchers("/api/auth/me", "/api/auth/verify/resend").authenticated()
+                        .requestMatchers("/api/dev/**").permitAll() // the controller refuses unless app.auth.dev-mailbox
                         .requestMatchers("/api/auth/**").permitAll()
                         // public read-only data
                         .requestMatchers(HttpMethod.GET,
                                 "/api/countries/**", "/api/search/**", "/api/indicators/**",
-                                "/api/leaderboard/**", "/api/activity/**", "/api/views/**", "/api/rooms/**")
+                                "/api/leaderboard/**", "/api/activity/**", "/api/views/**", "/api/rooms/**",
+                                "/api/challenges/**")
                         .permitAll()
                         // protected areas
                         .requestMatchers("/api/admin/**", "/api/analytics/**").hasRole("ADMIN")
-                        .requestMatchers("/api/atlas/**").hasRole("USER")
+                        .requestMatchers("/api/atlas/**").access((auth, ctx) -> new AuthorizationDecision(
+                                atlasAllowed(auth.get(), requireVerified)))
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(o -> o.jwt(j -> j.jwtAuthenticationConverter(jwtConverter)))
                 .exceptionHandling(e -> e
@@ -67,6 +74,15 @@ public class SecurityConfig {
                         .accessDeniedHandler((req, res, ex) ->
                                 writeProblem(res, json, HttpStatus.FORBIDDEN, "forbidden", "You are not allowed to do that.")));
         return http.build();
+    }
+
+    /** Accounts only (no guests); with app.auth.require-verified-email also a confirmed e-mail address. */
+    private static boolean atlasAllowed(Authentication auth, boolean requireVerified) {
+        if (auth == null || auth.getAuthorities().stream().noneMatch(a -> "ROLE_USER".equals(a.getAuthority()))) {
+            return false;
+        }
+        if (!requireVerified) return true;
+        return auth instanceof JwtAuthenticationToken jwt && Boolean.TRUE.equals(jwt.getToken().getClaim("email_verified"));
     }
 
     @Bean

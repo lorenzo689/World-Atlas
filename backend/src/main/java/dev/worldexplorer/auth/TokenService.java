@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
@@ -23,11 +24,14 @@ import org.springframework.stereotype.Service;
  *
  * <ul>
  *   <li><b>Access token</b> – a short-lived signed JWT (15 min). Verified on every request without any
- *       lookup, which is why it cannot be revoked and is kept short.
- *   <li><b>Refresh token</b> – a long random string (14 days). Only its SHA-256 hash is stored in Redis
- *       ({@code refresh:<hash> → userId}, with TTL). Each use <em>rotates</em> it: the old one is
- *       deleted and a new one issued, so a stolen refresh token works at most once. Logout deletes it.
+ *       lookup, which is why it cannot be revoked and is kept short. The browser keeps it in memory only.
+ *   <li><b>Refresh token</b> – a long random string (14 days), delivered as an {@code HttpOnly} cookie so
+ *       JavaScript (and therefore an XSS attack) can never read it. Only its SHA-256 hash is stored in
+ *       Redis ({@code refresh:<hash> → userId}, with TTL). Each use <em>rotates</em> it: the old one is
+ *       deleted and a new one issued, so a stolen refresh token works at most once.
  * </ul>
+ * Per user, the hashes are also kept in a set ({@code user-refresh:<userId>}) so that all sessions can
+ * be ended at once, e.g. after a password reset.
  */
 @Service
 public class TokenService {
@@ -57,27 +61,38 @@ public class TokenService {
                 .claim("name", user.getDisplayName())
                 .claim("roles", user.getRoles())
                 .claim("guest", user.isGuest())
+                .claim("email_verified", user.isEmailVerified())
                 .build();
         JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
         String access = encoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
 
         String refresh = randomToken();
-        redis.opsForValue().set(key(refresh), user.getId().toString(), config.refreshTokenTtl());
+        String hash = sha256(refresh);
+        redis.opsForValue().set("refresh:" + hash, user.getId().toString(), config.refreshTokenTtl());
+        String sessions = "user-refresh:" + user.getId();
+        redis.opsForSet().add(sessions, hash);
+        redis.expire(sessions, config.refreshTokenTtl());
         return new Tokens(access, config.accessTokenTtl().toSeconds(), refresh);
     }
 
     /** Consumes a refresh token (one-time use) and returns the user it belonged to. */
     public Optional<UUID> consumeRefreshToken(String refreshToken) {
-        String userId = redis.opsForValue().getAndDelete(key(refreshToken));
+        if (refreshToken == null || refreshToken.isBlank()) return Optional.empty();
+        String hash = sha256(refreshToken);
+        String userId = redis.opsForValue().getAndDelete("refresh:" + hash);
+        if (userId != null) redis.opsForSet().remove("user-refresh:" + userId, hash);
         return Optional.ofNullable(userId).map(UUID::fromString);
     }
 
     public void revoke(String refreshToken) {
-        redis.delete(key(refreshToken));
+        consumeRefreshToken(refreshToken);
     }
 
-    private static String key(String refreshToken) {
-        return "refresh:" + sha256(refreshToken);
+    /** Ends every session of a user (all refresh tokens). Access tokens expire within 15 minutes. */
+    public void revokeAll(UUID userId) {
+        Set<String> hashes = redis.opsForSet().members("user-refresh:" + userId);
+        if (hashes != null) hashes.forEach(h -> redis.delete("refresh:" + h));
+        redis.delete("user-refresh:" + userId);
     }
 
     private static String randomToken() {

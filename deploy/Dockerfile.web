@@ -1,0 +1,14 @@
+# Frontend image: builds the Vite app and serves it with Caddy, which also reverse-proxies /api and /ws
+# to the backend and gets a Let's Encrypt certificate automatically.
+# Build from the repository root:   docker build -f deploy/Dockerfile.web -t world-explorer-web .
+
+FROM node:24-alpine AS build
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+FROM caddy:2-alpine
+COPY deploy/Caddyfile /etc/caddy/Caddyfile
+COPY --from=build /app/dist /srv

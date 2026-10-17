@@ -27,7 +27,8 @@ public record QuizSession(
         List<AnswerRecord> answers,
         int score,
         Instant startedAt,
-        Instant finishedAt) {
+        Instant finishedAt,
+        UUID challengeId) {
 
     public record AnswerRecord(int index, String answer, boolean correct, int points, Double distanceKm,
             long elapsedMs, boolean late) {}
@@ -42,7 +43,7 @@ public record QuizSession(
 
     public QuizSession serve(Instant now) {
         return new QuizSession(id, userId, playerName, mode, region, dailyDate, ranked, questions, current, now,
-                answers, score, startedAt, finishedAt);
+                answers, score, startedAt, finishedAt, challengeId);
     }
 
     public QuizSession answer(AnswerRecord record, Instant now) {
@@ -51,7 +52,8 @@ public record QuizSession(
         int nextIndex = current + 1;
         Instant done = nextIndex >= questions.size() ? now : null;
         return new QuizSession(id, userId, playerName, mode, region, dailyDate, ranked, questions,
-                Math.min(nextIndex, questions.size() - 1), null, next, score + record.points(), startedAt, done);
+                Math.min(nextIndex, questions.size() - 1), null, next, score + record.points(), startedAt, done,
+                challengeId);
     }
 
     public int correctCount() {

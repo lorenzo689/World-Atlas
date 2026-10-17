@@ -64,6 +64,27 @@ public class IndicatorValueRepository {
         return out;
     }
 
+    /**
+     * The value of every country "as of" a year: the most recent observation in [year - window, year].
+     * Reporting is patchy (a country may skip a year), the window keeps the map filled without showing
+     * values that are too old.
+     */
+    public Map<String, Point> asOf(String key, int year, int window) {
+        Map<String, Point> out = new LinkedHashMap<>();
+        jdbc.sql("""
+                        select distinct on (country_code) country_code, year, value
+                        from indicator_value
+                        where indicator_key = :key and year between :from and :to
+                        order by country_code, year desc
+                        """)
+                .param("key", key).param("from", year - window).param("to", year)
+                .query((rs, i) -> {
+                    out.put(rs.getString("country_code"), new Point(rs.getInt("year"), rs.getDouble("value")));
+                    return null;
+                }).list();
+        return out;
+    }
+
     public Map<String, List<Point>> series(String key, Collection<String> codes, int from, int to) {
         Map<String, List<Point>> out = new LinkedHashMap<>();
         jdbc.sql("""

@@ -45,7 +45,7 @@ public class ActivityIndexer {
 
     @KafkaListener(id = "activity-indexer", groupId = "activity-indexer", containerFactory = "rawJsonFactory",
             topics = {Topics.INDICATOR_INGESTED, Topics.USER_REGISTERED, Topics.ATLAS_CHANGED, Topics.QUIZ_COMPLETED,
-                Topics.MULTIPLAYER_FINISHED})
+                Topics.MULTIPLAYER_FINISHED, Topics.ACHIEVEMENT_UNLOCKED})
     public void on(ConsumerRecord<String, String> record) {
         indices.ensure(ActivityDocument.class);
         JsonNode e = json.readTree(record.value());
@@ -87,6 +87,11 @@ public class ActivityIndexer {
                 boolean isPublic = "FAVORITE_ADDED".equals(type);
                 yield doc(id, "atlas.changed:" + type, topic, userId, userName(userId), code, null,
                         isPublic ? "Someone added " + country + " to their favourites" : type, isPublic, at, payload);
+            }
+            case Topics.ACHIEVEMENT_UNLOCKED -> {
+                String name = text(e, "userName");
+                yield doc(id, "achievement.unlocked", topic, userId, name, null, null,
+                        name + " earned the badge “" + text(e, "title") + "”", true, at, payload);
             }
             case Topics.INDICATOR_INGESTED -> doc(id, "indicator.ingested", topic, null, null, null, null,
                     "Data platform refreshed %s (%d values)".formatted(text(e, "indicatorKey"), e.path("records").asInt()),

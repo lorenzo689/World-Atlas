@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: world-explorer
+    folder: World Explorer
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards

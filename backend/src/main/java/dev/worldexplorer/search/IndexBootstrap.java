@@ -30,7 +30,8 @@ import org.springframework.stereotype.Component;
 public class IndexBootstrap {
 
     private static final Logger log = LoggerFactory.getLogger(IndexBootstrap.class);
-    private static final List<Class<?>> DOCUMENTS = List.of(CountryDocument.class, NoteDocument.class, ActivityDocument.class);
+    /** Countries are handled by {@link CountryIndexer} (alias + versioned indices). */
+    private static final List<Class<?>> DOCUMENTS = List.of(NoteDocument.class, ActivityDocument.class);
 
     private final ElasticsearchOperations es;
     private final Set<Class<?>> ready = ConcurrentHashMap.newKeySet();

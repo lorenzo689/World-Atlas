@@ -7,6 +7,7 @@ import dev.worldexplorer.support.IntegrationTest;
 import java.time.Duration;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import tools.jackson.databind.JsonNode;
 
@@ -29,16 +30,71 @@ class AuthAndAtlasIT extends IntegrationTest {
 
         var login = post("/api/auth/login", null, Map.of("email", "mia@test.dev", "password", "password123"));
         assertThat(login.getStatusCode()).isEqualTo(HttpStatus.OK);
-        String refresh = login.getBody().get("refreshToken").asString();
+        // the refresh token is not in the body, only in an HttpOnly cookie
+        assertThat(login.getBody().has("refreshToken")).isFalse();
+        String setCookie = login.getHeaders().getFirst(HttpHeaders.SET_COOKIE);
+        assertThat(setCookie).contains("we_refresh=", "HttpOnly", "SameSite=Strict", "Path=/api/auth");
+        String cookie = setCookie.substring(0, setCookie.indexOf(';'));
 
-        var refreshed = post("/api/auth/refresh", null, Map.of("refreshToken", refresh));
+        var refreshed = refreshWithCookie(cookie);
         assertThat(refreshed.getStatusCode()).isEqualTo(HttpStatus.OK);
         // refresh tokens rotate: the old one is single-use
-        assertThat(post("/api/auth/refresh", null, Map.of("refreshToken", refresh)).getStatusCode())
-                .isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(refreshWithCookie(cookie).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
 
         var me = get("/api/auth/me", refreshed.getBody().get("accessToken").asString());
         assertThat(me.getBody().get("displayName").asString()).isEqualTo("Mia");
+    }
+
+    @Test
+    void emailVerificationAndPasswordReset() {
+        String email = "reset-" + java.util.UUID.randomUUID() + "@test.dev";
+        String token = register(email);
+        assertThat(get("/api/auth/me", token).getBody().get("emailVerified").asBoolean()).isFalse();
+
+        // verification link from the (dev) mailbox
+        String verifyToken = linkToken(email, "verify?token=");
+        var verified = post("/api/auth/verify", null, Map.of("token", verifyToken));
+        assertThat(verified.getBody().get("user").get("emailVerified").asBoolean()).isTrue();
+        assertThat(post("/api/auth/verify", null, Map.of("token", verifyToken)).getStatusCode())
+                .isEqualTo(HttpStatus.BAD_REQUEST); // single use
+
+        // unknown addresses get the same answer as known ones
+        assertThat(post("/api/auth/forgot-password", null, Map.of("email", "nobody@test.dev")).getStatusCode())
+                .isEqualTo(HttpStatus.ACCEPTED);
+        assertThat(post("/api/auth/forgot-password", null, Map.of("email", email)).getStatusCode())
+                .isEqualTo(HttpStatus.ACCEPTED);
+        String resetToken = linkToken(email, "reset-password?token=");
+        var reset = post("/api/auth/reset-password", null, Map.of("token", resetToken, "password", "brand-new-pass"));
+        assertThat(reset.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(post("/api/auth/login", null, Map.of("email", email, "password", "password123")).getStatusCode())
+                .isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(post("/api/auth/login", null, Map.of("email", email, "password", "brand-new-pass")).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    void adminsManageRoles() {
+        String admin = register("roles-admin-" + java.util.UUID.randomUUID() + "@test.dev");
+        // only the configured bootstrap address is admin
+        assertThat(get("/api/admin/users", admin).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    private org.springframework.http.ResponseEntity<JsonNode> refreshWithCookie(String cookie) {
+        return http.post().uri("/api/auth/refresh").header(HttpHeaders.COOKIE, cookie)
+                .retrieve().toEntity(JsonNode.class);
+    }
+
+    /** Reads the newest e-mail to {@code email} from the dev mailbox and extracts the token after {@code marker}. */
+    private String linkToken(String email, String marker) {
+        JsonNode mails = get("/api/dev/mails", null).getBody();
+        for (JsonNode m : mails) {
+            String body = m.get("body").asString();
+            if (m.get("to").asString().equals(email) && body.contains(marker)) {
+                String rest = body.substring(body.indexOf(marker) + marker.length());
+                return rest.split("\\s")[0];
+            }
+        }
+        throw new AssertionError("no mail with " + marker + " for " + email);
     }
 
     @Test

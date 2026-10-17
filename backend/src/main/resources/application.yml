@@ -47,6 +47,10 @@ spring:
         enable.idempotence: true
         linger.ms: 20
         compression.type: lz4
+    template:
+      observation-enabled: true     # trace context travels in Kafka headers …
+    listener:
+      observation-enabled: true     # … and continues in the consumer
     consumer:
       group-id: world-explorer
       auto-offset-reset: earliest
@@ -86,6 +90,12 @@ management:
   metrics:
     tags:
       application: world-explorer
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true   # latency histograms for Grafana (p50/p95/p99)
+  tracing:
+    sampling:
+      probability: 1.0               # trace every request locally; lower in production
 
 springdoc:
   swagger-ui:
@@ -95,12 +105,17 @@ springdoc:
 
 logging:
   pattern:
-    correlation: "[%X{requestId:-}] "
+    correlation: "[%X{requestId:-} %X{traceId:-}] "
   level:
     org.apache.kafka: WARN
     org.springframework.kafka: INFO
 
 app:
+  auth:
+    public-url: http://localhost:5173
+    cookie-secure: false
+    require-verified-email: false
+    dev-mailbox: true          # local only: read sent e-mails at GET /api/dev/mails
   jwt:
     # Dev-only default. Override with APP_JWT_SECRET (>= 32 bytes) everywhere else.
     secret: ${APP_JWT_SECRET:dev-secret-dev-secret-dev-secret-dev-secret-0123456789}

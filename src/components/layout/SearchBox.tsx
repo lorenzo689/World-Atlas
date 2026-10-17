@@ -3,6 +3,7 @@ import { Search, X } from 'lucide-react'
 import type { Country } from '@/types'
 import { useCountries } from '@/hooks/useCountries'
 import { searchCountries } from '@/lib/search'
+import { useT } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { Flag } from '@/components/country/Flag'
 
@@ -14,7 +15,8 @@ interface SearchBoxProps {
 }
 
 /** Accessible combobox (ARIA 1.2 pattern) with diacritic-insensitive country autocomplete. */
-export function SearchBox({ onSelect, placeholder = 'Search countries, capitals‚Ä¶', className, autoFocus }: SearchBoxProps) {
+export function SearchBox({ onSelect, placeholder, className, autoFocus }: SearchBoxProps) {
+  const t = useT()
   const { index, status } = useCountries()
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
@@ -80,14 +82,14 @@ export function SearchBox({ onSelect, placeholder = 'Search countries, capitals‚
           aria-controls={listId}
           aria-autocomplete="list"
           aria-activedescendant={showList && results[active] ? `${listId}-${results[active].code}` : undefined}
-          aria-label="Search countries"
+          aria-label={t('explore.search')}
           autoComplete="off"
           autoCorrect="off"
           spellCheck={false}
           autoFocus={autoFocus}
           disabled={status !== 'ready'}
           value={query}
-          placeholder={placeholder}
+          placeholder={placeholder ?? t('search.placeholder')}
           onChange={(e) => {
             setQuery(e.target.value)
             setOpen(true)
@@ -100,7 +102,7 @@ export function SearchBox({ onSelect, placeholder = 'Search countries, capitals‚
         {query ? (
           <button
             type="button"
-            aria-label="Clear search"
+            aria-label={t('search.clear')}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => {
               setQuery('')
@@ -119,12 +121,12 @@ export function SearchBox({ onSelect, placeholder = 'Search countries, capitals‚
         <ul
           id={listId}
           role="listbox"
-          aria-label="Matching countries"
+          aria-label={t('search.matching')}
           className="glass animate-fade absolute inset-x-0 top-[calc(100%+8px)] z-30 overflow-hidden rounded-3xl p-1.5"
         >
           {results.length === 0 ? (
             <li className="px-4 py-3 text-sm text-muted-foreground" role="presentation">
-              No country matches ‚Äú{query}‚Äù
+              {t('search.none', { query })}
             </li>
           ) : (
             results.map((c, i) => (

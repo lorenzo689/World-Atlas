@@ -1,46 +1,46 @@
 package dev.worldexplorer.common.events;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.kafka.core.KafkaTemplate;
+import java.util.UUID;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.event.TransactionPhase;
-import org.springframework.transaction.event.TransactionalEventListener;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Publishes domain events to Kafka <em>after</em> the surrounding database transaction committed.
+ * Publishes domain events with the <b>transactional outbox</b> pattern.
  *
- * <p>Services call {@link #publish(DomainEvent)} inside their {@code @Transactional} method. The event is
- * first a Spring application event; {@link #forward} only runs once the transaction committed
- * ({@code AFTER_COMMIT}), so consumers never see an event for data that was rolled back.
- * Outside a transaction it is forwarded immediately ({@code fallbackExecution = true}).
+ * <p>{@link #publish} does not talk to Kafka. It inserts the event into the {@code outbox_event} table –
+ * inside the caller's database transaction. So the business change and the event are committed
+ * together or not at all:
+ * <ul>
+ *   <li>transaction rolls back → no event (consumers never hear about data that does not exist)
+ *   <li>process crashes after the commit → the event is still in the table and will be sent
+ * </ul>
+ * The {@link OutboxRelay} sends unsent rows to Kafka in the background. Delivery is therefore
+ * "at least once" – which is why all consumers are idempotent.
  *
- * <p>Trade-off (worth knowing): if the process dies between commit and send, the event is lost.
- * The bullet-proof alternative is the transactional outbox pattern (write the event into a table in
- * the same transaction and relay it to Kafka asynchronously).
+ * <p>Outside a transaction the insert simply auto-commits.
  */
 @Component
 public class EventPublisher {
 
-    private static final Logger log = LoggerFactory.getLogger(EventPublisher.class);
+    private final JdbcClient jdbc;
+    private final JsonMapper json;
 
-    private final ApplicationEventPublisher springEvents;
-    private final KafkaTemplate<Object, Object> kafka;
-
-    public EventPublisher(ApplicationEventPublisher springEvents, KafkaTemplate<Object, Object> kafka) {
-        this.springEvents = springEvents;
-        this.kafka = kafka;
+    public EventPublisher(JdbcClient jdbc, JsonMapper json) {
+        this.jdbc = jdbc;
+        this.json = json;
     }
 
     public void publish(DomainEvent event) {
-        springEvents.publishEvent(event);
-    }
-
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
-    void forward(DomainEvent event) {
-        kafka.send(event.topic(), event.key(), event).whenComplete((result, ex) -> {
-            if (ex != null) log.warn("Could not publish {} {}: {}", event.topic(), event.eventId(), ex.getMessage());
-        });
+        jdbc.sql("""
+                        insert into outbox_event (id, topic, msg_key, type, payload)
+                        values (:id, :topic, :key, :type, :payload)
+                        """)
+                .param("id", UUID.fromString(event.eventId()))
+                .param("topic", event.topic())
+                .param("key", event.key())
+                .param("type", event.getClass().getName())
+                .param("payload", json.writeValueAsString(event))
+                .update();
     }
 }

@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { Country } from '@/types'
 import { buildIndex, type SearchEntry } from '@/lib/search'
+import { countryName, useLang } from '@/i18n'
 
 interface CountriesValue {
   status: 'loading' | 'error' | 'ready'
@@ -34,15 +35,25 @@ export function CountriesProvider({ children }: { children: ReactNode }) {
     return () => ctrl.abort()
   }, [attempt])
 
+  // Country names follow the UI language (Intl.DisplayNames); everything else stays as in the data.
+  const lang = useLang((s) => s.lang)
+  const localized = useMemo(
+    () =>
+      lang === 'en'
+        ? state.countries
+        : state.countries.map((c) => ({ ...c, name: countryName(c.code2, lang, c.name) })),
+    [state.countries, lang],
+  )
+
   const value = useMemo<CountriesValue>(
     () => ({
       status: state.status,
-      countries: state.countries,
-      byCode: new Map(state.countries.map((c) => [c.code, c])),
-      index: buildIndex(state.countries),
+      countries: localized,
+      byCode: new Map(localized.map((c) => [c.code, c])),
+      index: buildIndex(localized),
       reload: () => setAttempt((n) => n + 1),
     }),
-    [state],
+    [state.status, localized],
   )
 
   return <CountriesContext.Provider value={value}>{children}</CountriesContext.Provider>

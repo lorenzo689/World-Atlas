@@ -44,7 +44,7 @@ public final class RoomDtos {
     public record PlayerResult(UUID userId, String name, String answer, boolean correct, int points, Double distanceKm,
             long elapsedMs) {}
 
-    public record RoundEnded(int round, String correctAnswer, String correctLabel, String target,
+    public record RoundEnded(int round, String correctAnswer, String correctLabel, String correctCountry, String target,
             List<PlayerResult> results, List<PlayerView> scoreboard, Instant nextAt) {}
 
     public record Placement(int placement, UUID userId, String name, int score, int correct) {}

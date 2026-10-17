@@ -4,19 +4,18 @@ import { Activity, Crown, Flame } from 'lucide-react'
 import { activityApi, quizApi, type FeedItem, type Leaderboard, type Period } from '@/lib/backend'
 import { useAuth } from '@/store/auth'
 import { useDocumentMeta } from '@/hooks/useMisc'
+import { useLang, useNumberFormat, useT, type T } from '@/i18n'
 import { Card, EmptyHint, ErrorText, PageShell } from '@/components/layout/PageShell'
 import { Chip } from '@/pages/QuizPage'
 import { cn } from '@/lib/utils'
 
-const PERIODS: { id: Period; label: string; unit: string }[] = [
-  { id: 'weekly', label: 'This week', unit: 'points' },
-  { id: 'daily', label: "Today's challenge", unit: 'points' },
-  { id: 'alltime', label: 'All time', unit: 'points' },
-  { id: 'multiplayer', label: 'Match wins', unit: 'wins' },
-]
+const PERIODS: Period[] = ['weekly', 'daily', 'alltime', 'multiplayer']
 
 export default function LeaderboardPage() {
-  useDocumentMeta({ title: 'Leaderboard · World Explorer', description: 'The best geo quiz players.' })
+  const t = useT()
+  const fmt = useNumberFormat()
+  const lang = useLang((s) => s.lang)
+  useDocumentMeta({ title: `${t('nav.leaderboard')} · World Explorer`, description: t('lb.metaDescription') })
   const me = useAuth((s) => s.user)
   const [period, setPeriod] = useState<Period>('weekly')
   const [board, setBoard] = useState<Leaderboard | null>(null)
@@ -40,59 +39,53 @@ export default function LeaderboardPage() {
     return () => clearInterval(id)
   }, [])
 
-  const unit = PERIODS.find((p) => p.id === period)!.unit
+  const unit = period === 'multiplayer' ? t('lb.wins') : t('lb.points')
 
   return (
-    <PageShell title="Leaderboard" eyebrow="Hall of fame">
+    <PageShell title={t('nav.leaderboard')} eyebrow={t('lb.eyebrow')}>
       <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
         <Card>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2" role="group" aria-label={t('lb.period')}>
             {PERIODS.map((p) => (
-              <Chip key={p.id} active={period === p.id} onClick={() => setPeriod(p.id)}>
-                {p.label}
+              <Chip key={p} active={period === p} onClick={() => setPeriod(p)}>
+                {t(`lb.period.${p}`)}
               </Chip>
             ))}
           </div>
-          {board && board.top.length === 0 && <EmptyHint>Nobody on the board yet. Be the first!</EmptyHint>}
+          {board && board.top.length === 0 && <EmptyHint>{t('lb.empty')}</EmptyHint>}
+          {!board && <div className="skeleton mt-4 h-40" />}
           <ol className="mt-4 divide-y divide-border">
             {board?.top.map((e) => (
-              <li
-                key={e.userId}
-                className={cn('flex items-center gap-4 py-3', e.userId === me?.id && 'rounded-xl bg-primary/10 px-3')}
-              >
-                <span className={cn('tabular w-8 text-right text-lg', e.rank <= 3 ? 'text-amber-300' : 'text-muted-foreground')}>
-                  {e.rank}
-                </span>
-                {e.rank === 1 && <Crown className="size-4 text-amber-300" />}
+              <li key={e.userId} className={cn('flex items-center gap-4 py-3', e.userId === me?.id && 'rounded-xl bg-primary/10 px-3')}>
+                <span className={cn('tabular w-8 text-right text-lg', e.rank <= 3 ? 'text-amber-300' : 'text-muted-foreground')}>{e.rank}</span>
+                {e.rank === 1 && <Crown className="size-4 text-amber-300" aria-label={t('common.winner')} />}
                 <span className="flex-1 truncate">{e.name}</span>
                 <span className="tabular font-medium">
-                  {e.score.toLocaleString('en')} <span className="text-xs text-muted-foreground">{unit}</span>
+                  {fmt(e.score)} <span className="text-xs text-muted-foreground">{unit}</span>
                 </span>
               </li>
             ))}
           </ol>
           {board?.me && !board.top.some((e) => e.userId === me?.id) && (
-            <p className="mt-4 rounded-xl bg-white/5 px-3 py-2 text-sm">
-              You are #{board.me.rank} with {board.me.score.toLocaleString('en')} {unit}
-            </p>
+            <p className="mt-4 rounded-xl bg-white/5 px-3 py-2 text-sm">{t('lb.yourRank', { rank: board.me.rank, score: fmt(board.me.score), unit })}</p>
           )}
           <p className="mt-6 text-xs text-muted-foreground">
-            Classic games with default settings and the daily challenge are ranked. <Link to="/quiz" className="text-primary hover:underline">Play now</Link>
+            {t('lb.rankedHint')} <Link to="/quiz" className="text-primary hover:underline">{t('lb.playNow')}</Link>
           </p>
           <ErrorText error={error} />
         </Card>
         <div className="flex flex-col gap-6">
           <Card>
             <p className="eyebrow mb-3 flex items-center gap-2">
-              <Activity className="size-4 text-primary" /> Live activity
+              <Activity className="size-4 text-primary" /> {t('lb.live')}
             </p>
             {feed === null && <div className="skeleton h-24" />}
-            {feed?.length === 0 && <EmptyHint>Nothing happened yet.</EmptyHint>}
-            <ul className="grid gap-3 text-sm">
+            {feed?.length === 0 && <EmptyHint>{t('lb.noActivity')}</EmptyHint>}
+            <ul className="grid gap-3 text-sm" aria-live="polite">
               {feed?.map((f) => (
                 <li key={f.id} className="animate-fade">
                   <p>{f.summary}</p>
-                  <p className="text-xs text-muted-foreground">{timeAgo(f.at)}</p>
+                  <p className="text-xs text-muted-foreground">{timeAgo(f.at, t, lang)}</p>
                 </li>
               ))}
             </ul>
@@ -100,7 +93,7 @@ export default function LeaderboardPage() {
           {popular.length > 0 && (
             <Card>
               <p className="eyebrow mb-3 flex items-center gap-2">
-                <Flame className="size-4 text-primary" /> Trending countries
+                <Flame className="size-4 text-primary" /> {t('lb.trending')}
               </p>
               <ul className="grid gap-2 text-sm">
                 {popular.map((p) => (
@@ -118,10 +111,10 @@ export default function LeaderboardPage() {
   )
 }
 
-export function timeAgo(iso: string) {
+export function timeAgo(iso: string, t: T, lang: string) {
   const s = Math.round((Date.now() - Date.parse(iso)) / 1000)
-  if (s < 60) return 'just now'
-  if (s < 3600) return `${Math.round(s / 60)} min ago`
-  if (s < 86400) return `${Math.round(s / 3600)} h ago`
-  return new Date(iso).toLocaleDateString('en', { day: 'numeric', month: 'short' })
+  if (s < 60) return t('time.justNow')
+  if (s < 3600) return t('time.minutesAgo', { n: Math.round(s / 60) })
+  if (s < 86400) return t('time.hoursAgo', { n: Math.round(s / 3600) })
+  return new Date(iso).toLocaleDateString(lang, { day: 'numeric', month: 'short' })
 }

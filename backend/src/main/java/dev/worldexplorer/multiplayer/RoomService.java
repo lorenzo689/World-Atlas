@@ -40,7 +40,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -51,10 +50,10 @@ import org.springframework.transaction.support.TransactionTemplate;
  * broadcast</b> ({@link #mutate}). The Redis lock guarantees that concurrent answers, a round timer and
  * a "leave" never interleave. Broadcasts go through {@link RoomBroadcaster} (Redis pub/sub → WebSocket).
  *
- * <p>Round timing uses Spring's {@link TaskScheduler}: when a round starts, its end is scheduled; when it
- * ends, the next round is scheduled. Timers are idempotent (they check round number and game counter),
- * so a round that already ended early – because everybody answered – is not ended twice.
- * Limitation: timers live in the instance that started the game.
+ * <p>Round timing uses {@link GameTimers} – timers stored in Redis that any backend instance can execute:
+ * when a round starts, its end is scheduled; when it ends, the next round is scheduled. Timer actions
+ * are idempotent (they check round number and game counter), so a round that already ended early –
+ * because everybody answered – is not ended twice, and a timer that runs twice after a crash is harmless.
  */
 @Service
 public class RoomService {
@@ -74,14 +73,14 @@ public class RoomService {
     private final QuestionFactory questions;
     private final AnswerChecker checker;
     private final FlagStore flags;
-    private final TaskScheduler scheduler;
+    private final GameTimers timers;
     private final EventPublisher events;
     private final JdbcClient jdbc;
     private final TransactionTemplate tx;
     private final AppProperties.Multiplayer config;
 
     public RoomService(RedisJson store, RedisLock lock, StringRedisTemplate redis, RoomBroadcaster broadcast,
-            QuestionFactory questions, AnswerChecker checker, FlagStore flags, TaskScheduler scheduler,
+            QuestionFactory questions, AnswerChecker checker, FlagStore flags, GameTimers timers,
             EventPublisher events, JdbcClient jdbc, TransactionTemplate tx, AppProperties props) {
         this.store = store;
         this.lock = lock;
@@ -90,7 +89,14 @@ public class RoomService {
         this.questions = questions;
         this.checker = checker;
         this.flags = flags;
-        this.scheduler = scheduler;
+        this.timers = timers;
+        timers.onDue(t -> {
+            switch (t.action()) {
+                case START_ROUND -> startRound(t.room(), t.round(), t.game());
+                case END_ROUND -> endRound(t.room(), t.round(), t.game());
+                case FINISH -> finish(t.room(), t.game());
+            }
+        });
         this.events = events;
         this.jdbc = jdbc;
         this.tx = tx;
@@ -238,7 +244,7 @@ public class RoomService {
         broadcast.toRoom(room.code, "GAME_STARTING", firstRound);
         broadcast.toRoom(room.code, "ROOM_STATE", view(room));
         int game = room.game;
-        scheduler.schedule(() -> startRound(room.code, 0, game), firstRound);
+        timers.schedule(GameTimers.Action.START_ROUND, room.code, 0, game, firstRound);
     }
 
     void startRound(String code, int round, int game) {
@@ -260,7 +266,7 @@ public class RoomService {
         Question q = room.currentQuestion();
         broadcast.toRoom(code, "ROUND_STARTED",
                 new RoundStarted(round, room.questions.size(), q.toPublic(room.questions.size()), room.roundEndsAt));
-        scheduler.schedule(() -> endRound(code, round, game), room.roundEndsAt.plus(GRACE));
+        timers.schedule(GameTimers.Action.END_ROUND, code, round, game, room.roundEndsAt.plus(GRACE));
     }
 
     public void answer(String code, AuthUser user, int round, String answer) {
@@ -296,7 +302,7 @@ public class RoomService {
         if (waitingFor == 0) {
             int round = room.round;
             int game = room.game;
-            scheduler.schedule(() -> endRound(room.code, round, game), Instant.now().plusMillis(300));
+            timers.schedule(GameTimers.Action.END_ROUND, room.code, round, game, Instant.now().plusMillis(300));
         }
     }
 
@@ -328,10 +334,10 @@ public class RoomService {
         }).toList();
         boolean last = round + 1 >= room.questions.size();
         Instant nextAt = Instant.now().plus(config.resultPause());
-        broadcast.toRoom(code, "ROUND_ENDED", new RoundEnded(round, q.answer(), checker.correctLabel(q), q.target(),
+        broadcast.toRoom(code, "ROUND_ENDED", new RoundEnded(round, q.answer(), checker.correctLabel(q), q.answerCountry(), q.target(),
                 results, scoreboard(room), nextAt));
-        if (last) scheduler.schedule(() -> finish(code, game), nextAt);
-        else scheduler.schedule(() -> startRound(code, round + 1, game), nextAt);
+        if (last) timers.schedule(GameTimers.Action.FINISH, code, round, game, nextAt);
+        else timers.schedule(GameTimers.Action.START_ROUND, code, round + 1, game, nextAt);
     }
 
     void finish(String code, int game) {

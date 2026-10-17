@@ -2,7 +2,8 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react
 import { useExplorer } from '@/store/explorer'
 import { useCountries } from '@/hooks/useCountries'
 import { prefetchBoundaries, useBoundaries } from '@/hooks/useBoundaries'
-import { useLatestForAll } from '@/hooks/useIndicator'
+import { useIndicatorAtYear, useLatestForAll } from '@/hooks/useIndicator'
+import { useT } from '@/i18n'
 import { useDocumentMeta, useIsDesktop } from '@/hooks/useMisc'
 import { INDICATORS } from '@/lib/indicators'
 import { buildChoropleth } from '@/lib/color'
@@ -26,7 +27,11 @@ const GlobeView = lazy(() => globeChunk)
 
 const PANEL_WIDTH = 380
 
+const MIN_YEAR = 1990
+const MAX_YEAR = new Date().getFullYear() - 1
+
 export default function ExplorerPage() {
+  const t = useT()
   const isDesktop = useIsDesktop()
   const { byCode, status: countriesStatus, reload } = useCountries()
   const boundaries = useBoundaries()
@@ -41,21 +46,27 @@ export default function ExplorerPage() {
   // Read once on mount: restores the camera when coming back from a country page.
   const [initialPose] = useState(() => useExplorer.getState().view)
 
+  // time slider (data mode): null = latest value per country
+  const [year, setYear] = useState<number | null>(null)
   const [ready, setReady] = useState(false)
   const webgl = useMemo(hasWebGL, [])
   const [focusNonce, setFocusNonce] = useState(0)
   const [snap, setSnap] = useState<SheetSnap>('peek')
 
-  useDocumentMeta({
-    title: 'World Explorer — An interactive 3D atlas of every country',
-    description:
-      'Explore every country on an interactive 3D Earth. Real boundaries, flags, demographics and economic indicators from the World Bank.',
-    path: '/',
-  })
+  useDocumentMeta({ title: t('explore.metaTitle'), description: t('explore.metaDescription'), path: '/' })
 
   const metric = INDICATORS[metricKey]
   const latest = useLatestForAll(metricKey, mode === 'data')
-  const values = mode === 'data' && latest.status === 'success' ? latest.data : null
+  const atYear = useIndicatorAtYear(metricKey, mode === 'data' ? year : null)
+  // a year that cannot be loaded (backend down) falls back to the latest values
+  const values =
+    mode !== 'data'
+      ? null
+      : year != null && atYear.status === 'success'
+        ? atYear.data
+        : latest.status === 'success'
+          ? latest.data
+          : null
   const scale = useMemo(() => {
     if (!values) return null
     const nums: number[] = []
@@ -100,14 +111,14 @@ export default function ExplorerPage() {
 
   return (
     <main className="fixed inset-0 overflow-hidden bg-background">
-      <h1 className="sr-only">World Explorer — interactive 3D globe</h1>
+      <h1 className="sr-only">{t('explore.h1')}</h1>
 
       {/* Globe */}
       {countriesStatus === 'error' || boundaries.status === 'error' ? (
         <div className="absolute inset-0 flex items-center justify-center p-6">
           <ErrorState
-            title="Couldn’t load map data"
-            message="Check your connection and try again."
+            title={t('explore.mapError')}
+            message={t('explore.mapErrorHint')}
             onRetry={() => {
               reload()
               boundaries.retry()
@@ -153,7 +164,7 @@ export default function ExplorerPage() {
       >
         <div className="size-10 animate-spin rounded-full border border-primary/20 border-t-primary" />
         <p className="font-serif text-2xl text-foreground/90">World Explorer</p>
-        <p className="eyebrow">Charting the globe…</p>
+        <p className="eyebrow">{t('explore.charting')}</p>
       </div>
 
       {/* Top bar */}
@@ -184,6 +195,11 @@ export default function ExplorerPage() {
             status={latest.status}
             scale={scale}
             onRetry={latest.retry}
+            year={year}
+            onYearChange={setYear}
+            minYear={MIN_YEAR}
+            maxYear={MAX_YEAR}
+            yearStatus={atYear.status}
           />
         </div>
       )}
@@ -198,7 +214,7 @@ export default function ExplorerPage() {
       {/* Hint */}
       {!showPanel && mode !== 'data' && ready && (
         <p className="eyebrow animate-fade pointer-events-none absolute inset-x-0 bottom-8 z-10 text-center">
-          {isDesktop ? 'Drag to rotate · Scroll to zoom · Click a country' : 'Drag to rotate · Pinch to zoom · Tap a country'}
+          {isDesktop ? t('explore.hintDesktop') : t('explore.hintTouch')}
         </p>
       )}
 
@@ -207,7 +223,7 @@ export default function ExplorerPage() {
         (isDesktop ? (
           <aside
             key={country.code}
-            aria-label={`${country.name} overview`}
+            aria-label={t('explore.overview', { name: country.name })}
             className="glass scrollbar-thin animate-rise absolute bottom-4 right-4 top-[88px] z-20 overflow-y-auto rounded-[28px]"
             style={{ width: PANEL_WIDTH }}
           >
@@ -223,7 +239,7 @@ export default function ExplorerPage() {
             snap={snap}
             onSnapChange={setSnap}
             onDismiss={() => select(null)}
-            label={`${country.name} overview`}
+            label={t('explore.overview', { name: country.name })}
           >
             <CountryPreview
               key={country.code}
@@ -236,7 +252,7 @@ export default function ExplorerPage() {
         ))}
 
       <p className="sr-only" role="status" aria-live="polite">
-        {country ? `${country.name} selected` : ''}
+        {country ? t('explore.selected', { name: country.name }) : ''}
       </p>
     </main>
   )

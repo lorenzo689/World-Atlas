@@ -47,8 +47,21 @@ class QuestionGeneratorTest {
         var questions = generator.generate(List.of(QuestionType.POPULATION), null, 5,
                 RandomGeneratorFactory.of("L64X128MixRandom").create(3));
         for (Question q : questions) {
-            String other = q.options().stream().map(Question.Option::id).filter(id -> !id.equals(q.answer())).findFirst().orElseThrow();
-            assertThat(POPULATION.get(q.answer())).isGreaterThan(POPULATION.get(other));
+            String bigger = q.answerCountry();
+            String other = q.options().stream().map(Question.Option::code).filter(c -> !c.equals(bigger)).findFirst().orElseThrow();
+            assertThat(POPULATION.get(bigger)).isGreaterThan(POPULATION.get(other));
+        }
+    }
+
+    @Test
+    void optionIdsDoNotRevealTheAnswer() {
+        var questions = generator.generate(List.of(QuestionType.CAPITAL), null, 8,
+                RandomGeneratorFactory.of("L64X128MixRandom").create(11));
+        for (Question q : questions) {
+            // neutral ids, and capital options carry no country code that could be matched to the prompt
+            assertThat(q.options()).extracting(Question.Option::id).containsExactly("A", "B", "C", "D");
+            assertThat(q.options()).extracting(Question.Option::code).containsOnlyNulls();
+            assertThat(q.toPublic(8).subject()).isEqualTo(q.target());
         }
     }
 

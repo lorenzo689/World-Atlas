@@ -1,4 +1,5 @@
 import { useAuth, type AuthResponse } from '@/store/auth'
+import { t, useLang, type MessageKey } from '@/i18n'
 
 /** An error response from the backend (RFC 9457 problem detail). */
 export class ApiError extends Error {
@@ -12,24 +13,28 @@ export class ApiError extends Error {
   }
 }
 
+/** Uses a translated message for known error codes (e.g. `error.email_taken`), else the server's text. */
+function localized(code: string, fallback: string) {
+  const key = `error.${code}` as MessageKey
+  const text = t(key)
+  return text === key ? fallback : text
+}
+
 let refreshing: Promise<boolean> | null = null
 
-/** Exchanges the refresh token for new tokens. Concurrent callers share one request ("single flight"). */
+/**
+ * Exchanges the refresh-token cookie for a new access token. Concurrent callers share one request
+ * ("single flight"), so ten parallel 401s cause exactly one refresh.
+ */
 async function refreshSession(): Promise<boolean> {
-  const { refreshToken, setSession, clear } = useAuth.getState()
-  if (!refreshToken) return false
   if (!refreshing) {
-    refreshing = fetch('/api/auth/refresh', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken }),
-    })
+    refreshing = fetch('/api/auth/refresh', { method: 'POST', credentials: 'same-origin' })
       .then(async (r) => {
         if (!r.ok) {
-          clear()
+          useAuth.getState().clear()
           return false
         }
-        setSession((await r.json()) as AuthResponse)
+        useAuth.getState().setSession((await r.json()) as AuthResponse)
         return true
       })
       .catch(() => false)
@@ -40,10 +45,18 @@ async function refreshSession(): Promise<boolean> {
   return refreshing
 }
 
+/** On startup: turn the cookie back into a session (if the user was signed in before). */
+export async function restoreSession() {
+  const { user, setRestored } = useAuth.getState()
+  if (user) await refreshSession()
+  setRestored()
+}
+
 /** A valid access token, refreshed shortly before it expires. */
 export async function accessToken(): Promise<string | null> {
-  const { accessToken: token, expiresAt } = useAuth.getState()
+  const { accessToken: token, expiresAt, user } = useAuth.getState()
   if (token && Date.now() < expiresAt - 30_000) return token
+  if (!user) return null
   if (await refreshSession()) return useAuth.getState().accessToken
   return null
 }
@@ -57,15 +70,17 @@ interface RequestOptions {
 }
 
 /**
- * Typed fetch for the backend API (`/api/...`, proxied by Vite).
- * Adds the bearer token, retries once after a 401 with a refreshed token,
+ * Typed fetch for the backend API (`/api/...`, proxied by Vite / the reverse proxy).
+ * Adds the bearer token and the UI language, retries once after a 401 with a refreshed token,
  * and turns problem-detail responses into {@link ApiError}s.
  */
 export async function api<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   const send = async (token: string | null) =>
     fetch(`/api${path}`, {
       method: opts.method ?? (opts.body === undefined ? 'GET' : 'POST'),
+      credentials: 'same-origin',
       headers: {
+        'Accept-Language': useLang.getState().lang,
         ...(opts.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
@@ -74,20 +89,28 @@ export async function api<T>(path: string, opts: RequestOptions = {}): Promise<T
     })
 
   const useAuthHeader = opts.auth !== false
-  let res = await send(useAuthHeader ? await accessToken() : null)
-  if (res.status === 401 && useAuthHeader && (await refreshSession())) {
+  let res: Response
+  try {
+    res = await send(useAuthHeader ? await accessToken() : null)
+  } catch (e) {
+    if ((e as Error)?.name === 'AbortError') throw e
+    throw new ApiError(0, 'network', t('error.network'))
+  }
+  if (res.status === 401 && useAuthHeader && useAuth.getState().user && (await refreshSession())) {
     res = await send(useAuth.getState().accessToken)
   }
-  if (res.status === 204) return undefined as T
+  if (res.status === 204 || res.status === 202) return undefined as T
   const text = await res.text()
-  const data = text ? JSON.parse(text) : undefined
+  let data: Record<string, unknown> | undefined
+  try {
+    data = text ? JSON.parse(text) : undefined
+  } catch {
+    data = undefined
+  }
   if (!res.ok) {
-    throw new ApiError(
-      res.status,
-      data?.code ?? 'http_' + res.status,
-      data?.detail ?? `Request failed (${res.status})`,
-      data?.fields ?? {},
-    )
+    const code = (data?.code as string) ?? 'http_' + res.status
+    throw new ApiError(res.status, code, localized(code, (data?.detail as string) ?? `Request failed (${res.status})`),
+      (data?.fields as Record<string, string>) ?? {})
   }
   return data as T
 }
@@ -112,7 +135,6 @@ export function backendAvailable(): Promise<boolean> {
   if (available && checkedAt > Date.now() - 10_000) return available
   if (available) {
     const cached = available
-    // keep a known-good result, retry a known-bad one
     available = cached.then((ok) => (ok ? true : probe()))
   } else {
     available = probe()
@@ -123,27 +145,37 @@ export function backendAvailable(): Promise<boolean> {
 
 async function probe(): Promise<boolean> {
   const ctrl = new AbortController()
-  const t = setTimeout(() => ctrl.abort(), 5000)
+  const timer = setTimeout(() => ctrl.abort(), 5000)
   try {
     const r = await fetch('/api/health', { signal: ctrl.signal })
     return r.ok && (r.headers.get('content-type') ?? '').includes('json')
   } catch {
     return false
   } finally {
-    clearTimeout(t)
+    clearTimeout(timer)
   }
 }
 
 // ---- auth calls ------------------------------------------------------------------------------
+const session = async (p: Promise<AuthResponse>) => {
+  const res = await p
+  useAuth.getState().setSession(res)
+  return res
+}
+
 export const authApi = {
   login: (email: string, password: string) =>
-    api<AuthResponse>('/auth/login', { body: { email, password }, auth: false }),
+    session(api<AuthResponse>('/auth/login', { body: { email, password }, auth: false })),
   register: (email: string, password: string, displayName: string) =>
-    api<AuthResponse>('/auth/register', { body: { email, password, displayName }, auth: false }),
-  guest: (displayName: string) => api<AuthResponse>('/auth/guest', { body: { displayName }, auth: false }),
+    session(api<AuthResponse>('/auth/register', { body: { email, password, displayName }, auth: false })),
+  guest: (displayName: string) => session(api<AuthResponse>('/auth/guest', { body: { displayName }, auth: false })),
+  verify: (token: string) => session(api<AuthResponse>('/auth/verify', { body: { token }, auth: false })),
+  resendVerification: () => api<void>('/auth/verify/resend', { method: 'POST' }),
+  forgotPassword: (email: string) => api<void>('/auth/forgot-password', { body: { email }, auth: false }),
+  resetPassword: (token: string, password: string) =>
+    session(api<AuthResponse>('/auth/reset-password', { body: { token, password }, auth: false })),
   logout: async () => {
-    const { refreshToken, clear } = useAuth.getState()
-    if (refreshToken) await api('/auth/logout', { body: { refreshToken }, auth: false }).catch(() => {})
-    clear()
+    await api('/auth/logout', { method: 'POST', auth: false }).catch(() => {})
+    useAuth.getState().clear()
   },
 }

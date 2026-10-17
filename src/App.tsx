@@ -1,9 +1,12 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { BrowserRouter, Link, Route, Routes } from 'react-router-dom'
 import { CountriesProvider } from '@/hooks/useCountries'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
 import { useDocumentMeta } from '@/hooks/useMisc'
+import { restoreSession } from '@/lib/api'
+import { Notifications } from '@/components/layout/Notifications'
+import { useT } from '@/i18n'
 
 const ExplorerPage = lazy(() => import('@/pages/ExplorerPage'))
 const CountryPage = lazy(() => import('@/pages/CountryPage'))
@@ -14,16 +17,23 @@ const MultiplayerPage = lazy(() => import('@/pages/MultiplayerPage'))
 const LeaderboardPage = lazy(() => import('@/pages/LeaderboardPage'))
 const AtlasPage = lazy(() => import('@/pages/AtlasPage'))
 const DataPage = lazy(() => import('@/pages/DataPage'))
+const AchievementsPage = lazy(() => import('@/pages/AchievementsPage'))
+const ChallengePage = lazy(() => import('@/pages/ChallengePage'))
+const ComparePage = lazy(() => import('@/pages/ComparePage'))
+const AdminPage = lazy(() => import('@/pages/AdminPage'))
+const VerifyEmailPage = lazy(() => import('@/pages/AccountLinkPages').then((m) => ({ default: m.VerifyEmailPage })))
+const ResetPasswordPage = lazy(() => import('@/pages/AccountLinkPages').then((m) => ({ default: m.ResetPasswordPage })))
 const SharedViewPage = lazy(() => import('@/pages/SharedViewPage'))
 
 function NotFound() {
-  useDocumentMeta({ title: 'Page not found · World Explorer', description: 'This page does not exist.' })
+  const t = useT()
+  useDocumentMeta({ title: `${t('notfound.title')} · World Explorer`, description: t('notfound.text') })
   return (
     <div className="flex min-h-full flex-col items-center justify-center gap-4 p-6 text-center">
-      <p className="font-serif text-6xl">Off the map</p>
-      <p className="text-muted-foreground">We couldn’t find that page.</p>
+      <p className="font-serif text-6xl">{t('notfound.title')}</p>
+      <p className="text-muted-foreground">{t('notfound.text')}</p>
       <Button asChild variant="outline">
-        <Link to="/">Back to the globe</Link>
+        <Link to="/">{t('notfound.back')}</Link>
       </Button>
     </div>
   )
@@ -38,6 +48,9 @@ function Splash() {
 }
 
 export default function App() {
+  useEffect(() => {
+    void restoreSession()
+  }, [])
   return (
     <BrowserRouter>
       <TooltipProvider delayDuration={200}>
@@ -52,10 +65,17 @@ export default function App() {
               <Route path="/leaderboard" element={<LeaderboardPage />} />
               <Route path="/atlas" element={<AtlasPage />} />
               <Route path="/data" element={<DataPage />} />
+              <Route path="/achievements" element={<AchievementsPage />} />
+              <Route path="/challenge/:slug" element={<ChallengePage />} />
+              <Route path="/compare" element={<ComparePage />} />
+              <Route path="/admin" element={<AdminPage />} />
+              <Route path="/verify" element={<VerifyEmailPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
               <Route path="/views/:slug" element={<SharedViewPage />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>
+          <Notifications />
         </CountriesProvider>
       </TooltipProvider>
     </BrowserRouter>

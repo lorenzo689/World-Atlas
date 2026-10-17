@@ -7,46 +7,54 @@ export interface User {
   email: string | null
   roles: string[]
   guest: boolean
+  emailVerified: boolean
 }
 
 export interface AuthResponse {
   accessToken: string
   expiresIn: number
-  refreshToken: string
   user: User
 }
 
 interface AuthState {
+  /** Short-lived JWT – memory only, never written to storage. */
   accessToken: string | null
-  refreshToken: string | null
   /** epoch ms when the access token expires */
   expiresAt: number
   user: User | null
+  /** true once the startup refresh (cookie → access token) has finished */
+  restored: boolean
   setSession: (res: AuthResponse) => void
+  setRestored: () => void
   clear: () => void
 }
 
 /**
- * Tokens + user, persisted in localStorage so a reload keeps you signed in.
- * The access token is short-lived (15 min); `api.ts` refreshes it transparently.
+ * Session state.
+ *
+ * - The **refresh token** lives in an HttpOnly cookie set by the backend – JavaScript cannot read it,
+ *   so an XSS bug cannot steal a long-lived session.
+ * - The **access token** (15 min) is kept in memory only. After a reload it is gone and
+ *   `restoreSession()` in api.ts gets a new one with the cookie.
+ * - Only the (non-secret) user profile is persisted, so the UI can show the name immediately.
  */
 export const useAuth = create<AuthState>()(
   persist(
     (set) => ({
       accessToken: null,
-      refreshToken: null,
       expiresAt: 0,
       user: null,
+      restored: false,
       setSession: (res) =>
-        set({
-          accessToken: res.accessToken,
-          refreshToken: res.refreshToken,
-          expiresAt: Date.now() + res.expiresIn * 1000,
-          user: res.user,
-        }),
-      clear: () => set({ accessToken: null, refreshToken: null, expiresAt: 0, user: null }),
+        set({ accessToken: res.accessToken, expiresAt: Date.now() + res.expiresIn * 1000, user: res.user, restored: true }),
+      setRestored: () => set({ restored: true }),
+      clear: () => set({ accessToken: null, expiresAt: 0, user: null }),
     }),
-    { name: 'world-explorer-auth', storage: createJSONStorage(() => localStorage) },
+    {
+      name: 'world-explorer-auth',
+      storage: createJSONStorage(() => localStorage),
+      partialize: (s) => ({ user: s.user }),
+    },
   ),
 )
 

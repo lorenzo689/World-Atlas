@@ -1,20 +1,28 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Copy, Crown, Loader2, Play, RotateCcw, Send, Users, Wifi, WifiOff, Zap } from 'lucide-react'
 import { ApiError } from '@/lib/api'
 import { roomApi, type OpenRoom, type PlayerView, type PublicQuestion, type QuestionType, type RoomView } from '@/lib/backend'
 import { createRealtime, type Realtime, type RoomEvent } from '@/lib/realtime'
 import { useAuth } from '@/store/auth'
+import { useCountries } from '@/hooks/useCountries'
 import { useDocumentMeta } from '@/hooks/useMisc'
+import { useNumberFormat, useT } from '@/i18n'
+import { useQuizText } from '@/lib/quizText'
 import { Card, EmptyHint, ErrorText, PageShell, RequireUser } from '@/components/layout/PageShell'
 import { QuestionPanel, type Feedback } from '@/components/game/QuestionPanel'
 import { QuizGlobe } from '@/components/game/QuizGlobe'
+import type { GlobeMarker } from '@/components/globe/GlobeView'
 import { Button } from '@/components/ui/button'
 import { Chip, REGIONS, TYPES } from '@/pages/QuizPage'
 import { cn } from '@/lib/utils'
 
+/** One colour per player (markers on the globe + names in the results). */
+export const PLAYER_COLORS = ['#6fa8ff', '#f6c177', '#eb6f92', '#9ccfd8', '#c4a7e7', '#a3be8c', '#ffb86c', '#8be9fd']
+
 export default function MultiplayerPage() {
-  useDocumentMeta({ title: 'Multiplayer · World Explorer', description: 'Play the geo quiz live against friends.' })
+  const t = useT()
+  useDocumentMeta({ title: `${t('mp.title')} · World Explorer`, description: t('mp.metaDescription') })
   const { code } = useParams()
   return <RequireUser>{code ? <RoomScreen code={code.toUpperCase()} /> : <Lobby />}</RequireUser>
 }
@@ -22,6 +30,8 @@ export default function MultiplayerPage() {
 // ============================================================================== lobby ==========
 
 function Lobby() {
+  const t = useT()
+  const text = useQuizText()
   const navigate = useNavigate()
   const [rooms, setRooms] = useState<OpenRoom[]>([])
   const [joinCode, setJoinCode] = useState('')
@@ -31,7 +41,6 @@ function Lobby() {
   const [isPublic, setIsPublic] = useState(true)
   const [searching, setSearching] = useState(false)
   const [error, setError] = useState<unknown>(null)
-  const rt = useRef<Realtime | null>(null)
 
   useEffect(() => {
     const load = () => roomApi.open().then(setRooms).catch(() => {})
@@ -44,11 +53,7 @@ function Lobby() {
   useEffect(() => {
     if (!searching) return
     const realtime = createRealtime()
-    rt.current = realtime
-    const off = realtime.subscribe('/user/queue/match', (e) => {
-      const data = e.data as { roomCode: string }
-      navigate(`/play/${data.roomCode}`)
-    })
+    const off = realtime.subscribe('/user/queue/match', (e) => navigate(`/play/${(e.data as { roomCode: string }).roomCode}`))
     roomApi.matchmaking().catch(setError)
     return () => {
       off()
@@ -76,24 +81,24 @@ function Lobby() {
   }
 
   return (
-    <PageShell title="Multiplayer" eyebrow="Live geo quiz">
+    <PageShell title={t('mp.title')} eyebrow={t('mp.eyebrow')}>
       <div className="grid gap-6 lg:grid-cols-3">
         <Card>
           <h2 className="flex items-center gap-2 text-lg font-medium">
-            <Zap className="size-5 text-primary" /> Quick match
+            <Zap className="size-5 text-primary" /> {t('mp.quickMatch')}
           </h2>
-          <p className="mt-1 text-sm text-muted-foreground">Get paired with 1–3 other players waiting right now.</p>
+          <p className="mt-1 text-sm text-muted-foreground">{t('mp.quickMatchHint')}</p>
           <Button className="mt-5 w-full" variant={searching ? 'outline' : 'default'} onClick={() => setSearching((s) => !s)}>
             {searching ? (
               <>
-                <Loader2 className="animate-spin" /> Searching… (cancel)
+                <Loader2 className="animate-spin" /> {t('mp.searching')}
               </>
             ) : (
-              'Find a match'
+              t('mp.findMatch')
             )}
           </Button>
           <div className="mt-8">
-            <p className="eyebrow">Join with a code</p>
+            <label className="eyebrow" htmlFor="join-code">{t('mp.joinWithCode')}</label>
             <form
               className="mt-2 flex gap-2"
               onSubmit={(e) => {
@@ -102,53 +107,55 @@ function Lobby() {
               }}
             >
               <input
+                id="join-code"
                 value={joinCode}
                 onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
                 maxLength={6}
                 placeholder="ABCDE"
+                autoComplete="off"
                 className="h-10 w-full rounded-full border border-input bg-white/[0.03] px-4 font-mono tracking-[0.3em] outline-none focus:border-primary"
               />
-              <Button type="submit" variant="outline">Join</Button>
+              <Button type="submit" variant="outline">{t('mp.join')}</Button>
             </form>
           </div>
         </Card>
 
         <Card>
-          <h2 className="text-lg font-medium">Create a room</h2>
-          <p className="eyebrow mt-4">Rounds · {rounds}</p>
-          <input type="range" min={3} max={15} value={rounds} onChange={(e) => setRounds(Number(e.target.value))} className="mt-2 w-full accent-[var(--primary)]" />
-          <p className="eyebrow mt-4">Region</p>
+          <h2 className="text-lg font-medium">{t('mp.createRoom')}</h2>
+          <label className="eyebrow mt-4 block" htmlFor="rounds">{t('mp.rounds', { n: rounds })}</label>
+          <input id="rounds" type="range" min={3} max={15} value={rounds} onChange={(e) => setRounds(Number(e.target.value))} className="mt-2 w-full accent-[var(--primary)]" />
+          <p className="eyebrow mt-4">{t('quiz.region')}</p>
           <div className="mt-2 flex flex-wrap gap-1.5">
-            <Chip active={region === null} onClick={() => setRegion(null)}>World</Chip>
+            <Chip active={region === null} onClick={() => setRegion(null)}>{t('region.World')}</Chip>
             {REGIONS.map((r) => (
-              <Chip key={r} active={region === r} onClick={() => setRegion(r)}>{r}</Chip>
+              <Chip key={r} active={region === r} onClick={() => setRegion(r)}>{t(`region.${r}`)}</Chip>
             ))}
           </div>
-          <p className="eyebrow mt-4">Questions</p>
+          <p className="eyebrow mt-4">{t('quiz.types')}</p>
           <div className="mt-2 flex flex-wrap gap-1.5">
-            {TYPES.map((t) => (
+            {TYPES.map((id) => (
               <Chip
-                key={t.id}
-                active={types.includes(t.id)}
-                onClick={() => setTypes((cur) => (cur.includes(t.id) ? (cur.length > 1 ? cur.filter((x) => x !== t.id) : cur) : [...cur, t.id]))}
+                key={id}
+                active={types.includes(id)}
+                onClick={() => setTypes((cur) => (cur.includes(id) ? (cur.length > 1 ? cur.filter((x) => x !== id) : cur) : [...cur, id]))}
               >
-                {t.label}
+                {text.typeLabel(id)}
               </Chip>
             ))}
           </div>
           <label className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
             <input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} className="accent-[var(--primary)]" />
-            List publicly in the lobby
+            {t('mp.listPublicly')}
           </label>
-          <Button className="mt-5 w-full" onClick={create}>Create room</Button>
+          <Button className="mt-5 w-full" onClick={create}>{t('mp.createRoom')}</Button>
         </Card>
 
         <Card>
           <h2 className="flex items-center gap-2 text-lg font-medium">
-            <Users className="size-5 text-primary" /> Open rooms
+            <Users className="size-5 text-primary" /> {t('mp.openRooms')}
           </h2>
           {rooms.length === 0 ? (
-            <EmptyHint>No open rooms right now. Create one!</EmptyHint>
+            <EmptyHint>{t('mp.noOpenRooms')}</EmptyHint>
           ) : (
             <ul className="mt-3 divide-y divide-border">
               {rooms.map((r) => (
@@ -156,10 +163,10 @@ function Lobby() {
                   <div>
                     <p className="font-mono tracking-widest">{r.code}</p>
                     <p className="text-xs text-muted-foreground">
-                      {r.hostName} · {r.players}/{r.maxPlayers} players · {r.settings.rounds} rounds{r.settings.region ? ` · ${r.settings.region}` : ''}
+                      {t('mp.openRoomLine', { host: r.hostName, players: r.players, max: r.maxPlayers, rounds: r.settings.rounds })}
                     </p>
                   </div>
-                  <Button size="sm" variant="outline" onClick={() => join(r.code)}>Join</Button>
+                  <Button size="sm" variant="outline" onClick={() => join(r.code)}>{t('mp.join')}</Button>
                 </li>
               ))}
             </ul>
@@ -173,13 +180,21 @@ function Lobby() {
 
 // ============================================================================== room ===========
 
+interface RoundResult {
+  userId: string
+  name: string
+  points: number
+  correct: boolean
+  answer: string | null
+}
+
 interface RoundState {
   question: PublicQuestion
   round: number
   endsAt: number
   picked: string | null
   feedback: Feedback | null
-  results: { userId: string; name: string; points: number; correct: boolean; answer: string | null }[] | null
+  results: RoundResult[] | null
   nextAt: number | null
 }
 
@@ -190,7 +205,10 @@ interface ChatLine {
 }
 
 function RoomScreen({ code }: { code: string }) {
+  const t = useT()
+  const fmt = useNumberFormat()
   const me = useAuth((s) => s.user)
+  const { byCode } = useCountries()
   const navigate = useNavigate()
   const [room, setRoom] = useState<RoomView | null>(null)
   const [round, setRound] = useState<RoundState | null>(null)
@@ -200,6 +218,7 @@ function RoomScreen({ code }: { code: string }) {
   const [chat, setChat] = useState<ChatLine[]>([])
   const [message, setMessage] = useState('')
   const [connected, setConnected] = useState(false)
+  const [copied, setCopied] = useState(false)
   const [error, setError] = useState<unknown>(null)
   const rt = useRef<Realtime | null>(null)
 
@@ -239,7 +258,8 @@ function RoomScreen({ code }: { code: string }) {
           const d = e.data as {
             correctAnswer: string
             correctLabel: string
-            results: { userId: string; name: string; points: number; correct: boolean; answer: string | null; distanceKm: number | null }[]
+            correctCountry: string
+            results: (RoundResult & { distanceKm: number | null })[]
             scoreboard: PlayerView[]
             nextAt: string
           }
@@ -254,6 +274,7 @@ function RoomScreen({ code }: { code: string }) {
                 points: mine?.points ?? 0,
                 correctAnswer: d.correctAnswer,
                 correctLabel: d.correctLabel,
+                correctCountry: d.correctCountry,
                 distanceKm: mine?.distanceKm ?? null,
                 late: !mine?.answer,
               },
@@ -300,41 +321,62 @@ function RoomScreen({ code }: { code: string }) {
   }
 
   const isHost = room?.hostId === me?.id
-  const players = room?.players ?? []
+  const players = useMemo(() => room?.players ?? [], [room])
+  const colorOf = useCallback(
+    (userId: string) => PLAYER_COLORS[Math.max(0, players.findIndex((p) => p.id === userId)) % PLAYER_COLORS.length],
+    [players],
+  )
+
+  // after a "find the country" round: one dot per player where they clicked
+  const markers = useMemo<GlobeMarker[]>(() => {
+    if (!round?.results || round.question.type !== 'LOCATE') return []
+    return round.results.flatMap((r) => {
+      const c = r.answer ? byCode.get(r.answer) : undefined
+      return c?.latlng ? [{ lat: c.latlng[0], lng: c.latlng[1], color: colorOf(r.userId) }] : []
+    })
+  }, [round, byCode, colorOf])
+
+  const isLocate = round?.question.type === 'LOCATE'
 
   return (
     <PageShell
-      title={`Room ${code}`}
-      eyebrow={room ? statusLabel(room, startsAt, round) : 'Joining…'}
-      wide={round?.question.type === 'LOCATE'}
+      title={t('mp.room', { code })}
+      eyebrow={room ? statusLabel(t, room, startsAt, round) : t('mp.joining')}
+      wide={isLocate}
       actions={
-        <div className="flex items-center gap-2">
-          <span className={cn('flex items-center gap-1.5 text-xs', connected ? 'text-emerald-300' : 'text-destructive')}>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={cn('flex items-center gap-1.5 text-xs', connected ? 'text-emerald-300' : 'text-destructive')} role="status">
             {connected ? <Wifi className="size-4" /> : <WifiOff className="size-4" />}
-            {connected ? 'live' : 'reconnecting'}
+            {connected ? t('mp.live') : t('mp.reconnecting')}
           </span>
-          <Button variant="outline" size="sm" onClick={() => navigator.clipboard?.writeText(window.location.href)}>
-            <Copy /> Invite link
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              await navigator.clipboard?.writeText(window.location.href)
+              setCopied(true)
+            }}
+          >
+            <Copy /> {copied ? t('common.copied') : t('mp.inviteLink')}
           </Button>
-          <Button variant="ghost" size="sm" onClick={leave}>Leave</Button>
+          <Button variant="ghost" size="sm" onClick={leave}>{t('mp.leave')}</Button>
         </div>
       }
     >
-      <div className={cn('grid gap-6', round?.question.type === 'LOCATE' ? 'lg:grid-cols-[minmax(0,400px)_1fr_260px]' : 'lg:grid-cols-[1fr_300px]')}>
+      <div className={cn('grid gap-6', isLocate ? 'lg:grid-cols-[minmax(0,400px)_1fr_260px]' : 'lg:grid-cols-[1fr_300px]')}>
         <div className="flex flex-col gap-6">
           {room?.status === 'LOBBY' && (
             <Card>
-              <h2 className="text-lg font-medium">Waiting for players</h2>
+              <h2 className="text-lg font-medium">{t('mp.waiting')}</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Share the code <span className="font-mono tracking-widest text-foreground">{code}</span>. {room.settings.rounds} rounds of{' '}
-                {room.settings.roundSeconds} s{room.settings.region ? ` · ${room.settings.region}` : ''}.
+                {t('mp.waitingHint', { code, rounds: room.settings.rounds, seconds: room.settings.roundSeconds })}
               </p>
               {isHost ? (
                 <Button className="mt-5" onClick={() => roomApi.start(code).catch(setError)}>
-                  <Play /> Start game
+                  <Play /> {t('mp.start')}
                 </Button>
               ) : (
-                <p className="mt-5 text-sm text-muted-foreground">The host starts the game.</p>
+                <p className="mt-5 text-sm text-muted-foreground">{t('mp.hostStarts')}</p>
               )}
             </Card>
           )}
@@ -351,16 +393,19 @@ function RoomScreen({ code }: { code: string }) {
                 onAnswer={answer}
               />
               {!round.feedback && (
-                <p className="mt-4 text-xs text-muted-foreground">
-                  {answered} of {players.filter((p) => p.connected).length} answered
+                <p className="mt-4 text-xs text-muted-foreground" aria-live="polite">
+                  {t('mp.answered', { n: answered, total: players.filter((p) => p.connected).length })}
                 </p>
               )}
               {round.results && (
                 <ul className="mt-4 grid gap-1.5 text-sm">
                   {round.results.map((r) => (
-                    <li key={r.userId} className="flex justify-between">
-                      <span className={cn(r.correct ? 'text-emerald-300' : 'text-muted-foreground')}>{r.name}</span>
-                      <span className="tabular">+{r.points}</span>
+                    <li key={r.userId} className="flex items-center justify-between gap-2">
+                      <span className={cn('flex items-center gap-2', r.correct ? 'text-emerald-300' : 'text-muted-foreground')}>
+                        {isLocate && <span className="size-2.5 rounded-full" style={{ background: colorOf(r.userId) }} aria-hidden />}
+                        {r.name}
+                      </span>
+                      <span className="tabular">+{fmt(r.points)}</span>
                     </li>
                   ))}
                 </ul>
@@ -369,22 +414,24 @@ function RoomScreen({ code }: { code: string }) {
           )}
           {placements && (
             <Card>
-              <h2 className="font-serif text-3xl">{placements[0]?.userId === me?.id ? 'You won! 🎉' : `${placements[0]?.name} wins`}</h2>
+              <h2 className="font-serif text-3xl">
+                {placements[0]?.userId === me?.id ? t('mp.youWon') : t('mp.wins', { name: placements[0]?.name ?? '' })}
+              </h2>
               <ol className="mt-4 divide-y divide-border">
                 {placements.map((p) => (
                   <li key={p.userId} className="flex items-center justify-between py-2.5">
                     <span className="flex items-center gap-2">
                       <span className="tabular w-6 text-muted-foreground">{p.placement}.</span>
-                      {p.placement === 1 && <Crown className="size-4 text-amber-300" />}
+                      {p.placement === 1 && <Crown className="size-4 text-amber-300" aria-label={t('common.winner')} />}
                       {p.name}
                     </span>
-                    <span className="tabular">{p.score.toLocaleString('en')}</span>
+                    <span className="tabular">{fmt(p.score)}</span>
                   </li>
                 ))}
               </ol>
               {isHost && (
                 <Button className="mt-5" variant="outline" onClick={() => roomApi.rematch(code).catch(setError)}>
-                  <RotateCcw /> Rematch
+                  <RotateCcw /> {t('mp.rematch')}
                 </Button>
               )}
             </Card>
@@ -392,35 +439,37 @@ function RoomScreen({ code }: { code: string }) {
           <ErrorText error={error} />
         </div>
 
-        {round?.question.type === 'LOCATE' && (
+        {isLocate && round && (
           <QuizGlobe
-            className="h-[60vh] min-h-[420px] rounded-3xl border border-border"
+            className="h-[52vh] min-h-[320px] rounded-3xl border border-border sm:h-[60vh] sm:min-h-[420px]"
             onPick={answer}
             disabled={!!round.picked || !!round.feedback}
-            highlight={round.feedback ? round.feedback.correctAnswer : round.picked}
+            highlight={round.feedback ? round.feedback.correctCountry : round.picked}
+            markers={markers}
           />
         )}
 
         <div className="flex flex-col gap-6">
           <Card>
-            <p className="eyebrow mb-3">Players</p>
+            <p className="eyebrow mb-3">{t('mp.players')}</p>
             <ul className="grid gap-2 text-sm">
               {[...players].sort((a, b) => b.score - a.score).map((p) => (
                 <li key={p.id} className="flex items-center justify-between gap-2">
                   <span className={cn('flex items-center gap-2 truncate', !p.connected && 'text-muted-foreground line-through')}>
-                    {p.host && <Crown className="size-3.5 text-amber-300" />}
+                    <span className="size-2 shrink-0 rounded-full" style={{ background: colorOf(p.id) }} aria-hidden />
+                    {p.host && <Crown className="size-3.5 text-amber-300" aria-label={t('mp.host')} />}
                     {p.name}
-                    {p.id === me?.id && <span className="text-xs text-muted-foreground">(you)</span>}
+                    {p.id === me?.id && <span className="text-xs text-muted-foreground">({t('mp.you')})</span>}
                   </span>
-                  <span className="tabular">{p.score.toLocaleString('en')}</span>
+                  <span className="tabular">{fmt(p.score)}</span>
                 </li>
               ))}
             </ul>
           </Card>
           <Card>
-            <p className="eyebrow mb-3">Chat</p>
-            <div className="scrollbar-thin flex h-48 flex-col gap-1.5 overflow-y-auto text-sm">
-              {chat.length === 0 && <p className="text-xs text-muted-foreground">Say hi 👋</p>}
+            <p className="eyebrow mb-3" id="chat-label">{t('mp.chat')}</p>
+            <div className="scrollbar-thin flex h-48 flex-col gap-1.5 overflow-y-auto text-sm" role="log" aria-labelledby="chat-label" aria-live="polite">
+              {chat.length === 0 && <p className="text-xs text-muted-foreground">{t('mp.sayHi')}</p>}
               {chat.map((c) => (
                 <p key={c.id}>
                   <span className="text-primary">{c.name}:</span> {c.text}
@@ -440,10 +489,11 @@ function RoomScreen({ code }: { code: string }) {
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 maxLength={200}
-                placeholder="Message"
+                placeholder={t('mp.message')}
+                aria-label={t('mp.message')}
                 className="h-9 w-full rounded-full border border-input bg-white/[0.03] px-3.5 text-sm outline-none focus:border-primary"
               />
-              <Button size="icon-sm" type="submit" aria-label="Send">
+              <Button size="icon-sm" type="submit" aria-label={t('mp.send')}>
                 <Send />
               </Button>
             </form>
@@ -454,15 +504,16 @@ function RoomScreen({ code }: { code: string }) {
   )
 }
 
-function statusLabel(room: RoomView, startsAt: number | null, round: RoundState | null) {
-  if (startsAt) return 'Get ready…'
-  if (round) return `Round ${round.round + 1} of ${round.question.total}`
-  if (room.status === 'LOBBY') return `Lobby · ${room.players.length} player${room.players.length === 1 ? '' : 's'}`
-  if (room.status === 'RUNNING') return `Round ${Math.max(1, room.round + 1)} of ${room.totalRounds}`
-  return 'Game over'
+function statusLabel(t: ReturnType<typeof useT>, room: RoomView, startsAt: number | null, round: RoundState | null) {
+  if (startsAt) return t('mp.getReady')
+  if (round) return t('mp.roundOf', { n: round.round + 1, total: round.question.total })
+  if (room.status === 'LOBBY') return t('mp.lobbyPlayers', { n: room.players.length })
+  if (room.status === 'RUNNING') return t('mp.roundOf', { n: Math.max(1, room.round + 1), total: room.totalRounds })
+  return t('mp.gameOver')
 }
 
 function Countdown({ until }: { until: number }) {
+  const t = useT()
   const [now, setNow] = useState(Date.now())
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 100)
@@ -471,8 +522,8 @@ function Countdown({ until }: { until: number }) {
   const s = Math.max(0, Math.ceil((until - now) / 1000))
   return (
     <Card className="flex flex-col items-center py-12">
-      <p className="eyebrow">Starting in</p>
-      <p className="tabular font-serif text-8xl">{s}</p>
+      <p className="eyebrow">{t('mp.startingIn')}</p>
+      <p className="tabular font-serif text-8xl" aria-live="assertive">{s}</p>
     </Card>
   )
 }

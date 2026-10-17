@@ -6,7 +6,6 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.springframework.boot.kafka.autoconfigure.KafkaProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
@@ -48,7 +47,9 @@ public class KafkaConfig {
                 topic(Topics.MULTIPLAYER_FINISHED, 3),
                 topic(Topics.MULTIPLAYER_FINISHED + Topics.DLT_SUFFIX, 1),
                 topic(Topics.INDICATOR_INGESTED + Topics.DLT_SUFFIX, 1),
-                topic(Topics.USER_REGISTERED + Topics.DLT_SUFFIX, 1));
+                topic(Topics.USER_REGISTERED + Topics.DLT_SUFFIX, 1),
+                topic(Topics.ACHIEVEMENT_UNLOCKED, 3),
+                topic(Topics.ACHIEVEMENT_UNLOCKED + Topics.DLT_SUFFIX, 1));
     }
 
     private static NewTopic topic(String name, int partitions) {
@@ -76,10 +77,16 @@ public class KafkaConfig {
         return factory;
     }
 
+    /**
+     * Starts from the configuration of Boot's consumer factory (not from {@code KafkaProperties}): only
+     * that one contains the resolved connection details – e.g. the broker address of a Testcontainers
+     * or Docker Compose service connection – and swaps the value deserializer for plain strings.
+     */
     @Bean
     ConcurrentKafkaListenerContainerFactory<String, String> rawJsonFactory(
-            KafkaProperties properties, DefaultErrorHandler errorHandler) {
-        Map<String, Object> config = new HashMap<>(properties.buildConsumerProperties());
+            ConsumerFactory<Object, Object> base, DefaultErrorHandler errorHandler) {
+        Map<String, Object> config = new HashMap<>(base.getConfigurationProperties());
+        config.remove("spring.deserializer.value.delegate.class");
         config.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         config.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         var factory = new ConcurrentKafkaListenerContainerFactory<String, String>();

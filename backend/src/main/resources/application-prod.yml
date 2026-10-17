@@ -1,0 +1,25 @@
+# Production settings (used by deploy/docker-compose.prod.yml).
+app:
+  auth:
+    cookie-secure: true
+    dev-mailbox: false
+    require-verified-email: false
+  ingestion:
+    bootstrap-on-startup: true
+management:
+  tracing:
+    sampling:
+      probability: 0.1
+  endpoint:
+    health:
+      show-details: when-authorized
+springdoc:
+  swagger-ui:
+    enabled: true
+server:
+  shutdown: graceful
+  forward-headers-strategy: framework   # behind the reverse proxy: trust X-Forwarded-* for client IPs
+logging:
+  structured:
+    format:
+      console: ecs

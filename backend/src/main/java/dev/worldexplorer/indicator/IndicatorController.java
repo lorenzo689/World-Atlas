@@ -45,6 +45,12 @@ public class IndicatorController {
         return ResponseEntity.ok().cacheControl(TEN_MINUTES).body(query.latest(key));
     }
 
+    @Operation(summary = "Every country's value in one year (latest observation of that year or the 2 before)")
+    @GetMapping("/{key}/at/{year}")
+    ResponseEntity<LatestValues> atYear(@PathVariable String key, @PathVariable int year) {
+        return ResponseEntity.ok().cacheControl(TEN_MINUTES).body(query.atYear(key, year));
+    }
+
     @Operation(summary = "Time series for up to 12 countries")
     @GetMapping("/{key}/series")
     SeriesResponse series(@PathVariable String key, @RequestParam List<String> countries,

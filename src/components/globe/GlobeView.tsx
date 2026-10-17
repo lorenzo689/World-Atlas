@@ -45,6 +45,18 @@ interface GlobeViewProps {
   focusNonce?: number
   /** Hover tooltips with the country name (off in the quiz, where they would give the answer away). */
   tooltips?: boolean
+  /** A second highlighted country (comparison), drawn in amber. */
+  secondary?: string | null
+  /** Custom fill per country (political/data modes); null = neutral. Used by the travel map. */
+  paint?: ((code: string) => string | null) | null
+  /** Dots on the globe, e.g. where the other players clicked. */
+  markers?: GlobeMarker[]
+}
+
+export interface GlobeMarker {
+  lat: number
+  lng: number
+  color: string
 }
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
@@ -63,6 +75,9 @@ export function GlobeView({
   insets,
   focusNonce = 0,
   tooltips = true,
+  secondary = null,
+  paint = null,
+  markers,
 }: GlobeViewProps) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const tipRef = useRef<HTMLDivElement>(null)
@@ -203,11 +218,34 @@ export function GlobeView({
     const { layers } = scene
     scene.setSatellite(mode === 'satellite')
     layers.caps.visible = mode !== 'satellite'
-    if (mode !== 'satellite') layers.setCapColors(baseColor)
+    if (mode !== 'satellite') layers.setCapColors(paint ? (code) => paint(code) ?? '#243044' : baseColor)
     if (mode === 'satellite') layers.setBorder('#ffffff', 0.26)
     else layers.setBorder('#080d16', 0.75)
     scene.requestRender()
-  }, [scene, mode, baseColor])
+  }, [scene, mode, baseColor, paint])
+
+  // ---- secondary highlight (comparison) -------------------------------------------------------
+  useEffect(() => {
+    if (!scene) return
+    scene.layers.secondary.set(secondary)
+    if (secondary) {
+      scene.layers.secondary.style({
+        capColor: '#f6c177',
+        capOpacity: mode === 'satellite' ? 0.4 : 0.85,
+        lineColor: '#ffe2b0',
+        lineOpacity: 0.95,
+        altitude: 0.018,
+      })
+    }
+    scene.requestRender()
+  }, [scene, secondary, mode])
+
+  // ---- markers ---------------------------------------------------------------------------------
+  useEffect(() => {
+    if (!scene) return
+    scene.layers.setMarkers(markers ?? [])
+    scene.requestRender()
+  }, [scene, markers])
 
   // ---- selection highlight ------------------------------------------------------------------
   useEffect(() => {

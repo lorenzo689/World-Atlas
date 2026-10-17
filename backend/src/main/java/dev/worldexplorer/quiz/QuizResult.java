@@ -38,10 +38,13 @@ public class QuizResult {
     @Column(name = "finished_at", nullable = false)
     private Instant finishedAt;
 
+    @Column(name = "challenge_id")
+    private UUID challengeId;
+
     protected QuizResult() {}
 
     public QuizResult(UUID id, UUID userId, String playerName, QuizMode mode, String region, int score, int correct,
-            int total, long durationMs, Instant finishedAt) {
+            int total, long durationMs, Instant finishedAt, UUID challengeId) {
         this.id = id;
         this.userId = userId;
         this.playerName = playerName;
@@ -52,6 +55,7 @@ public class QuizResult {
         this.total = total;
         this.durationMs = durationMs;
         this.finishedAt = finishedAt;
+        this.challengeId = challengeId;
     }
 
     public UUID getId() { return id; }
@@ -64,4 +68,5 @@ public class QuizResult {
     public int getTotal() { return total; }
     public long getDurationMs() { return durationMs; }
     public Instant getFinishedAt() { return finishedAt; }
+    public UUID getChallengeId() { return challengeId; }
 }

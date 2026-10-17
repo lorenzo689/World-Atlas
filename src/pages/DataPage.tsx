@@ -37,6 +37,7 @@ import { Card, EmptyHint, ErrorText, PageShell } from '@/components/layout/PageS
 import { Button } from '@/components/ui/button'
 import { Chip } from '@/pages/QuizPage'
 import { cn } from '@/lib/utils'
+import { useT, type MessageKey } from '@/i18n'
 
 const SERIES_COLORS = ['#6fa8ff', '#f6c177', '#9ccfd8', '#eb6f92', '#c4a7e7', '#a3be8c']
 const axis = { stroke: 'rgba(160,190,235,0.35)', fontSize: 11 }
@@ -49,7 +50,8 @@ const fmt = (key: string) => (INDICATORS[key as IndicatorKey]?.format ?? ((v: nu
 const tick = (key: string) => (INDICATORS[key as IndicatorKey]?.tick ?? ((v: number) => String(v)))
 
 export default function DataPage() {
-  useDocumentMeta({ title: 'Data platform · World Explorer', description: 'World Bank indicators ingested through Kafka into PostgreSQL.' })
+  const tr = useT()
+  useDocumentMeta({ title: `${tr('data.title')} · World Explorer`, description: tr('data.metaDescription') })
   const user = useAuth((s) => s.user)
   const [catalog, setCatalog] = useState<IndicatorInfo[] | null>(null)
   const [key, setKey] = useState<string>('gdpPerCapita')
@@ -63,30 +65,28 @@ export default function DataPage() {
   const empty = catalog && catalog.every((c) => c.coverage.observations === 0)
 
   return (
-    <PageShell title="Data platform" eyebrow="World Bank → Kafka → PostgreSQL" wide>
+    <PageShell title={tr('data.title')} eyebrow={tr('data.eyebrow')} wide>
       {empty && (
         <Card className="mb-6">
-          <p className="text-sm">
-            No data ingested yet. The backend starts a full ingestion on first launch (needs internet); admins can also trigger it below.
-          </p>
+          <p className="text-sm">{tr('data.empty')}</p>
         </Card>
       )}
       <div className="mb-6 flex flex-wrap gap-2">
         {catalog?.map((c) => (
           <Chip key={c.key} active={key === c.key} onClick={() => setKey(c.key)}>
-            {INDICATORS[c.key as IndicatorKey]?.short ?? c.key}
+            {indicatorName(tr, c.key)}
           </Chip>
         ))}
       </div>
       {info && (
         <p className="mb-6 text-sm text-muted-foreground">
-          {info.label} · {info.coverage.countries} countries · {info.coverage.observations.toLocaleString('en')} observations
+          {info.label} · {tr('data.coverage', { countries: info.coverage.countries, observations: info.coverage.observations.toLocaleString() })}
           {info.coverage.fromYear && ` · ${info.coverage.fromYear}–${info.coverage.toYear}`}
         </p>
       )}
       <ErrorText error={error} />
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-2 [&>*]:min-w-0">
         <TrendCard indicator={key} />
         <StatsCard indicator={key} />
         <RankingCard indicator={key} />
@@ -96,10 +96,9 @@ export default function DataPage() {
         <CorrelationCard />
       </div>
       {isAdmin(user) && (
-        <div className="mt-6 grid gap-6 lg:grid-cols-2">
-          <IngestionCard catalog={catalog ?? []} />
-          <OverviewCard />
-        </div>
+        <p className="mt-6 text-sm">
+          <Link to="/admin" className="text-primary hover:underline">{tr('data.adminLink')}</Link>
+        </p>
       )}
     </PageShell>
   )
@@ -123,12 +122,13 @@ function useLoad<T>(load: () => Promise<T>, deps: unknown[]) {
 }
 
 function TrendCard({ indicator }: { indicator: string }) {
+  const tr = useT()
   const { data } = useLoad<TrendPoint[]>(() => dataApi.trend(indicator), [indicator])
   const rows = data?.map((p) => ({ ...p, band: [p.min, p.max] }))
   return (
     <Card>
-      <p className="eyebrow mb-1">World trend</p>
-      <p className="mb-4 text-xs text-muted-foreground">Median across countries per year (SQL percentile_cont), with the mean</p>
+      <p className="eyebrow mb-1">{tr('data.trend')}</p>
+      <p className="mb-4 text-xs text-muted-foreground">{tr('data.trendHint')}</p>
       <div className="h-64">
         {rows && rows.length > 0 ? (
           <ResponsiveContainer>
@@ -138,8 +138,8 @@ function TrendCard({ indicator }: { indicator: string }) {
               <YAxis tickFormatter={tick(indicator)} width={64} {...axis} />
               <Tooltip {...tooltipStyle} formatter={(v) => fmt(indicator)(Number(v))} />
               <Area dataKey="median" stroke="none" fill="rgba(111,168,255,0.12)" />
-              <Line dataKey="median" stroke="#6fa8ff" dot={false} strokeWidth={2} name="Median" />
-              <Line dataKey="mean" stroke="#f6c177" dot={false} strokeWidth={1.5} strokeDasharray="4 3" name="Mean" />
+              <Line dataKey="median" stroke="#6fa8ff" dot={false} strokeWidth={2} name={tr('data.median')} />
+              <Line dataKey="mean" stroke="#f6c177" dot={false} strokeWidth={1.5} strokeDasharray="4 3" name={tr('data.mean')} />
             </ComposedChart>
           </ResponsiveContainer>
         ) : (
@@ -151,23 +151,24 @@ function TrendCard({ indicator }: { indicator: string }) {
 }
 
 function StatsCard({ indicator }: { indicator: string }) {
+  const tr = useT()
   const { data } = useLoad<IndicatorStats>(() => dataApi.stats(indicator), [indicator])
   const f = fmt(indicator)
   const items: [string, number | null][] = data
     ? [
-        ['Minimum', data.min],
-        ['25th percentile', data.p25],
-        ['Median', data.median],
-        ['75th percentile', data.p75],
-        ['Maximum', data.max],
-        ['Mean', data.mean],
+        [tr('data.min'), data.min],
+        [tr('data.p25'), data.p25],
+        [tr('data.median'), data.median],
+        [tr('data.p75'), data.p75],
+        [tr('data.max'), data.max],
+        [tr('data.mean'), data.mean],
       ]
     : []
   return (
     <Card>
-      <p className="eyebrow mb-1">Distribution of the latest values</p>
+      <p className="eyebrow mb-1">{tr('data.distribution')}</p>
       <p className="mb-4 text-xs text-muted-foreground">
-        {data ? `${data.countries} countries, latest year ${data.latestYear ?? '—'}` : 'Loading…'}
+        {data ? tr('data.distributionHint', { countries: data.countries, year: data.latestYear ?? '—' }) : tr('common.loading')}
       </p>
       {data && data.min != null && data.max != null && (
         <BoxPlot min={data.min} p25={data.p25!} median={data.median!} p75={data.p75!} max={data.max} />
@@ -196,22 +197,23 @@ function BoxPlot({ min, p25, median, p75, max }: { min: number; p25: number; med
       <div className="absolute top-1/2 h-px w-full bg-white/20" />
       <div className="absolute top-1/2 h-6 -translate-y-1/2 rounded-md border border-primary/60 bg-primary/15" style={{ left: x(p25), width: `calc(${x(p75)} - ${x(p25)})` }} />
       <div className="absolute top-1/2 h-8 w-0.5 -translate-y-1/2 bg-primary" style={{ left: x(median) }} />
-      {log && <span className="absolute -bottom-4 right-0 text-[10px] text-muted-foreground">log scale</span>}
+      {log && <span className="absolute -bottom-4 right-0 text-[10px] text-muted-foreground">log</span>}
     </div>
   )
 }
 
 function RankingCard({ indicator }: { indicator: string }) {
+  const tr = useT()
   const [order, setOrder] = useState<'desc' | 'asc'>('desc')
   const { data } = useLoad<RankingEntry[]>(() => dataApi.ranking(indicator, order, 12), [indicator, order])
   const f = fmt(indicator)
   return (
     <Card>
       <div className="mb-4 flex items-center justify-between">
-        <p className="eyebrow">Ranking (SQL window function)</p>
+        <p className="eyebrow">{tr('data.ranking')}</p>
         <div className="flex gap-1.5">
-          <Chip active={order === 'desc'} onClick={() => setOrder('desc')}>Highest</Chip>
-          <Chip active={order === 'asc'} onClick={() => setOrder('asc')}>Lowest</Chip>
+          <Chip active={order === 'desc'} onClick={() => setOrder('desc')}>{tr('data.highest')}</Chip>
+          <Chip active={order === 'asc'} onClick={() => setOrder('asc')}>{tr('data.lowest')}</Chip>
         </div>
       </div>
       <ol className="grid gap-1.5 text-sm">
@@ -224,12 +226,13 @@ function RankingCard({ indicator }: { indicator: string }) {
           </li>
         ))}
       </ol>
-      {data?.length === 0 && <EmptyHint>No data.</EmptyHint>}
+      {data?.length === 0 && <EmptyHint>{tr('data.noData')}</EmptyHint>}
     </Card>
   )
 }
 
 function CompareCard({ indicator }: { indicator: string }) {
+  const tr = useT()
   const { countries } = useCountries()
   const [codes, setCodes] = useState<string[]>(['DEU', 'USA', 'CHN', 'IND'])
   const [add, setAdd] = useState('')
@@ -244,7 +247,7 @@ function CompareCard({ indicator }: { indicator: string }) {
 
   return (
     <Card>
-      <p className="eyebrow mb-3">Compare countries</p>
+      <p className="eyebrow mb-3">{tr('data.compare')}</p>
       <div className="mb-3 flex flex-wrap items-center gap-1.5">
         {codes.map((c, i) => (
           <button
@@ -253,7 +256,7 @@ function CompareCard({ indicator }: { indicator: string }) {
             onClick={() => codes.length > 1 && setCodes(codes.filter((x) => x !== c))}
             className="rounded-full border px-2.5 py-1 text-xs"
             style={{ borderColor: SERIES_COLORS[i % SERIES_COLORS.length], color: SERIES_COLORS[i % SERIES_COLORS.length] }}
-            title="Remove"
+            title={tr('common.remove')}
           >
             {countries.find((x) => x.code === c)?.name ?? c} ×
           </button>
@@ -267,7 +270,7 @@ function CompareCard({ indicator }: { indicator: string }) {
             }}
             className="h-7 rounded-full border border-input bg-background px-2 text-xs"
           >
-            <option value="">+ add</option>
+            <option value="">{tr('data.add')}</option>
             {countries.map((c) => (
               <option key={c.code} value={c.code}>{c.name}</option>
             ))}
@@ -292,6 +295,7 @@ function CompareCard({ indicator }: { indicator: string }) {
 }
 
 function CorrelationCard() {
+  const tr = useT()
   const [x, setX] = useState('gdpPerCapita')
   const [y, setY] = useState('lifeExpectancy')
   const { data } = useLoad<Correlation>(() => dataApi.correlation(x, y), [x, y])
@@ -299,7 +303,7 @@ function CorrelationCard() {
   const select = (value: string, onChange: (v: string) => void) => (
     <select value={value} onChange={(e) => onChange(e.target.value)} className="h-9 rounded-full border border-input bg-background px-3 text-sm">
       {Object.values(INDICATORS).map((m) => (
-        <option key={m.key} value={m.key}>{m.short}</option>
+        <option key={m.key} value={m.key}>{indicatorName(tr, m.key)}</option>
       ))}
     </select>
   )
@@ -312,14 +316,14 @@ function CorrelationCard() {
   return (
     <Card>
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <p className="eyebrow">Correlation</p>
+        <p className="eyebrow">{tr('data.correlation')}</p>
         {select(x, setX)}
         <span className="text-muted-foreground">vs</span>
         {select(y, setY)}
         {data && (
           <span className="ml-auto text-sm">
             Pearson r = <strong className="tabular">{data.pearsonR?.toFixed(3) ?? '—'}</strong>
-            <span className="text-muted-foreground"> · n = {data.n} (PostgreSQL corr())</span>
+            <span className="text-muted-foreground"> · n = {data.n} ({tr('data.corrSource')})</span>
           </span>
         )}
       </div>
@@ -354,7 +358,8 @@ function CorrelationCard() {
   )
 }
 
-function IngestionCard({ catalog }: { catalog: IndicatorInfo[] }) {
+export function IngestionCard({ catalog }: { catalog: IndicatorInfo[] }) {
+  const tr = useT()
   const [runs, setRuns] = useState<IngestionRun[]>([])
   const load = () => dataApi.runs().then(setRuns).catch(() => {})
   useEffect(() => {
@@ -366,10 +371,10 @@ function IngestionCard({ catalog }: { catalog: IndicatorInfo[] }) {
     <Card>
       <div className="mb-4 flex items-center justify-between">
         <p className="eyebrow flex items-center gap-2">
-          <Database className="size-4 text-primary" /> Ingestion runs (admin)
+          <Database className="size-4 text-primary" /> {tr('data.ingestionRuns')}
         </p>
         <Button size="sm" variant="outline" onClick={() => dataApi.ingest().then(load)}>
-          <Play /> Ingest all
+          <Play /> {tr('data.ingestAll')}
         </Button>
       </div>
       <ul className="scrollbar-thin grid max-h-80 gap-1.5 overflow-y-auto text-sm">
@@ -401,12 +406,13 @@ function IngestionCard({ catalog }: { catalog: IndicatorInfo[] }) {
           </li>
         ))}
       </ul>
-      {runs.length === 0 && <EmptyHint>No runs yet ({catalog.length} indicators available).</EmptyHint>}
+      {runs.length === 0 && <EmptyHint>{tr('data.noRuns', { n: catalog.length })}</EmptyHint>}
     </Card>
   )
 }
 
-function OverviewCard() {
+export function OverviewCard() {
+  const tr = useT()
   const [o, setO] = useState<Overview | null>(null)
   const [days, setDays] = useState<DayBucket[]>([])
   useEffect(() => {
@@ -422,7 +428,7 @@ function OverviewCard() {
   return (
     <Card>
       <p className="eyebrow mb-4 flex items-center gap-2">
-        <Server className="size-4 text-primary" /> System overview (admin)
+        <Server className="size-4 text-primary" /> {tr('data.systemOverview')}
       </p>
       {o && (
         <div className="grid gap-4 text-sm sm:grid-cols-2">
@@ -430,7 +436,7 @@ function OverviewCard() {
           <Block title="Elasticsearch" rows={o.elasticsearch} />
           <Block title="Redis" rows={o.redis} />
           <div>
-            <p className="mb-1 text-xs text-muted-foreground">Kafka consumer lag</p>
+            <p className="mb-1 text-xs text-muted-foreground">{tr('data.kafkaLag')}</p>
             <p className={cn('tabular text-2xl', totalLag > 0 ? 'text-amber-300' : 'text-emerald-300')}>{totalLag}</p>
             <ul className="mt-1 text-[11px] text-muted-foreground">
               {o.kafkaLag.filter((l) => l.lag > 0).map((l) => (
@@ -443,13 +449,13 @@ function OverviewCard() {
       )}
       {days.length > 0 && (
         <div className="mt-5 h-36">
-          <p className="mb-1 text-xs text-muted-foreground">Events per day (Elasticsearch date_histogram)</p>
+          <p className="mb-1 text-xs text-muted-foreground">{tr('data.eventsPerDay')}</p>
           <ResponsiveContainer>
             <ComposedChart data={days}>
               <XAxis dataKey="day" {...axis} tickFormatter={(d: string) => d.slice(5)} />
               <YAxis width={32} {...axis} />
               <Tooltip {...tooltipStyle} />
-              <Area dataKey="total" stroke="#6fa8ff" fill="rgba(111,168,255,0.2)" name="Events" />
+              <Area dataKey="total" stroke="#6fa8ff" fill="rgba(111,168,255,0.2)" name={tr('data.events')} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
@@ -472,4 +478,11 @@ function Block({ title, rows }: { title: string; rows: Record<string, number> })
       </dl>
     </div>
   )
+}
+
+/** Short indicator name in the UI language (falls back to the English short name). */
+export function indicatorName(tr: ReturnType<typeof useT>, key: string) {
+  const k = `indicator.${key}` as MessageKey
+  const text = tr(k)
+  return text === k ? (INDICATORS[key as IndicatorKey]?.short ?? key) : text
 }

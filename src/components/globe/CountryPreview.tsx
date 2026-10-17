@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { ArrowRight, X } from 'lucide-react'
+import { ArrowRight, Scale, X } from 'lucide-react'
 import type { Country } from '@/types'
 import { useIndicator } from '@/hooks/useIndicator'
 import { INDICATORS } from '@/lib/indicators'
@@ -7,6 +7,7 @@ import { formatArea, formatCompact, formatNumber } from '@/lib/format'
 import { Flag } from '@/components/country/Flag'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useT } from '@/i18n'
 import { AtlasActions } from '@/components/globe/AtlasActions'
 
 interface CountryPreviewProps {
@@ -30,6 +31,7 @@ function Fact({ label, children, note }: { label: string; children: React.ReactN
 
 /** Compact country card used in the desktop side panel and the mobile bottom sheet. */
 export function CountryPreview({ country, neighbours, onClose, onSelectNeighbour }: CountryPreviewProps) {
+  const t = useT()
   const pop = useIndicator(country.code, 'population')
 
   return (
@@ -44,43 +46,43 @@ export function CountryPreview({ country, neighbours, onClose, onSelectNeighbour
             {country.officialName}
           </p>
         </div>
-        <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label="Close country panel" className="-mr-2 -mt-1">
+        <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label={t('explore.close')} className="-mr-2 -mt-1">
           <X />
         </Button>
       </header>
 
       <p className="mt-4 text-xs text-muted-foreground">
         {[country.subregion, country.region].filter((v, i, a) => v && a.indexOf(v) === i).join(' · ')}
-        {!country.independent && ' · Dependent territory'}
+        {!country.independent && ` · ${t('explore.dependent')}`}
       </p>
 
       <AtlasActions code={country.code} />
 
       <dl className="mt-3 divide-y divide-border">
-        <Fact label="Capital">{country.capital.length ? country.capital.join(', ') : '—'}</Fact>
+        <Fact label={t('compare.capital')}>{country.capital.length ? country.capital.join(', ') : '—'}</Fact>
         <Fact
-          label="Population"
+          label={t('indicator.population')}
           note={pop.status === 'success' && pop.data.latest ? String(pop.data.latest.year) : undefined}
         >
           {pop.status === 'loading' && <Skeleton className="inline-block h-5 w-24 align-middle" />}
-          {pop.status === 'error' && <span className="text-muted-foreground">Unavailable</span>}
+          {pop.status === 'error' && <span className="text-muted-foreground">{t('explore.unavailable')}</span>}
           {pop.status === 'success' &&
             (pop.data.latest ? (
               <span className="tabular">{formatNumber(pop.data.latest.value)}</span>
             ) : (
-              <span className="text-muted-foreground">Not reported</span>
+              <span className="text-muted-foreground">{t('explore.notReported')}</span>
             ))}
         </Fact>
-        <Fact label="Area">
+        <Fact label={t('compare.area')}>
           <span className="tabular">{formatArea(country.area)}</span>
         </Fact>
-        <Fact label="Currency">
+        <Fact label={t('explore.currency')}>
           {country.currencies.length
             ? country.currencies.map((c) => `${c.name}${c.symbol ? ` (${c.symbol})` : ''}`).join(', ')
             : '—'}
         </Fact>
-        <Fact label="Languages">{country.languages.length ? country.languages.join(', ') : '—'}</Fact>
-        <Fact label={`Neighbours${neighbours.length ? ` · ${neighbours.length}` : ''}`}>
+        <Fact label={t('compare.languages')}>{country.languages.length ? country.languages.join(', ') : '—'}</Fact>
+        <Fact label={`${t('explore.neighbours')}${neighbours.length ? ` · ${neighbours.length}` : ''}`}>
           {neighbours.length ? (
             <ul className="-ml-0.5 flex flex-wrap gap-1.5 pt-1">
               {neighbours.map((n) => (
@@ -98,7 +100,7 @@ export function CountryPreview({ country, neighbours, onClose, onSelectNeighbour
             </ul>
           ) : (
             <span className="text-muted-foreground">
-              {country.landlocked ? 'None' : 'No land borders (island or maritime territory)'}
+              {country.landlocked ? t('explore.none') : t('explore.noBorders')}
             </span>
           )}
         </Fact>
@@ -106,14 +108,19 @@ export function CountryPreview({ country, neighbours, onClose, onSelectNeighbour
 
       <Button asChild className="mt-5 w-full">
         <Link to={`/countries/${country.code}`}>
-          Explore {country.name} <ArrowRight />
+          {t('explore.explore', { name: country.name })} <ArrowRight />
+        </Link>
+      </Button>
+      <Button asChild variant="outline" className="mt-2 w-full">
+        <Link to={`/compare?a=${country.code}`}>
+          <Scale /> {t('explore.compare')}
         </Link>
       </Button>
       <p className="mt-3 text-center text-[11px] text-muted-foreground">
-        Population: {INDICATORS.population.label}, World Bank. Area: mledoze/countries.
+        {t('explore.sources', { label: INDICATORS.population.label })}
       </p>
       {pop.status === 'success' && pop.data.latest && (
-        <p className="sr-only">Approximately {formatCompact(pop.data.latest.value)} people</p>
+        <p className="sr-only">{t('explore.approx', { n: formatCompact(pop.data.latest.value) })}</p>
       )}
     </article>
   )

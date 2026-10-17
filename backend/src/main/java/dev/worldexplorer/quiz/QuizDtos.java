@@ -16,7 +16,9 @@ public final class QuizDtos {
             @NotNull QuizMode mode,
             String region,
             @Min(5) @Max(20) Integer rounds,
-            @Size(max = 4) List<QuestionType> types) {}
+            @Size(max = 4) List<QuestionType> types,
+            /* slug of the duel, required for mode CHALLENGE */
+            String challenge) {}
 
     public record StartResponse(UUID id, QuizMode mode, int total, boolean ranked, String region) {}
 
@@ -27,13 +29,15 @@ public final class QuizDtos {
 
     public record AnswerResult(
             boolean correct, boolean late, int points, int score, String correctAnswer, String correctLabel,
-            Double distanceKm, boolean finished, Integer nextIndex) {}
+            String correctCountry, Double distanceKm, boolean finished, Integer nextIndex) {}
 
     public record ReviewItem(int index, QuestionType type, String prompt, String target, String answer,
-            String correctAnswer, String correctLabel, boolean correct, int points, Double distanceKm, long elapsedMs) {}
+            String correctAnswer, String correctLabel, String correctCountry, boolean correct, int points,
+            Double distanceKm, long elapsedMs) {}
 
     public record Summary(UUID id, QuizMode mode, String region, boolean ranked, int score, int correct, int total,
-            long durationMs, Integer weeklyRank, Integer allTimeRank, Integer dailyRank, List<ReviewItem> review) {}
+            long durationMs, Integer weeklyRank, Integer allTimeRank, Integer dailyRank, String challenge,
+            List<ReviewItem> review) {}
 
     public record HistoryItem(UUID id, QuizMode mode, String region, int score, int correct, int total,
             long durationMs, Instant finishedAt) {}

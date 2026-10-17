@@ -34,7 +34,8 @@ public class SystemOverviewService {
 
     /** Kafka consumer groups of this application (see the @KafkaListener groupIds). */
     private static final List<String> GROUPS =
-            List.of("indicator-writer", "indicator-cache", "note-indexer", "player-stats", "activity-indexer");
+            List.of("indicator-writer", "indicator-cache", "note-indexer", "player-stats", "activity-indexer",
+                    "achievements", "achievement-notifier");
 
     public record ConsumerLag(String group, String topic, long lag) {}
 

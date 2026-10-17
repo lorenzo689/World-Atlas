@@ -34,6 +34,9 @@ public class AppUser {
 
     private boolean guest;
 
+    @Column(name = "email_verified", nullable = false)
+    private boolean emailVerified;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -58,6 +61,22 @@ public class AppUser {
 
     public static AppUser guest(String displayName) {
         return new AppUser(UUID.randomUUID(), null, displayName, null, List.of("GUEST"), true);
+    }
+
+    public void verifyEmail() {
+        this.emailVerified = true;
+    }
+
+    public void changePassword(String passwordHash) {
+        this.passwordHash = passwordHash;
+    }
+
+    public void setRoles(List<String> roles) {
+        this.roles = roles.toArray(String[]::new);
+    }
+
+    public boolean isEmailVerified() {
+        return emailVerified;
     }
 
     public void touchLogin() {

@@ -64,5 +64,7 @@ public class IngestionScheduler {
         }
         Cache catalog = caches.getCache(CacheNames.INDICATOR_CATALOG);
         if (catalog != null) catalog.evict("all");
+        Cache years = caches.getCache(CacheNames.INDICATOR_AT);
+        if (years != null) years.clear(); // keys are "<indicator>:<year>" – simplest to drop all
     }
 }

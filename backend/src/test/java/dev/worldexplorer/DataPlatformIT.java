@@ -56,6 +56,10 @@ class DataPlatformIT extends IntegrationTest {
         assertThat(corr.get("n").asInt()).isEqualTo(3);
         assertThat(corr.get("pearsonR").asDouble()).isBetween(-1.0, 1.0);
 
+        JsonNode year2022 = get("/api/indicators/gdpPerCapita/at/2022", null).getBody().get("values");
+        assertThat(year2022.get("DEU").get("value").asDouble()).isEqualTo(48_000);
+        assertThat(year2022.has("FRA")).isFalse(); // France only reported 2023
+
         JsonNode profile = get("/api/indicators/countries/DEU", null).getBody();
         assertThat(profile.findValuesAsString("key")).contains("gdpPerCapita", "lifeExpectancy");
     }

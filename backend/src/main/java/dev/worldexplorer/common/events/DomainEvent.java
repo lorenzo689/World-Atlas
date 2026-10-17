@@ -10,7 +10,8 @@ import java.time.Instant;
  * (events with the same key are delivered in order).
  */
 public sealed interface DomainEvent
-        permits UserRegistered, AtlasChanged, QuizCompleted, MultiplayerFinished, IndicatorIngested {
+        permits UserRegistered, AtlasChanged, QuizCompleted, MultiplayerFinished, IndicatorIngested,
+                AchievementUnlocked {
 
     String eventId();
 

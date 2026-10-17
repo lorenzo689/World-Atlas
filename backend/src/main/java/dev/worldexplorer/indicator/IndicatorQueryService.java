@@ -56,6 +56,16 @@ public class IndicatorQueryService {
         return new LatestValues(def.key(), all);
     }
 
+    /** Snapshot of all countries for one year (the time slider of the globe's data mode). */
+    @Cacheable(cacheNames = CacheNames.INDICATOR_AT, key = "#key + ':' + #year")
+    public LatestValues atYear(String key, int year) {
+        IndicatorDefinition def = IndicatorDefinition.of(key);
+        if (year < 1960 || year > Year.now().getValue()) throw ApiException.badRequest("invalid_year", "Year out of range.");
+        Map<String, Point> snapshot = this.values.asOf(def.key(), year, 2);
+        snapshot.keySet().retainAll(knownCodes());
+        return new LatestValues(def.key(), snapshot);
+    }
+
     public SeriesResponse series(String key, List<String> codes, Integer from, Integer to) {
         IndicatorDefinition def = IndicatorDefinition.of(key);
         if (codes.isEmpty() || codes.size() > 12) throw ApiException.badRequest("invalid_countries", "Give 1–12 country codes.");
