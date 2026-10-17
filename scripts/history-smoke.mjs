@@ -28,8 +28,10 @@ try {
     await page.waitForFunction((value) => [...document.querySelectorAll('section strong')].some((node) => node.textContent === String(value)), year)
   }
   await setYear(1990)
+  await page.waitForFunction(() => !document.querySelector('[aria-busy="true"]'))
+  await page.waitForTimeout(1200)
   await slider.hover()
-  await page.mouse.wheel(0, 1)
+  await page.mouse.wheel(0, 120)
   await page.waitForFunction(() => [...document.querySelectorAll('section strong')].some((node) => node.textContent === '1991'))
   await setYear(1990)
   const search = page.locator('input[placeholder]').first()

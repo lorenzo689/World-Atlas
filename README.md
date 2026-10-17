@@ -11,8 +11,7 @@ Compare two historical years side by side, follow the same camera, open sourced 
 and share the comparison URL. The [engineering case study](docs/PORTFOLIO.md) covers data
 provenance, reliability, security evidence and the measured geometry-file reduction.
 
-**Static demo:** The GitHub Pages workflow builds the historical globe at
-`https://lorenzo689.github.io/World-Atlas/` after Pages is enabled for this repository. It has
+**[Try the live historical demo](https://lorenzo689.github.io/World-Atlas/):** The GitHub Pages workflow publishes the historical globe. It has
 no login and resets to the 1989/1991 comparison on a fresh visit. The Spring Boot features
 require the separate deployment in [docs/DEPLOY.md](docs/DEPLOY.md).
 
