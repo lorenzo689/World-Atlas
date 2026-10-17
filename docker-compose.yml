@@ -55,9 +55,11 @@ services:
       KAFKA_HEAP_OPTS: "-Xms256m -Xmx512m"
     volumes: [kafka-data:/var/lib/kafka/data]
     healthcheck:
-      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      # A JVM-based Kafka CLI took longer than the timeout on a 4 GiB laptop.
+      # The listener socket becomes available only after the broker starts accepting requests.
+      test: ["CMD", "bash", "-lc", "echo > /dev/tcp/127.0.0.1/9092"]
       interval: 30s
-      timeout: 45s
+      timeout: 5s
       retries: 20
 
   elasticsearch:
