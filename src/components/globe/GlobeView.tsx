@@ -125,7 +125,7 @@ export function GlobeView({
       const base = {
         lineColor: isSelected ? '#d6e8ff' : '#bed7ff',
         lineOpacity: isSelected ? 0.95 : 0.85,
-        altitude: isSelected ? 0.022 : 0.014,
+        altitude: isSelected ? 0.0018 : 0.0012,
       }
       if (mode === 'satellite') {
         return { ...base, capColor: '#6fa8ff', capOpacity: isSelected ? 0.36 : 0.26 }
@@ -261,7 +261,7 @@ export function GlobeView({
         capOpacity: mode === 'satellite' ? 0.4 : 0.85,
         lineColor: '#ffe2b0',
         lineOpacity: 0.95,
-        altitude: 0.018,
+        altitude: 0.0015,
       })
     }
     scene.requestRender()
@@ -287,7 +287,7 @@ export function GlobeView({
     scene.requestRender()
   }, [scene, selected, highlightStyle, boundaries])
 
-  // ---- insets, auto-rotate ------------------------------------------------------------------
+  // ---- insets and external camera -------------------------------------------------------------
   useEffect(() => {
     scene?.setInsets(insets.right, insets.bottom)
   }, [scene, insets.right, insets.bottom])
@@ -295,10 +295,6 @@ export function GlobeView({
   useEffect(() => {
     if (scene && externalPose) scene.pointOfView(externalPose, 0)
   }, [scene, externalPose])
-
-  useEffect(() => {
-    scene?.setAutoRotate(!reduced && !selected && !externalPose)
-  }, [scene, reduced, selected, externalPose])
 
   // ---- fly to selection ---------------------------------------------------------------------
   useEffect(() => {
@@ -312,10 +308,12 @@ export function GlobeView({
   useEffect(() => {
     if (!PERF_DEBUG || !scene || !ready) return
     window.__globePose = () => scene.getPose()
+    window.__globeDetail = () => scene.getDetailDiagnostics()
     const stop = startPerfProbe(() => scene.renderer)
     return () => {
       stop()
       delete window.__globePose
+      delete window.__globeDetail
     }
   }, [scene, ready])
 

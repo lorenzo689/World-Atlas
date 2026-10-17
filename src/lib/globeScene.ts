@@ -29,9 +29,6 @@ import { ImageDetail } from '@/lib/imageDetail'
 
 const OCEAN = '#0b1626'
 const MIN_DPR = 1
-/** After this long of continuous auto-rotation the globe stops, so an idle page costs nothing. */
-const AUTO_ROTATE_MAX_MS = 30_000
-const AUTO_ROTATE_RESUME_MS = 5_000
 
 export interface SceneTextures {
   day: string
@@ -104,7 +101,7 @@ const cubicInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t
  * Plain three.js globe: one sphere, one atmosphere, the merged country layers and OrbitControls.
  *
  * The render loop runs on demand: it only schedules frames while something is moving (drag,
- * damping, auto-rotate, camera tween, hover change) and goes completely idle otherwise.
+ * damping, camera tween, hover change) and goes completely idle otherwise.
  * An adaptive governor lowers the pixel ratio (and finally drops bump/specular) when frames
  * take too long.
  */
@@ -146,11 +143,6 @@ export class GlobeScene {
   // view offset (keeps the focused country centred beside the info panel)
   private inset = { x: 0, y: 0, tx: 0, ty: 0 }
   private reduced: boolean
-
-  // auto rotate
-  private autoRotateWanted = false
-  private resumeTimer = 0
-  private stopTimer = 0
 
   // hover / click
   private raycaster = new Raycaster()
@@ -217,7 +209,7 @@ export class GlobeScene {
     this.globe.rotation.y = -Math.PI / 2 // prime meridian along +z
     this.globe.raycast = () => {}
     this.scene.add(this.globe)
-    this.imageDetail = new ImageDetail(this.globe, () => this.requestRender())
+    this.imageDetail = new ImageDetail(this.globe, this.camera, () => this.requestRender())
     this.imageDetail.setSatellite(this.satellite)
     this.imageDetail.setEnabled(opts.imageDetailEnabled !== false)
 
@@ -265,7 +257,7 @@ export class GlobeScene {
     c.zoomToCursor = true
     c.minDistance = 108
     c.maxDistance = 520
-    c.autoRotateSpeed = 0.35
+    c.autoRotate = false
     c.addEventListener('change', this.onControlsChange)
     c.addEventListener('end', this.onControlsEnd)
 
@@ -448,28 +440,6 @@ export class GlobeScene {
     this.controls.update()
   }
 
-  setAutoRotate(on: boolean) {
-    this.autoRotateWanted = on && !this.reduced
-    this.armAutoRotate(0)
-  }
-
-  private armAutoRotate(delay: number) {
-    window.clearTimeout(this.resumeTimer)
-    window.clearTimeout(this.stopTimer)
-    this.controls.autoRotate = false
-    if (!this.autoRotateWanted) return
-    const start = () => {
-      if (this.disposed) return
-      this.controls.autoRotate = true
-      this.wake()
-      this.stopTimer = window.setTimeout(() => {
-        this.controls.autoRotate = false
-      }, AUTO_ROTATE_MAX_MS)
-    }
-    if (delay) this.resumeTimer = window.setTimeout(start, delay)
-    else start()
-  }
-
   /** Client coordinates → lat/lng on the globe, or null if the pointer is off the sphere. */
   toGlobeCoords(clientX: number, clientY: number): { lat: number; lng: number } | null {
     const rect = this.canvas.getBoundingClientRect()
@@ -483,6 +453,10 @@ export class GlobeScene {
   requestRender() {
     this.needsRender = true
     if (!this.raf && !this.disposed) this.raf = requestAnimationFrame(this.tick)
+  }
+
+  getDetailDiagnostics() {
+    return { ...this.detail.getDiagnostics(), baseBordersVisible: this.layers.borders.visible, autoRotate: this.controls.autoRotate }
   }
 
   /** Keep the loop alive for `ms` (damping tails, texture uploads, tweens …). */
@@ -529,7 +503,11 @@ export class GlobeScene {
 
     this.detail.update(this.getPose())
     this.imageDetail.update(this.getPose())
-    this.layers.borders.visible = !this.detail.coversBorders()
+    const detailedBorders = this.detail.coversBorders()
+    this.layers.borders.visible = !detailedBorders
+    this.layers.selected.setOutlineVisible(!detailedBorders)
+    this.layers.hover.setOutlineVisible(!detailedBorders)
+    this.layers.secondary.setOutlineVisible(!detailedBorders)
 
     if (this.needsRender || moving) {
       this.needsRender = false
@@ -538,7 +516,7 @@ export class GlobeScene {
       this.sampleFrame(now, moving)
     }
 
-    const keep = moving || this.controls.autoRotate || this.pointerDown || now < this.busyUntil || this.needsRender
+    const keep = moving || this.pointerDown || now < this.busyUntil || this.needsRender
     if (keep) {
       this.chained = true
       this.raf = requestAnimationFrame(this.tick)
@@ -622,8 +600,6 @@ export class GlobeScene {
     this.pointerDown = true
     this.tween = null
     this.downAt = { x: e.clientX, y: e.clientY, t: performance.now() }
-    this.armAutoRotate(0)
-    this.controls.autoRotate = false
     this.setHover(null, e)
     this.wake(500)
   }
@@ -636,18 +612,15 @@ export class GlobeScene {
       const code = g ? this.layers.pick(g.lng, g.lat) : null
       if (code) this.cb.onClick(code)
     }
-    this.armAutoRotate(AUTO_ROTATE_RESUME_MS)
     this.wake(1500)
   }
 
   private onPointerCancel = () => {
     this.pointerDown = false
-    this.armAutoRotate(AUTO_ROTATE_RESUME_MS)
     this.wake(1500)
   }
 
   private onWheel = () => {
-    this.armAutoRotate(AUTO_ROTATE_RESUME_MS)
     this.wake(1500)
   }
 
@@ -690,8 +663,6 @@ export class GlobeScene {
     this.disposed = true
     cancelAnimationFrame(this.raf)
     cancelAnimationFrame(this.moveRaf)
-    window.clearTimeout(this.resumeTimer)
-    window.clearTimeout(this.stopTimer)
     window.clearTimeout(this.poseTimer)
     this.controls.removeEventListener('change', this.onControlsChange)
     this.controls.removeEventListener('end', this.onControlsEnd)

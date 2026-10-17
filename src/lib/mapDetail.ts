@@ -2,14 +2,14 @@ import { BufferGeometry, Float32BufferAttribute, Group, LineBasicMaterial, LineS
 import type { Pose } from '@/lib/geo'
 import { GLOBE_RADIUS, polarToXYZ } from '@/lib/globeLayers'
 
-type Kind = 'borders' | 'admin1' | 'rivers' | 'lakes'
+type Kind = 'borders' | 'admin1' | 'rivers' | 'lakes' | 'roads'
 type Manifest = { cols: number; rows: number; step: number; kinds: Record<Kind, Record<string, number>> }
 type Place = { name: string; lng: number; lat: number; population: number; capital: boolean }
 type Tile = { mesh: LineSegments; used: number }
 const BASE = `${import.meta.env.BASE_URL}data/map-detail/`
 const MAX_CACHE = 40
 const MAX_REQUESTS = 6
-const LIMITS: Record<Kind, number> = { borders: 18, admin1: 5, rivers: 5, lakes: 5 }
+const LIMITS: Record<Kind, number> = { borders: 18, admin1: 5, rivers: 5, lakes: 5, roads: 4 }
 const RAD = Math.PI / 180
 const angle = (a: Pose, lat: number, lng: number) => Math.acos(Math.max(-1, Math.min(1,
   Math.sin(a.lat * RAD) * Math.sin(lat * RAD) + Math.cos(a.lat * RAD) * Math.cos(lat * RAD) * Math.cos((a.lng - lng) * RAD),
@@ -42,6 +42,7 @@ export class MapDetail {
     admin1: new LineBasicMaterial({ color: '#d8e0e8', transparent: true, opacity: 0.26, depthWrite: false }),
     rivers: new LineBasicMaterial({ color: '#70baff', transparent: true, opacity: 0.68, depthWrite: false }),
     lakes: new LineBasicMaterial({ color: '#91c8ff', transparent: true, opacity: 0.55, depthWrite: false }),
+    roads: new LineBasicMaterial({ color: '#f5d8a8', transparent: true, opacity: 0.34, depthWrite: false }),
   }
 
   constructor(scene: Scene, private camera: PerspectiveCamera, container: HTMLElement, private requestRender: () => void, private lowEnd = false) {
@@ -63,12 +64,27 @@ export class MapDetail {
     this.materials.borders.color.set(satellite ? '#d6e7ff' : '#172136')
     this.materials.borders.opacity = satellite ? 0.72 : 0.82
     this.materials.admin1.color.set(satellite ? '#e1e9f2' : '#24324b')
+    this.materials.roads.color.set(satellite ? '#f5d8a8' : '#766345')
     this.requestRender()
   }
 
   coversBorders() {
     const borderTiles = [...this.wanted].filter((key) => key.startsWith('borders/'))
-    return this.enabled && this.fullBorderCoverage && borderTiles.length > 0 && borderTiles.every((key) => this.cache.has(key))
+    const ready = this.enabled && this.fullBorderCoverage && borderTiles.length > 0 && borderTiles.every((key) => this.cache.has(key))
+    // Switch the two border levels together, including while tiles are streaming in.
+    for (const key of borderTiles) {
+      const tile = this.cache.get(key)
+      if (tile) tile.mesh.visible = ready
+    }
+    return ready
+  }
+
+  getDiagnostics() {
+    return {
+      bordersReady: this.coversBorders(),
+      borderTiles: [...this.wanted].filter((key) => key.startsWith('borders/')).length,
+      roadsVisible: [...this.wanted].filter((key) => key.startsWith('roads/') && this.cache.has(key)).length,
+    }
   }
 
   update(pose: Pose, force = false) {
@@ -84,24 +100,30 @@ export class MapDetail {
       return
     }
     const want = new Set<string>()
-    const horizon = Math.acos(1 / (1 + pose.altitude)) / RAD + 25
+    const horizon = Math.acos(1 / (1 + pose.altitude)) / RAD
+    const halfFov = this.camera.fov * RAD / 2
+    const viewRadius = Math.atan(Math.tan(halfFov) * pose.altitude * Math.max(1, this.camera.aspect)) / RAD
+    // A 30-degree tile can intersect the screen even when its centre is outside it.
+    const reach = Math.min(horizon, viewRadius) + 23
     const candidates: { tile: string; distance: number }[] = []
     for (let y = 0; y < this.manifest.rows; y++) for (let x = 0; x < this.manifest.cols; x++) {
       const tile = `${x}-${y}`
       const lat = 90 - (y + 0.5) * this.manifest.step
       const lng = -180 + (x + 0.5) * this.manifest.step
       const distance = angle(pose, lat, lng)
-      if (distance <= horizon) candidates.push({ tile, distance })
+      if (distance <= reach) candidates.push({ tile, distance })
     }
     candidates.sort((a, b) => a.distance - b.distance)
-    const limits = this.lowEnd ? { borders: 8, admin1: 2, rivers: 2, lakes: 2 } : LIMITS
+    const limits = this.lowEnd ? { borders: 12, admin1: 2, rivers: 2, lakes: 2, roads: 2 } : LIMITS
     this.fullBorderCoverage = candidates.filter(({ tile }) => this.manifest!.kinds.borders?.[tile]).length <= limits.borders
-    for (const kind of ['borders', 'admin1', 'rivers', 'lakes'] as Kind[]) {
+    for (const kind of ['borders', 'admin1', 'rivers', 'lakes', 'roads'] as Kind[]) {
+      if (kind === 'borders' && !this.fullBorderCoverage) continue
       let count = 0
       for (const { tile } of candidates) {
         if (count >= limits[kind]) break
         if (kind === 'admin1' && pose.altitude > 0.34) continue
         if ((kind === 'rivers' || kind === 'lakes') && pose.altitude > 0.5) continue
+        if (kind === 'roads' && pose.altitude > 0.16) continue
         if (this.manifest.kinds[kind]?.[tile]) { want.add(`${kind}/${tile}`); count++ }
       }
     }
@@ -157,6 +179,7 @@ export class MapDetail {
       mesh.renderOrder = 1
       mesh.raycast = () => {}
       this.cache.set(key, { mesh, used: performance.now() })
+      if (kind === 'borders') mesh.visible = false
       this.group.add(mesh)
       this.trim()
       this.requestRender()
@@ -186,9 +209,12 @@ export class MapDetail {
     const width = this.overlay.clientWidth
     const height = this.overlay.clientHeight
     const v = new Vector3()
-    for (const place of this.places) {
-      if (selected.length >= 24) break
-      if (angle(pose, place.lat, place.lng) > 52) continue
+    const nearby = this.places
+      .map((place) => ({ place, distance: angle(pose, place.lat, place.lng) }))
+      .filter(({ distance }) => distance < Math.min(52, 8 + pose.altitude * 100))
+      .sort((a, b) => a.distance - b.distance || Number(b.place.capital) - Number(a.place.capital))
+    for (const { place } of nearby) {
+      if (selected.length >= (pose.altitude < 0.16 ? 36 : 24)) break
       const xyz: number[] = []
       polarToXYZ(place.lat, place.lng, GLOBE_RADIUS * 1.01, xyz)
       v.set(xyz[0], xyz[1], xyz[2]).project(this.camera)
@@ -226,6 +252,7 @@ export class MapDetail {
   private hide() {
     if (!this.active) return
     this.active = false
+    this.fullBorderCoverage = false
     this.wanted.clear()
     this.queue.length = 0
     this.group.clear()

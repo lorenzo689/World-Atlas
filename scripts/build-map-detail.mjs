@@ -14,6 +14,7 @@ const HASHES = {
   ne_10m_rivers_lake_centerlines_scale_rank: '65dca1bd1729a347dda0837f41b5d152252e33abd2d7ff3370a0539c33bdf89b',
   ne_10m_lakes: '2d036f53dedec578001c5c30c2959ee7d4eebc1306900fa4367c49929ec8f2d9',
   ne_10m_populated_places_simple: 'fd3fa867a320cbd5c5b6bb5bc550afeec2939fb2cef688e508007282a55ac42f',
+  ne_10m_roads: '66a0c7b438e92fd124822cc5921cfa11042f48c294ade5e0f03f2c6640fd0248',
 }
 const OUT = 'public/data/map-detail'
 const COLS = 12
@@ -71,6 +72,7 @@ for (const [name, kind, maxRank] of [
   ['ne_10m_admin_1_states_provinces_lines', 'admin1', 5],
   ['ne_10m_rivers_lake_centerlines_scale_rank', 'rivers', 6],
   ['ne_10m_lakes', 'lakes', 6],
+  ['ne_10m_roads', 'roads', 5],
 ]) {
   const data = await source(name)
   for (const f of data.features) {
@@ -80,7 +82,7 @@ for (const [name, kind, maxRank] of [
 }
 
 const places = (await source('ne_10m_populated_places_simple')).features
-  .filter((f) => f.geometry?.type === 'Point' && f.properties?.name && (f.properties.adm0cap === 1 || f.properties.pop_max >= 500000))
+  .filter((f) => f.geometry?.type === 'Point' && f.properties?.name && (f.properties.adm0cap === 1 || f.properties.pop_max >= 50000))
   .map((f) => ({ name: f.properties.name, lng: f.geometry.coordinates[0], lat: f.geometry.coordinates[1], population: f.properties.pop_max ?? 0, capital: f.properties.adm0cap === 1 }))
   .sort((a, b) => Number(b.capital) - Number(a.capital) || b.population - a.population)
 writeFileSync(`${OUT}/places.json`, JSON.stringify(places))

@@ -137,6 +137,10 @@ class HighlightSlot {
     this.group.scale.setScalar(1 + s.altitude)
   }
 
+  setOutlineVisible(visible: boolean) {
+    this.line.visible = visible
+  }
+
   dispose() {
     this.capMat.dispose()
     this.lineMat.dispose()

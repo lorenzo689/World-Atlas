@@ -1,8 +1,9 @@
 import { readFileSync, statSync } from 'node:fs'
+import sharp from 'sharp'
 
 const root = 'public/data/map-detail'
 const manifest = JSON.parse(readFileSync(`${root}/manifest.json`, 'utf8'))
-const required = ['borders', 'admin1', 'rivers', 'lakes']
+const required = ['borders', 'admin1', 'rivers', 'lakes', 'roads']
 if (manifest.cols !== 12 || manifest.rows !== 6 || manifest.step !== 30) throw new Error('Unexpected vector tile grid')
 let bytes = 0
 let tiles = 0
@@ -27,5 +28,7 @@ for (let y = 0; y < 8; y++) for (let x = 0; x < 16; x++) {
   if (size < 1000 || size > 500000) throw new Error(`Invalid image tile ${x}-${y}: ${size} bytes`)
   imagery += size
 }
-if (imagery > 12_000_000) throw new Error(`Image tiles exceed 12 MB (${imagery})`)
+if (imagery > 14_000_000) throw new Error(`Image tiles exceed 14 MB (${imagery})`)
+const tile = await sharp('public/textures/earth-detail/8-2.webp').metadata()
+if (tile.width !== 1350 || tile.height !== 1350) throw new Error(`Unexpected image tile dimensions: ${tile.width}x${tile.height}`)
 console.log(`Map detail verified: ${tiles} vector tiles (${(bytes / 1048576).toFixed(2)} MiB), 128 image tiles (${(imagery / 1048576).toFixed(2)} MiB), ${places.length} places`)

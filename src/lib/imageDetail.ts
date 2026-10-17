@@ -1,11 +1,11 @@
-import { Group, Mesh, MeshPhongMaterial, SphereGeometry, SRGBColorSpace, TextureLoader, type Texture } from 'three'
+import { Group, Mesh, MeshPhongMaterial, PerspectiveCamera, SphereGeometry, SRGBColorSpace, TextureLoader, type Texture } from 'three'
 import type { Pose } from '@/lib/geo'
 import { GLOBE_RADIUS } from '@/lib/globeLayers'
 
 const COLS = 16
 const ROWS = 8
-const MAX_ACTIVE = 16
-const MAX_CACHE = 24
+const MAX_ACTIVE = 12
+const MAX_CACHE = 18
 const MAX_REQUESTS = 4
 const RAD = Math.PI / 180
 const BASE = `${import.meta.env.BASE_URL}textures/earth-detail/`
@@ -31,7 +31,7 @@ export class ImageDetail {
   private lite = false
   private disposed = false
 
-  constructor(globe: Mesh, private requestRender: () => void) {
+  constructor(globe: Mesh, private camera: PerspectiveCamera, private requestRender: () => void) {
     globe.add(this.group) // same prime-meridian rotation as the global texture
   }
 
@@ -45,17 +45,18 @@ export class ImageDetail {
     const now = performance.now()
     if (!force && now - this.lastUpdate < 150) return
     this.lastUpdate = now
-    if (!this.enabled || !this.satellite || this.lite || pose.altitude > 0.55) {
+    if (!this.enabled || !this.satellite || this.lite || pose.altitude > 0.45) {
       if (this.wanted.size) this.hide()
       return
     }
-    const horizon = Math.acos(1 / (1 + pose.altitude)) / RAD + 13
+    const horizon = Math.acos(1 / (1 + pose.altitude)) / RAD
+    const viewRadius = Math.atan(Math.tan(this.camera.fov * RAD / 2) * pose.altitude * Math.max(1, this.camera.aspect)) / RAD
     const nearest: { key: string; distance: number }[] = []
     for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
       const lat = 90 - (y + 0.5) * 180 / ROWS
       const lng = -180 + (x + 0.5) * 360 / COLS
       const distance = angle(pose, lat, lng)
-      if (distance < horizon) nearest.push({ key: `${x}-${y}`, distance })
+      if (distance < Math.min(horizon, viewRadius) + 17) nearest.push({ key: `${x}-${y}`, distance })
     }
     nearest.sort((a, b) => a.distance - b.distance)
     const wanted = new Set(nearest.slice(0, MAX_ACTIVE).map((v) => v.key))

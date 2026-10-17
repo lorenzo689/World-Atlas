@@ -48,8 +48,7 @@ for (let y = 0; y < rows; y++) {
     const path = `${OUT}/earth-detail/${x}-${y}.webp`
     await sharp(HIRES)
       .extract({ left: x * sourceWidth, top: y * sourceHeight, width: sourceWidth, height: sourceHeight })
-      .resize(1024, 1024)
-      .webp({ quality: 82, effort: 4 })
+      .webp({ quality: 80, effort: 4 })
       .toFile(path)
   }
   console.log(`detail image row ${y + 1}/${rows}`)
