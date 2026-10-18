@@ -1,8 +1,6 @@
 package dev.worldexplorer.indicator;
 
 import dev.worldexplorer.common.config.AppProperties;
-import dev.worldexplorer.common.events.EventPublisher;
-import dev.worldexplorer.common.events.IndicatorIngested;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
@@ -11,7 +9,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Detects when the asynchronous part of a run is done: every few seconds it compares, for each
@@ -25,16 +22,14 @@ public class IngestionMonitor {
 
     private final IngestionRunRepository runs;
     private final StringRedisTemplate redis;
-    private final EventPublisher events;
-    private final TransactionTemplate tx;
+    private final IngestionRunTransitions transitions;
     private final Duration timeout;
 
-    public IngestionMonitor(IngestionRunRepository runs, StringRedisTemplate redis, EventPublisher events,
-            TransactionTemplate tx, AppProperties props) {
+    public IngestionMonitor(IngestionRunRepository runs, StringRedisTemplate redis,
+            IngestionRunTransitions transitions, AppProperties props) {
         this.runs = runs;
         this.redis = redis;
-        this.events = events;
-        this.tx = tx;
+        this.transitions = transitions;
         this.timeout = props.ingestion().runTimeout();
     }
 
@@ -48,10 +43,8 @@ public class IngestionMonitor {
             String raw = redis.opsForValue().get(storedKey(run.getId()));
             int stored = raw == null ? 0 : (int) Long.parseLong(raw);
             if (stored >= run.getFetched()) {
-                Integer updated = tx.execute(s -> runs.markCompleted(run.getId(), stored, Instant.now()));
-                if (updated != null && updated == 1) {
+                if (transitions.completedStored(run.getId(), run.getIndicatorKey(), stored)) {
                     redis.delete(storedKey(run.getId()));
-                    events.publish(IndicatorIngested.of(run.getId(), run.getIndicatorKey(), stored, true));
                     log.info("Ingestion {} completed: {} rows stored", run.getIndicatorKey(), stored);
                 }
             } else if (run.getStartedAt().isBefore(Instant.now().minus(timeout))) {
@@ -65,8 +58,9 @@ public class IngestionMonitor {
     }
 
     private void failStale(IngestionRun run, String reason) {
-        tx.executeWithoutResult(s -> runs.findById(run.getId()).ifPresent(r -> r.failed(reason)));
-        events.publish(IndicatorIngested.of(run.getId(), run.getIndicatorKey(), 0, false));
-        log.warn("Ingestion {} failed: {}", run.getIndicatorKey(), reason);
+        if (transitions.failed(run.getId(), run.getIndicatorKey(), run.getStatus(), reason)) {
+            redis.delete(storedKey(run.getId()));
+            log.warn("Ingestion {} failed: {}", run.getIndicatorKey(), reason);
+        }
     }
 }

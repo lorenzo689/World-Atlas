@@ -28,4 +28,25 @@ public interface IngestionRunRepository extends JpaRepository<IngestionRun, UUID
             where r.id = :id and r.status = 'PUBLISHED'
             """)
     int markCompleted(UUID id, int stored, Instant now);
+
+    @Modifying
+    @Query("""
+            update IngestionRun r set r.status = 'PUBLISHED', r.fetched = :fetched
+            where r.id = :id and r.status = 'FETCHING'
+            """)
+    int markPublished(UUID id, int fetched);
+
+    @Modifying
+    @Query("""
+            update IngestionRun r set r.status = 'COMPLETED', r.finishedAt = :now
+            where r.id = :id and r.status = 'FETCHING'
+            """)
+    int markCompletedEmpty(UUID id, Instant now);
+
+    @Modifying
+    @Query("""
+            update IngestionRun r set r.status = 'FAILED', r.error = :error, r.finishedAt = :now
+            where r.id = :id and r.status = :expected
+            """)
+    int markFailed(UUID id, IngestionRun.Status expected, String error, Instant now);
 }

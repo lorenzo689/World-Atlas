@@ -48,6 +48,7 @@ public class IngestionService {
     private final IndicatorSource source;
     private final KafkaTemplate<Object, Object> kafka;
     private final IngestionRunRepository runs;
+    private final IngestionRunTransitions transitions;
     private final CountryCatalog countries;
     private final RedisLock lock;
     private final TransactionTemplate tx;
@@ -57,10 +58,12 @@ public class IngestionService {
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
     public IngestionService(IndicatorSource source, KafkaTemplate<Object, Object> kafka, IngestionRunRepository runs,
-            CountryCatalog countries, RedisLock lock, TransactionTemplate tx, AppProperties props, MeterRegistry meters) {
+            IngestionRunTransitions transitions, CountryCatalog countries, RedisLock lock, TransactionTemplate tx,
+            AppProperties props, MeterRegistry meters) {
         this.source = source;
         this.kafka = kafka;
         this.runs = runs;
+        this.transitions = transitions;
         this.countries = countries;
         this.lock = lock;
         this.tx = tx;
@@ -105,7 +108,8 @@ public class IngestionService {
     void execute(java.util.UUID runId, IndicatorDefinition def) {
         var token = lock.tryAcquire("ingestion:" + def.key(), Duration.ofMinutes(5));
         if (token.isEmpty()) {
-            finish(runId, r -> r.failed("Another instance is already ingesting " + def.key()));
+            transitions.failed(runId, def.key(), Status.FETCHING,
+                    "Another instance is already ingesting " + def.key());
             return;
         }
         try {
@@ -118,20 +122,14 @@ public class IngestionService {
             kafka.flush();
             published.increment(known.size());
             log.info("Ingestion {} ({}): published {} of {} rows", def.key(), runId, known.size(), rows.size());
-            finish(runId, r -> {
-                if (known.isEmpty()) r.completed(0);
-                else r.published(known.size());
-            });
+            if (known.isEmpty()) transitions.completedEmpty(runId, def.key());
+            else transitions.published(runId, known.size());
         } catch (Exception e) {
             log.warn("Ingestion {} failed: {}", def.key(), e.toString());
-            finish(runId, r -> r.failed(e.getMessage()));
+            transitions.failed(runId, def.key(), Status.FETCHING, e.getMessage());
         } finally {
             lock.release("ingestion:" + def.key(), token.get());
         }
-    }
-
-    private void finish(java.util.UUID runId, java.util.function.Consumer<IngestionRun> change) {
-        tx.executeWithoutResult(s -> runs.findById(runId).ifPresent(change));
     }
 
     public static List<IndicatorDefinition> all() {

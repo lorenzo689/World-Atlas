@@ -59,23 +59,6 @@ public class IngestionRun {
         this.startedAt = Instant.now();
     }
 
-    public void published(int fetched) {
-        this.fetched = fetched;
-        this.status = Status.PUBLISHED;
-    }
-
-    public void completed(int stored) {
-        this.stored = stored;
-        this.status = Status.COMPLETED;
-        this.finishedAt = Instant.now();
-    }
-
-    public void failed(String error) {
-        this.error = error == null ? "unknown error" : error.substring(0, Math.min(error.length(), 2000));
-        this.status = Status.FAILED;
-        this.finishedAt = Instant.now();
-    }
-
     public UUID getId() { return id; }
     public String getIndicatorKey() { return indicatorKey; }
     public Trigger getTrigger() { return trigger; }
