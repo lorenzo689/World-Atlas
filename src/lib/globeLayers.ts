@@ -161,6 +161,7 @@ export class BaseLayers {
   readonly group = new Group()
   readonly caps: Mesh
   readonly borders: LineSegments
+  readonly changeLines: LineSegments
   readonly hover: HighlightSlot
   readonly selected: HighlightSlot
   /** a second, persistent highlight (country comparison) */
@@ -258,6 +259,15 @@ export class BaseLayers {
     this.borders.frustumCulled = false
     this.borders.renderOrder = 1
 
+    this.changeLines = new LineSegments(
+      new BufferGeometry(),
+      new LineBasicMaterial({ color: '#f6c177', transparent: true, opacity: 0.95, depthWrite: false }),
+    )
+    this.changeLines.frustumCulled = false
+    this.changeLines.raycast = () => {}
+    this.changeLines.renderOrder = 5
+    this.changeLines.visible = false
+
     // Picking is done by pick(); keep these out of any raycast.
     this.caps.raycast = () => {}
     this.borders.raycast = () => {}
@@ -283,7 +293,7 @@ export class BaseLayers {
     this.markers.renderOrder = 4
     this.markers.visible = false
 
-    this.group.add(this.caps, this.borders, this.secondary.group, this.selected.group, this.hover.group, this.markers)
+    this.group.add(this.caps, this.borders, this.secondary.group, this.selected.group, this.hover.group, this.markers, this.changeLines)
   }
 
   /** Outline of one country (all rings), built on demand and cached. */
@@ -331,6 +341,21 @@ export class BaseLayers {
     g.setAttribute('color', new Float32BufferAttribute(col, 3))
     g.computeBoundingSphere()
     this.markers.visible = markers.length > 0
+  }
+
+  /** A single merged draw call for boundaries present in only one compared snapshot. */
+  setChangeLines(lines: [number[], number[]][], color: string) {
+    const positions: number[] = []
+    for (const [a, b] of lines) {
+      polarToXYZ(a[1], a[0], GLOBE_RADIUS * 1.006, positions)
+      polarToXYZ(b[1], b[0], GLOBE_RADIUS * 1.006, positions)
+    }
+    this.changeLines.geometry.dispose()
+    const geometry = new BufferGeometry()
+    geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
+    this.changeLines.geometry = geometry
+    ;(this.changeLines.material as LineBasicMaterial).color.set(color)
+    this.changeLines.visible = lines.length > 0
   }
 
   /** Centroid-ish point of a country (largest piece's bounding-box centre) for markers. */
@@ -398,6 +423,8 @@ export class BaseLayers {
     ;(this.caps.material as MeshBasicMaterial).dispose()
     this.borders.geometry.dispose()
     ;(this.borders.material as LineBasicMaterial).dispose()
+    this.changeLines.geometry.dispose()
+    ;(this.changeLines.material as LineBasicMaterial).dispose()
     for (const g of this.outlines.values()) g.dispose()
     this.outlines.clear()
   }

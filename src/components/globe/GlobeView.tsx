@@ -10,6 +10,7 @@ import { GlobeScene } from '@/lib/globeScene'
 import type { HighlightStyle } from '@/lib/globeLayers'
 import { PERF_DEBUG, startPerfProbe } from '@/lib/perf'
 import { commonsFlagUrl, type HistoricalEntity } from '@/lib/history'
+import type { BorderSegment } from '@/lib/historyBoundaryDiff'
 
 const BASE = import.meta.env.BASE_URL
 // Phones and low-memory devices get the 2k colour map (a quarter of the GPU memory).
@@ -52,6 +53,8 @@ interface GlobeViewProps {
   paint?: ((code: string) => string | null) | null
   /** Dots on the globe, e.g. where the other players clicked. */
   markers?: GlobeMarker[]
+  /** Geometric difference from the other historical snapshot. */
+  changeLines?: { segments: BorderSegment[]; color: string } | null
   /** Historical entities have their own names and dated flags, separate from current country metadata. */
   historicalEntities?: Map<string, HistoricalEntity> | null
   /** Follow a camera controlled by another globe (historical side-by-side view). */
@@ -83,6 +86,7 @@ export function GlobeView({
   secondary = null,
   paint = null,
   markers,
+  changeLines = null,
   historicalEntities = null,
   externalPose = null,
 }: GlobeViewProps) {
@@ -273,6 +277,12 @@ export function GlobeView({
     scene.layers.setMarkers(markers ?? [])
     scene.requestRender()
   }, [scene, markers])
+
+  useEffect(() => {
+    if (!scene) return
+    scene.layers.setChangeLines(changeLines?.segments ?? [], changeLines?.color ?? '#f6c177')
+    scene.requestRender()
+  }, [scene, changeLines, boundaries])
 
   // ---- selection highlight ------------------------------------------------------------------
   useEffect(() => {

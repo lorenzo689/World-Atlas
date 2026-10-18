@@ -21,6 +21,7 @@ import { BottomSheet, type SheetSnap } from '@/components/globe/BottomSheet'
 import { ErrorState } from '@/components/ui/feedback'
 import { loadHistory, snapshotForYear, type HistoryData } from '@/lib/history'
 import { changedEntities, HISTORY_EVENTS, readHistoryLink } from '@/lib/historyCompare'
+import { differenceBetweenBorders } from '@/lib/historyBoundaryDiff'
 import type { Pose } from '@/lib/geo'
 import type { GlobeMode } from '@/types'
 
@@ -113,7 +114,9 @@ export default function ExplorerPage() {
     [compareYear, historyData],
   )
   const changed = useMemo(() => history && comparison ? changedEntities(history, comparison) : new Set<string>(), [history, comparison])
-  const changePaint = useCallback((code: string) => changed.has(code) ? '#f6c177' : '#34445b', [changed])
+  const borderDiff = useMemo(() => history && comparison ? differenceBetweenBorders(history, comparison) : null, [history, comparison])
+  const removedLines = useMemo(() => borderDiff ? { segments: borderDiff.removed, color: '#fb7185' } : null, [borderDiff])
+  const addedLines = useMemo(() => borderDiff ? { segments: borderDiff.added, color: '#5eead4' } : null, [borderDiff])
   useEffect(() => {
     const url = new URL(window.location.href)
     if (historyYear == null) url.searchParams.delete('year')
@@ -214,7 +217,7 @@ export default function ExplorerPage() {
                 initialPose={initialPose}
                 insets={insets}
                 focusNonce={focusNonce}
-                paint={comparison ? changePaint : null}
+                changeLines={removedLines}
               />
             </Suspense>
           </WebGLBoundary>
@@ -227,7 +230,7 @@ export default function ExplorerPage() {
             <GlobeView boundaries={comparison.boundaries} countries={byCode} mode="political" values={null} metric={metric}
               selected={historicalSelected} onSelect={onGlobeSelect} historicalEntities={comparison.entities}
               onReady={() => {}} onPoseChange={() => {}} initialPose={initialPose} externalPose={comparePose} insets={{ right: 0, bottom: 0 }}
-              focusNonce={focusNonce} paint={changePaint} />
+              focusNonce={focusNonce} changeLines={addedLines} />
           </Suspense></WebGLBoundary>
           <span className="glass pointer-events-none absolute left-3 top-32 rounded-full px-3 py-1 font-serif text-lg">{compareYear}</span>
         </div>
@@ -309,7 +312,11 @@ export default function ExplorerPage() {
           </div>
           {compareYear != null && <label className="mt-2 block">{lang === 'de' ? 'Vergleichsjahr' : 'Comparison year'}: {compareYear}<input className="mt-1 w-full accent-amber-300" type="range" min="1886" max="2019" value={compareYear} onChange={(e) => setCompareYear(Number(e.target.value))} /></label>}
           <div className="mt-2 flex flex-wrap gap-2">{HISTORY_EVENTS.map((event) => <button key={event.id} type="button" className="rounded-xl border border-input px-2 py-1 text-left hover:border-primary" onClick={() => { changeHistoryYear(event.before); setCompareYear(event.after) }} title={event.detail[lang]}>{event.date.slice(0, 4)} · {event.title[lang]}</button>)}</div>
-          {compareYear != null && <p className="mt-2 text-muted-foreground">{lang === 'de' ? 'Gelb markiert Datensatzperioden, die sich zwischen den Stichtagen unterscheiden; es ist keine geometrische Grenzdifferenz. Quellenereignisse können innerhalb eines Jahres liegen. Kartenstand jeweils 1. Januar.' : 'Amber marks source periods that differ between snapshots; it is not a geometric border diff. Events may occur during a year. Map date is 1 January.'}</p>}
+          {borderDiff && <div className="mt-2 flex flex-wrap gap-3" aria-label={lang === 'de' ? 'Geometrische Grenzänderungen' : 'Geometric border changes'}>
+            <span className="text-rose-300">● {lang === 'de' ? 'Entfallene Grenzsegmente' : 'Removed border segments'}: {borderDiff.removed.length}</span>
+            <span className="text-teal-300">● {lang === 'de' ? 'Neue Grenzsegmente' : 'Added border segments'}: {borderDiff.added.length}</span>
+          </div>}
+          {compareYear != null && <p className="mt-2 text-muted-foreground">{lang === 'de' ? 'Farbige Linien zeigen tatsächliche Unterschiede der CShapes-Grenzgeometrie. Staatenwechsel ohne neue Grenzlinie erscheinen in der Ereignisliste. Kartenstand jeweils 1. Januar; die Quelle ist eine wissenschaftliche Rekonstruktion.' : 'Colored lines show actual differences in CShapes boundary geometry. State changes without a new line appear in the event list. Snapshots represent 1 January; the source is an academic reconstruction.'}</p>}
           {compareYear != null && HISTORY_EVENTS.filter((event) => event.before === historyYear && event.after === compareYear).map((event) => <a key={event.id} className="mt-1 block text-primary underline" href={event.source} target="_blank" rel="noreferrer">{event.detail[lang]} · {lang === 'de' ? 'Quelle' : 'Source'} ↗</a>)}
         </section>}
       </div>
