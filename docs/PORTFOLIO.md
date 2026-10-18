@@ -35,6 +35,6 @@ If the outbox lag alert fires: check Kafka and PostgreSQL health, inspect `/api/
 
 ## Security evidence and limits
 
-The backend enforces JWT bearer authentication and roles in `SecurityConfig`; `/api/admin/**` requires `ROLE_ADMIN`. `AuthAndAtlasIT` checks guest and normal-user denial for the outbox read/retry endpoints. Refresh tokens rotate and use an HttpOnly, SameSite cookie; registration and reset flows have integration tests. CI runs a high-severity production npm audit and Dependabot checks npm, Maven and Actions dependencies weekly. This is an evidence map against parts of OWASP ASVS authentication, access-control and dependency-management areas, **not an ASVS certification or complete penetration test**.
+The backend enforces JWT bearer authentication and roles in `SecurityConfig`; `/api/admin/**` also checks current database roles and verified email. Refresh tokens rotate in an HttpOnly, SameSite cookie, and cookie-backed refresh/logout require an allowed Origin. CI runs a high-severity production npm audit, real-service integration tests and browser checks; Dependabot covers npm, Maven and Actions. The [security audit](SECURITY-AUDIT.md) lists the findings, fixes, tests and remaining limits. This evidence map is **not an ASVS certification or complete penetration test**.
 
 Historical data is CC BY-NC-SA 4.0. The public demo attributes CShapes and links flag files to their individual Wikimedia Commons pages. Commercial reuse needs a differently licensed boundary source.

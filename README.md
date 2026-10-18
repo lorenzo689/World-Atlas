@@ -137,6 +137,8 @@ frontend/
 
 ## Known limitations
 
+The [security audit](docs/SECURITY-AUDIT.md) records the current security controls, test evidence and deployment limits.
+
 - SEO metadata is set client-side (SPA); crawlers that don't run JS will see the generic shell. Pre-rendering would be the next step.
 - `sitemap.xml` uses a placeholder origin (`world-explorer.example`); edit `frontend/scripts/build-data.mjs` before deploying.
 - The service worker caches static assets only; API data, quiz sessions and WebSockets always need the network.
