@@ -42,6 +42,7 @@ export interface SceneCallbacks {
   /** Hover changed (code or null). x/y are relative to the canvas. */
   onHover(code: string | null, x: number, y: number): void
   onClick(code: string): void
+  onGlobeClick?(lat: number, lng: number): boolean
   onReady(): void
 }
 
@@ -609,6 +610,7 @@ export class GlobeScene {
     const moved = Math.hypot(e.clientX - this.downAt.x, e.clientY - this.downAt.y)
     if (moved < 5 && performance.now() - this.downAt.t < 600) {
       const g = this.toGlobeCoords(e.clientX, e.clientY)
+      if (g && this.cb.onGlobeClick?.(g.lat, g.lng)) { this.wake(1500); return }
       const code = g ? this.layers.pick(g.lng, g.lat) : null
       if (code) this.cb.onClick(code)
     }

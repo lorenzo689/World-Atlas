@@ -11,8 +11,9 @@ Zooming into today's map streams [higher-detail boundaries, rivers, lakes, admin
 place labels and NASA image tiles](docs/MAP-DETAIL.md) only for the visible area. Historical years
 keep their own dated CShapes boundaries and do not overlay current administrative data.
 
-Compare two historical years side by side, follow the same camera, open sourced event shortcuts,
-and share the comparison URL. The [engineering case study](docs/PORTFOLIO.md) covers data
+Compare two historical years side by side with geometric border and area changes, follow guided
+source-backed lessons, and share the comparison URL. The current map also offers source-dated
+conflict learning points with regional markers and context questions. The [engineering case study](docs/PORTFOLIO.md) covers data
 provenance, reliability, security evidence and the measured geometry-file reduction.
 
 **[Try the live historical demo](https://lorenzo689.github.io/World-Atlas/):** The GitHub Pages workflow publishes the historical globe. It has

@@ -54,6 +54,7 @@ interface GlobeViewProps {
   paint?: ((code: string) => string | null) | null
   /** Dots on the globe, e.g. where the other players clicked. */
   markers?: GlobeMarker[]
+  onMarkerSelect?: (index: number) => void
   /** Geometric difference from the other historical snapshot. */
   changeLines?: { segments: BorderSegment[]; color: string } | null
   changeAreas?: { mesh: AreaMesh; color: string } | null
@@ -61,6 +62,7 @@ interface GlobeViewProps {
   historicalEntities?: Map<string, HistoricalEntity> | null
   /** Follow a camera controlled by another globe (historical side-by-side view). */
   externalPose?: Pose | null
+  focusPose?: Pose | null
 }
 
 export interface GlobeMarker {
@@ -88,10 +90,12 @@ export function GlobeView({
   secondary = null,
   paint = null,
   markers,
+  onMarkerSelect,
   changeLines = null,
   changeAreas = null,
   historicalEntities = null,
   externalPose = null,
+  focusPose = null,
 }: GlobeViewProps) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const tipRef = useRef<HTMLDivElement>(null)
@@ -163,8 +167,8 @@ export function GlobeView({
   )
 
   // Latest values for the scene callbacks (the scene is created once and must not see stale props).
-  const live = useRef({ onSelect, onPoseChange, onReady, highlightStyle, tooltipHtml, selected, tooltips })
-  live.current = { onSelect, onPoseChange, onReady, highlightStyle, tooltipHtml, selected, tooltips }
+  const live = useRef({ onSelect, onPoseChange, onReady, highlightStyle, tooltipHtml, selected, tooltips, markers, onMarkerSelect })
+  live.current = { onSelect, onPoseChange, onReady, highlightStyle, tooltipHtml, selected, tooltips, markers, onMarkerSelect }
   const hoverRef = useRef<string | null>(null)
   const tipCode = useRef<string | null>(null)
   const initial = useRef({ initialPose, reduced, mode, features, boundaries })
@@ -192,6 +196,14 @@ export function GlobeView({
       {
         onPose: (p) => live.current.onPoseChange(p),
         onClick: (code) => live.current.onSelect(code),
+        onGlobeClick: (lat, lng) => {
+          const { markers: dots, onMarkerSelect: choose } = live.current
+          if (!dots?.length || !choose) return false
+          const closest = dots.map((dot, index) => ({ index, distance: Math.hypot(dot.lat - lat, (dot.lng - lng) * Math.cos(lat * Math.PI / 180)) })).sort((a, b) => a.distance - b.distance)[0]
+          if (!closest || closest.distance > 5) return false
+          choose(closest.index)
+          return true
+        },
         onHover: (code, x, y) => {
           hoverRef.current = code
           const { selected: sel, highlightStyle: style, tooltipHtml: html } = live.current
@@ -314,6 +326,10 @@ export function GlobeView({
   useEffect(() => {
     if (scene && externalPose) scene.pointOfView(externalPose, 0)
   }, [scene, externalPose])
+
+  useEffect(() => {
+    if (scene && ready && focusPose) scene.pointOfView(focusPose, reduced ? 0 : 1200)
+  }, [scene, ready, focusPose, reduced])
 
   // ---- fly to selection ---------------------------------------------------------------------
   useEffect(() => {

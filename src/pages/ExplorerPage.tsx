@@ -17,12 +17,15 @@ import { CountryPreview } from '@/components/globe/CountryPreview'
 import { HistoricalPreview } from '@/components/globe/HistoricalPreview'
 import { HistoricalTimeline } from '@/components/globe/HistoricalTimeline'
 import { HistoricalSearchBox } from '@/components/globe/HistoricalSearchBox'
+import { ConflictPanel } from '@/components/globe/ConflictPanel'
 import { BottomSheet, type SheetSnap } from '@/components/globe/BottomSheet'
 import { ErrorState } from '@/components/ui/feedback'
 import { loadHistory, snapshotForYear, type HistoryData } from '@/lib/history'
 import { changedEntities, HISTORY_EVENTS, readHistoryLink } from '@/lib/historyCompare'
+import { storyForEvent, storyEvent } from '@/lib/historyStories'
 import { differenceBetweenBorders } from '@/lib/historyBoundaryDiff'
 import { loadAreaDifference, type AreaDifference } from '@/lib/historyAreaDiff'
+import { CONFLICT_BRIEFS, type ConflictBrief } from '@/lib/conflicts'
 import type { Pose } from '@/lib/geo'
 import type { GlobeMode } from '@/types'
 
@@ -67,6 +70,12 @@ export default function ExplorerPage() {
   const [historicalSelected, setHistoricalSelected] = useState<string | null>(null)
   const [areaDiff, setAreaDiff] = useState<AreaDifference | null>(null)
   const [areaError, setAreaError] = useState(false)
+  const [activeStory, setActiveStory] = useState<string | null>(null)
+  const [storyStep, setStoryStep] = useState(0)
+  const [storyAnswer, setStoryAnswer] = useState(false)
+  const [storyFocus, setStoryFocus] = useState<Pose | null>(null)
+  const [conflictsOpen, setConflictsOpen] = useState(false)
+  const [activeConflict, setActiveConflict] = useState<ConflictBrief | null>(null)
   const [ready, setReady] = useState(false)
   const [comparePose, setComparePose] = useState<Pose | null>(initialPose)
   const webgl = useMemo(hasWebGL, [])
@@ -122,6 +131,9 @@ export default function ExplorerPage() {
   const addedLines = useMemo(() => borderDiff ? { segments: borderDiff.added, color: '#5eead4' } : null, [borderDiff])
   const lostAreas = useMemo(() => areaDiff ? { mesh: areaDiff.lost, color: '#fb7185' } : null, [areaDiff])
   const gainedAreas = useMemo(() => areaDiff ? { mesh: areaDiff.gained, color: '#5eead4' } : null, [areaDiff])
+  const story = activeStory ? storyForEvent(activeStory) : undefined
+  const eventForStory = activeStory ? storyEvent(activeStory) : undefined
+  const conflictMarkers = useMemo(() => conflictsOpen && historyYear == null ? CONFLICT_BRIEFS.map((brief) => ({ ...brief.location, color: brief.id === activeConflict?.id ? '#ffffff' : brief.status === 'active' ? '#fb7185' : '#fbbf24' })) : [], [conflictsOpen, historyYear, activeConflict])
   useEffect(() => {
     setAreaDiff(null)
     setAreaError(false)
@@ -159,11 +171,12 @@ export default function ExplorerPage() {
 
   const changeHistoryYear = useCallback((next: number | null) => {
     setHistoryYear(next)
-    if (next == null) setCompareYear(null)
+    if (next == null) { setCompareYear(null); setActiveStory(null); setStoryFocus(null) }
     setHistoricalSelected(null)
     select(null)
     setSnap('peek')
     if (next != null) setMode('political')
+    if (next != null) { setConflictsOpen(false); setActiveConflict(null) }
   }, [select, setMode])
 
   const changeMode = useCallback((next: GlobeMode) => {
@@ -176,8 +189,12 @@ export default function ExplorerPage() {
       setHistoricalSelected(code)
       setSnap('peek')
       setFocusNonce((n) => n + 1)
+    } else if (conflictsOpen) {
+      const brief = CONFLICT_BRIEFS.find((item) => item.countryCodes.includes(code))
+      if (brief) { setActiveConflict(brief); setStoryFocus({ ...brief.location, altitude: 1.25 }); return }
+      onSelect(code)
     } else onSelect(code)
-  }, [historyYear, onSelect])
+  }, [historyYear, onSelect, conflictsOpen])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -190,7 +207,7 @@ export default function ExplorerPage() {
     return () => window.removeEventListener('keydown', onKey)
   }, [select])
 
-  const showPanel = historyYear != null ? !!historicalEntity : !!country
+  const showPanel = historyYear != null ? !!historicalEntity : conflictsOpen || !!country
   const insets = useMemo(
     () => ({
       right: showPanel && isDesktop ? PANEL_WIDTH + 32 : 0,
@@ -236,6 +253,9 @@ export default function ExplorerPage() {
                 focusNonce={focusNonce}
                 changeLines={removedLines}
                 changeAreas={lostAreas}
+                focusPose={storyFocus}
+                markers={conflictMarkers}
+                onMarkerSelect={(index) => { const brief = CONFLICT_BRIEFS[index]; if (brief) { setActiveConflict(brief); setStoryFocus({ ...brief.location, altitude: 1.25 }) } }}
               />
             </Suspense>
           </WebGLBoundary>
@@ -289,6 +309,7 @@ export default function ExplorerPage() {
           <div className="pointer-events-auto hidden shrink-0 md:block" style={{ display: import.meta.env.VITE_STATIC_DEMO === 'true' ? 'none' : undefined }}>
             <ModeSwitcher mode={mode} onChange={changeMode} />
           </div>
+          <button type="button" className={`pointer-events-auto shrink-0 rounded-full border px-3 py-2 text-xs sm:text-sm ${conflictsOpen ? 'border-rose-300 bg-rose-300/20 text-rose-100' : 'border-input bg-background/75 text-foreground'}`} aria-pressed={conflictsOpen} onClick={() => { if (historyYear != null) changeHistoryYear(null); setConflictsOpen((open) => !open); setActiveConflict(null); select(null) }}>{lang === 'de' ? 'Konflikte' : 'Conflicts'}</button>
           <UserMenu className="pointer-events-auto shrink-0" />
         </div>
         <div className="pointer-events-auto md:hidden" style={{ display: import.meta.env.VITE_STATIC_DEMO === 'true' ? 'none' : undefined }}>
@@ -329,7 +350,17 @@ export default function ExplorerPage() {
             {comparison && <span className="text-amber-300">{changed.size} {lang === 'de' ? 'veränderte Staaten/Perioden' : 'changed states/periods'}</span>}
           </div>
           {compareYear != null && <label className="mt-2 block">{lang === 'de' ? 'Vergleichsjahr' : 'Comparison year'}: {compareYear}<input className="mt-1 w-full accent-amber-300" type="range" min="1886" max="2019" value={compareYear} onChange={(e) => setCompareYear(Number(e.target.value))} /></label>}
-          <div className="mt-2 flex flex-wrap gap-2">{HISTORY_EVENTS.map((event) => <button key={event.id} type="button" className="rounded-xl border border-input px-2 py-1 text-left hover:border-primary" onClick={() => { changeHistoryYear(event.before); setCompareYear(event.after) }} title={event.detail[lang]}>{event.date.slice(0, 4)} · {event.title[lang]}</button>)}</div>
+          <div className="mt-2 flex flex-wrap gap-2">{HISTORY_EVENTS.map((event) => <button key={event.id} type="button" className="rounded-xl border border-input px-2 py-1 text-left hover:border-primary" onClick={() => { changeHistoryYear(event.before); setCompareYear(event.after); setActiveStory(event.id); setStoryStep(0); setStoryAnswer(false); setStoryFocus(storyForEvent(event.id)?.focus ?? null) }} title={event.detail[lang]}>{event.date.slice(0, 4)} · {event.title[lang]}</button>)}</div>
+          {story && eventForStory && <article className="mt-3 rounded-xl border border-primary/50 bg-background/80 p-3" aria-label={lang === 'de' ? 'Geführte Zeitreise' : 'Guided history lesson'}>
+            <div className="flex items-center justify-between gap-2"><strong className="text-sm">{eventForStory.title[lang]}</strong><button type="button" aria-label={lang === 'de' ? 'Lernpfad schließen' : 'Close lesson'} onClick={() => setActiveStory(null)}>×</button></div>
+            <p className="mt-1 text-muted-foreground">{eventForStory.date} · {storyStep + 1}/{story.steps.length}</p>
+            <p className="mt-2 text-sm">{story.steps[storyStep][lang]}</p>
+            <div className="mt-2 flex gap-2"><button type="button" disabled={storyStep === 0} className="rounded border border-input px-2 py-1 disabled:opacity-40" onClick={() => setStoryStep((n) => n - 1)}>{lang === 'de' ? 'Zurück' : 'Back'}</button><button type="button" disabled={storyStep === story.steps.length - 1} className="rounded border border-primary px-2 py-1 text-primary disabled:opacity-40" onClick={() => setStoryStep((n) => n + 1)}>{lang === 'de' ? 'Weiter' : 'Next'}</button></div>
+            <p className="mt-3 font-medium">{story.question[lang]}</p>
+            <button type="button" className="mt-1 text-primary underline" onClick={() => setStoryAnswer((shown) => !shown)}>{storyAnswer ? (lang === 'de' ? 'Antwort verbergen' : 'Hide answer') : (lang === 'de' ? 'Antwort zeigen' : 'Show answer')}</button>
+            {storyAnswer && <p className="mt-1">{story.answer[lang]}</p>}
+            <a className="mt-2 block text-primary underline" href={eventForStory.source} target="_blank" rel="noreferrer">{lang === 'de' ? 'Primärquelle öffnen' : 'Open primary source'} ↗</a>
+          </article>}
           {borderDiff && <div className="mt-2 flex flex-wrap gap-3" aria-label={lang === 'de' ? 'Geometrische Grenzänderungen' : 'Geometric border changes'}>
             <span className="text-rose-300">● {lang === 'de' ? 'Entfallene Grenzsegmente' : 'Removed border segments'}: {borderDiff.removed.length}</span>
             <span className="text-teal-300">● {lang === 'de' ? 'Neue Grenzsegmente' : 'Added border segments'}: {borderDiff.added.length}</span>
@@ -359,6 +390,7 @@ export default function ExplorerPage() {
       )}
 
       {/* Country preview */}
+      {historyYear == null && conflictsOpen && <ConflictPanel lang={lang} selected={activeConflict} onSelect={(brief) => { setActiveConflict(brief); setStoryFocus({ ...brief.location, altitude: 1.25 }); select(null) }} onClose={() => { setConflictsOpen(false); setActiveConflict(null) }} />}
       {historyYear != null && historicalEntity && history &&
         (isDesktop ? (
           <aside key={historicalEntity.code} aria-label={historicalEntity.name} className="glass scrollbar-thin animate-rise absolute bottom-4 right-4 top-[88px] z-20 overflow-y-auto rounded-[28px]" style={{ width: PANEL_WIDTH }}>
@@ -369,7 +401,7 @@ export default function ExplorerPage() {
             <HistoricalPreview entity={historicalEntity} year={historyYear} onClose={() => setHistoricalSelected(null)} />
           </BottomSheet>
         ))}
-      {historyYear == null && country &&
+      {historyYear == null && country && !conflictsOpen &&
         (isDesktop ? (
           <aside
             key={country.code}

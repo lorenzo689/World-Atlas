@@ -11,11 +11,21 @@ Modern 1:10m close-zoom borders, administrative lines, physical details and plac
 for historical years. They cannot be safely projected onto dated CShapes states. The satellite
 texture is January 2004 imagery used as a visual background, not a dated land-cover layer.
 
-The comparison control shows two selected snapshots side by side. Amber marks countries whose
-source period identifier differs or whose state appears/disappears; it is not a polygon-difference
-calculation. The right globe follows the left camera. Curated event buttons choose dates on either
-side of a transition and link to a primary source. A copied URL includes `year` and `compare`
+The comparison control shows two selected snapshots side by side. Rose lines show removed boundary
+segments; teal lines show added segments. Translucent areas show geometric losses and gains for
+states present in both snapshots. A Web Worker computes the polygon difference, debounced while
+scrubbing and cached for recent year pairs. New or dissolved states are listed as entity changes
+rather than coloring their entire footprint as a territorial gain or loss. The right globe follows
+the left camera. Four guided lessons explain selected transitions, focus the map and ask a question;
+each links to a primary source. A copied URL includes `year` and `compare`
 parameters, so the same view opens on the GitHub Pages demo without an account.
+
+The **Conflicts** control switches to Today and opens five source-dated regional learning points.
+Selecting a point in the list or on the globe shows context, a question and the underlying UN
+report. This is an editorial selection, not a complete conflict registry. Markers are approximate
+regional anchors, not battle sites, front lines, territorial control or safety advice. Each card
+shows its source date and flags a report older than 60 days for review. Gaza is classified as a
+fragile ceasefire, following the cited OCHA report.
 
 There is no historical boundary source in this project for 2020–2025. The slider therefore ends
 at 2019 and offers a separate Today button; it does not silently reuse today's borders for those

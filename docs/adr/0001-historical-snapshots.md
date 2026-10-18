@@ -8,7 +8,7 @@ The existing Natural Earth map represents current states. Showing an old flag on
 
 ## Decision
 
-Use pinned CShapes 2.0 country periods, sample them on 1 January each year from 1886 to 2019, and keep the current map as a separate Today state. Build shared TopoJSON plus precomputed geometry and dated flag references. Publish a SHA-256 manifest and verify generated artifacts in CI. Compare snapshots by source period IDs, with explicit UI wording that the highlight does not compute border segments.
+Use pinned CShapes 2.0 country periods, sample them on 1 January each year from 1886 to 2019, and keep the current map as a separate Today state. Build shared TopoJSON plus precomputed geometry and dated flag references. Publish a SHA-256 manifest and verify generated artifacts in CI. Compare snapshots using shared boundary segment differences and worker-computed polygon differences for continuing states; source period IDs identify entity transitions.
 
 ## Consequences
 
