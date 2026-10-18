@@ -21,6 +21,7 @@ With `?debug=1` the adaptive quality governor is off, so numbers are reproducibl
 ### Scripted run
 
 ```bash
+cd frontend
 npm run build
 npm run perf                                  # software GL: draw calls, transfer size
 npm run perf -- --gpu                         # real GPU: also frame-time, ready time, long-task and heap budgets

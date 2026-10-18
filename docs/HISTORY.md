@@ -44,7 +44,7 @@ binary from 18,376,160 to 12,376,220 bytes. `historical-manifest.json` records s
 license, schema and SHA-256 checksums. `npm run data:history:verify` checks annual coverage, dates,
 geometry and generated files and runs in CI.
 
-After `npm run build`, run `npm run preview -- --port 4173` and `npm run smoke:history` in separate
+From `frontend/`, after `npm run build`, run `npm run preview -- --port 4173` and `npm run smoke:history` in separate
 terminals to check the real browser interaction.
 
 Flag timelines are derived from the CC0 [Wikimedia Commons FlagsData table](https://commons.wikimedia.org/wiki/Data:FlagsData.tab)

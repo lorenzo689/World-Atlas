@@ -8,7 +8,7 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
 /**
- * Serves flag SVGs for flag questions. The flags are the frontend's {@code public/flags/*.svg}, copied
+ * Serves flag SVGs for flag questions. The flags are the frontend's {@code frontend/public/flags/*.svg}, copied
  * into the jar by Maven. They are streamed by the backend (instead of linking {@code /flags/DEU.svg})
  * so the image URL does not give the answer away.
  */

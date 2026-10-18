@@ -54,8 +54,8 @@ flowchart LR
 
 ```bash
 docker compose up -d                    # PostgreSQL (5433), Redis, Kafka, Elasticsearch
-cd backend && ./mvnw spring-boot:run    # API on :8080 (Swagger: /swagger-ui.html)
-npm run dev                             # frontend on :5173, proxies /api and /ws to the backend
+(cd backend && ./mvnw spring-boot:run)  # API on :8080
+(cd frontend && npm ci && npm run dev)  # frontend on :5173, proxies /api and /ws
 ```
 
 How the backend works, module by module, with the main request flows: [docs/BACKEND-GUIDE.md](docs/BACKEND-GUIDE.md) (German).
@@ -74,16 +74,17 @@ Prometheus exposes `outbox_pending` and `outbox_failed` gauges. Kafka consumer f
 parked on per-topic `.dlt` topics, visible in Kafka UI.
 
 ```bash
-npm test                         # frontend unit/component tests (vitest, testing-library)
-cd backend && ./mvnw verify      # backend unit + integration tests (Testcontainers needs Docker)
-npm run build && npm run e2e     # browser end-to-end test against the running full stack
+(cd frontend && npm test)                       # frontend unit/component tests
+(cd backend && ./mvnw verify)                   # backend integration tests (Docker)
+(cd frontend && npm run build && npm run e2e)  # browser end-to-end test
 docker run --rm -i -e BASE_URL=http://host.docker.internal:8080 grafana/k6:1.3.0 run - < loadtest/quiz.js
 ```
 
 ## Run it
 
 ```bash
-npm install
+cd frontend
+npm ci
 npm run dev        # http://localhost:5173
 npm run build      # type-check + production build into dist/
 npm run preview    # serve the production build
@@ -109,19 +110,20 @@ npm run icons      # regenerate the PWA icons from public/favicon.svg
 Nothing is invented: missing values render as `—` or an explicit empty state, and every chart shows its data years and source.
 
 - **Statistics**: [World Bank Open Data](https://data.worldbank.org) API (CC BY 4.0), fetched live in the browser and cached per session.
-- **Country metadata**: [mledoze/countries](https://github.com/mledoze/countries) (ODbL), snapshotted in `scripts/source/countries.json`.
+- **Country metadata**: [mledoze/countries](https://github.com/mledoze/countries) (ODbL), snapshotted in `frontend/scripts/source/countries.json`.
   (REST Countries v3.1 is deprecated and v5 needs an API key, so it isn't used.)
 - **Boundaries**: Natural Earth 1:50m world view and 1:10m close-zoom tiles via `world-atlas` (public domain).
-- **Flags**: `flag-icons` (MIT), copied to `public/flags`.
+- **Flags**: `flag-icons` (MIT), copied to `frontend/public/flags`.
 - **Descriptions**: Wikipedia REST summary API (CC BY-SA), attributed on the page.
-- **Textures**: NASA Blue Marble Next Generation January 2004 with topography and bathymetry. `node scripts/optimize-textures.mjs` checks the pinned original and writes 4K/2K base maps plus close-zoom WebP tiles.
+- **Textures**: NASA Blue Marble Next Generation January 2004 with topography and bathymetry. From `frontend/`, `node scripts/optimize-textures.mjs` checks the pinned original and writes 4K/2K base maps plus close-zoom WebP tiles.
 
-`npm run data` rebuilds `public/data/{countries,boundaries}.json` (boundaries are a simplified TopoJSON topology), the pre-triangulated globe caps `public/data/geometry.{bin,json}`, `public/flags`, `sitemap.xml` and `robots.txt`. Serve `*.bin` with compression enabled.
+From `frontend/`, `npm run data` rebuilds `public/data/{countries,boundaries}.json` (boundaries are a simplified TopoJSON topology), the pre-triangulated globe caps `public/data/geometry.{bin,json}`, `public/flags`, `sitemap.xml` and `robots.txt`. Serve `*.bin` with compression enabled.
 
 ## Structure
 
 ```
-src/
+frontend/
+ src/
   components/ globe/ (GlobeView, controls, preview, bottom sheet)
               country/ (tabs, map, locator globe, flag)
               charts/ ui/ layout/
@@ -136,7 +138,7 @@ src/
 ## Known limitations
 
 - SEO metadata is set client-side (SPA); crawlers that don't run JS will see the generic shell. Pre-rendering would be the next step.
-- `sitemap.xml` uses a placeholder origin (`world-explorer.example`); edit `scripts/build-data.mjs` before deploying.
+- `sitemap.xml` uses a placeholder origin (`world-explorer.example`); edit `frontend/scripts/build-data.mjs` before deploying.
 - The service worker caches static assets only; API data, quiz sessions and WebSockets always need the network.
 - 14 small territories have no polygon in the 1:50m dataset (e.g. Gibraltar, Réunion). They are searchable and the camera flies to their coordinates, but no shape is highlighted.
 - Country borders follow the Natural Earth dataset and carry no political endorsement.

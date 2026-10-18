@@ -1,5 +1,5 @@
 # Multi-stage build: compile with Maven, run on a slim JRE.
-# Build context is ./backend, but the jar also packages ../public/data and ../public/flags,
+# Build context is the repository root; the jar packages frontend/public/data and frontend/public/flags,
 # so build from the repository root:   docker build -f backend/Dockerfile -t world-explorer-backend .
 
 FROM eclipse-temurin:25-jdk AS build
@@ -9,8 +9,8 @@ COPY backend/mvnw backend/pom.xml backend/
 # download dependencies first: this layer is cached as long as pom.xml does not change
 RUN cd backend && ./mvnw -q -B dependency:go-offline
 COPY backend/src backend/src
-COPY public/data public/data
-COPY public/flags public/flags
+COPY frontend/public/data frontend/public/data
+COPY frontend/public/flags frontend/public/flags
 RUN cd backend && ./mvnw -q -B package -DskipTests \
     && java -Djarmode=tools -jar target/world-explorer-backend-*.jar extract --layers --launcher --destination /app
 

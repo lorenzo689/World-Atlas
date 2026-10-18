@@ -4,8 +4,8 @@ dist
 .DS_Store
 perf-results
 .vscode*.tsbuildinfo
-scripts/source/historical/CShapes-2.0.geojson
-scripts/source/detail/
-scripts/source/textures/earth-blue-marble-hires.jpg
+frontend/scripts/source/historical/CShapes-2.0.geojson
+frontend/scripts/source/detail/
+frontend/scripts/source/textures/earth-blue-marble-hires.jpg
 backend/run.log
 backend/run-error.log

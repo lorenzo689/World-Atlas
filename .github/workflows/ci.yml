@@ -8,12 +8,16 @@ on:
 jobs:
   frontend:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
+          cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run data:history:verify
       - run: npm run data:detail:verify
@@ -56,6 +60,7 @@ jobs:
         with:
           node-version: 24
           cache: npm
+          cache-dependency-path: frontend/package-lock.json
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -72,15 +77,19 @@ jobs:
           for i in $(seq 1 90); do curl -sf localhost:8080/api/health && break; sleep 2; done
           curl -sf localhost:8080/api/health
       - run: npm ci
+        working-directory: frontend
       - run: npm run build
+        working-directory: frontend
       - name: End-to-end test
         run: CHROME_PATH=$(which google-chrome) npm run e2e -- --screenshots e2e-screenshots
+        working-directory: frontend
       - name: Close-zoom map detail
         run: CHROME_PATH=$(which google-chrome) npm run smoke:detail
+        working-directory: frontend
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: e2e-artifacts
           path: |
-            e2e-screenshots
+            frontend/e2e-screenshots
             backend.log

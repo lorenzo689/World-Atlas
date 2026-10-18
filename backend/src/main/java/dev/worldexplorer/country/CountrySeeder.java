@@ -16,7 +16,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Seeds the {@code country} table on startup from {@code data/countries.json} – the same file the
- * frontend uses (Maven copies it from {@code ../public/data} into the jar, see pom.xml).
+ * frontend uses (Maven copies it from {@code ../frontend/public/data} into the jar, see pom.xml).
  *
  * <p>Runs only when the table is empty, then announces {@link CountriesSeeded} so that the search
  * module can (re)index Elasticsearch.

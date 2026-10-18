@@ -21,6 +21,7 @@ GitHub Pages opens the static historical demo in 1989 and uses political mode. T
 ## Rebuild and verify
 
 ```bash
+cd frontend
 npm ci
 npm run data:detail                # pinned Natural Earth source; downloads if cache is absent
 node scripts/optimize-textures.mjs # pinned NASA source; downloads if cache is absent

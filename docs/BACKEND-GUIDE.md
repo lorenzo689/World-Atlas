@@ -38,7 +38,7 @@ PostgreSQL bzw. aus Kafka-Ereignissen jederzeit neu aufbauen kann.
 ```bash
 docker compose up -d                       # postgres:5433, redis:6379, kafka:9092, elasticsearch:9200
 cd backend && ./mvnw spring-boot:run       # Backend auf http://localhost:8080
-npm run dev                                # Frontend auf http://localhost:5173 (Proxy auf das Backend)
+cd ../frontend && npm ci && npm run dev   # Frontend auf http://localhost:5173 (Proxy auf das Backend)
 ```
 
 - **API-Doku (Swagger UI):** http://localhost:8080/swagger-ui.html

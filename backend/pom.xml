@@ -21,7 +21,7 @@
         <java.version>25</java.version>
         <springdoc.version>3.1.1</springdoc.version>
         <!-- Frontend data that the backend seeds from (single source of truth) -->
-        <frontend.data.dir>${project.basedir}/../public/data</frontend.data.dir>
+        <frontend.data.dir>${project.basedir}/../frontend/public/data</frontend.data.dir>
     </properties>
 
     <dependencies>
@@ -191,7 +191,7 @@
             </resource>
             <!-- flags for flag questions (streamed by the backend so the URL does not reveal the answer) -->
             <resource>
-                <directory>${project.basedir}/../public/flags</directory>
+                <directory>${project.basedir}/../frontend/public/flags</directory>
                 <targetPath>flags</targetPath>
             </resource>
         </resources>
