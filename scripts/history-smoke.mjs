@@ -15,6 +15,7 @@ try {
   const page = await browser.newPage({ viewport: { width: 1360, height: 850 } })
   const pageErrors = []
   page.on('pageerror', (error) => pageErrors.push(error.message))
+  page.on('console', (message) => { if (message.type() === 'error') console.error('Browser console:', message.text()) })
   await page.goto(process.env.SMOKE_URL ?? 'http://localhost:4173/', { waitUntil: 'domcontentloaded' })
   const slider = page.getByRole('slider', { name: /Year|Jahr/i }).first()
   await slider.waitFor()
@@ -55,6 +56,13 @@ try {
   await page.getByRole('button', { name: /German reunification|Deutsche Wiedervereinigung/ }).click()
   await page.waitForURL(/year=1989.*compare=1991/)
   await page.getByLabel(/Comparison year 1991|Vergleichsjahr 1991/).waitFor()
+  await page.getByLabel(/Geometric border changes|Geometrische Grenzänderungen/).waitFor()
+  try {
+    await page.getByText(/Shaded areas show actual territory|Schattierte Flächen zeigen reale Gebietsverluste/).waitFor({ timeout: 60000 })
+  } catch (error) {
+    console.error('Area status:', await page.getByRole('status').allTextContents())
+    throw error
+  }
   await page.getByRole('link', { name: /Source|Quelle/ }).waitFor()
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.getByLabel(/Comparison year 1991|Vergleichsjahr 1991/).waitFor()

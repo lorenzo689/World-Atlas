@@ -162,6 +162,7 @@ export class BaseLayers {
   readonly caps: Mesh
   readonly borders: LineSegments
   readonly changeLines: LineSegments
+  readonly changeAreas: Mesh
   readonly hover: HighlightSlot
   readonly selected: HighlightSlot
   /** a second, persistent highlight (country comparison) */
@@ -268,6 +269,15 @@ export class BaseLayers {
     this.changeLines.renderOrder = 5
     this.changeLines.visible = false
 
+    this.changeAreas = new Mesh(
+      new BufferGeometry(),
+      new MeshBasicMaterial({ color: '#f6c177', transparent: true, opacity: 0.5, depthWrite: false }),
+    )
+    this.changeAreas.frustumCulled = false
+    this.changeAreas.raycast = () => {}
+    this.changeAreas.renderOrder = 4
+    this.changeAreas.visible = false
+
     // Picking is done by pick(); keep these out of any raycast.
     this.caps.raycast = () => {}
     this.borders.raycast = () => {}
@@ -293,7 +303,7 @@ export class BaseLayers {
     this.markers.renderOrder = 4
     this.markers.visible = false
 
-    this.group.add(this.caps, this.borders, this.secondary.group, this.selected.group, this.hover.group, this.markers, this.changeLines)
+    this.group.add(this.caps, this.borders, this.secondary.group, this.selected.group, this.hover.group, this.markers, this.changeAreas, this.changeLines)
   }
 
   /** Outline of one country (all rings), built on demand and cached. */
@@ -356,6 +366,18 @@ export class BaseLayers {
     this.changeLines.geometry = geometry
     ;(this.changeLines.material as LineBasicMaterial).color.set(color)
     this.changeLines.visible = lines.length > 0
+  }
+
+  setChangeAreas(area: { positions: Float32Array; indices: Uint32Array } | null, color: string) {
+    this.changeAreas.geometry.dispose()
+    const geometry = new BufferGeometry()
+    if (area && area.indices.length) {
+      geometry.setAttribute('position', new BufferAttribute(area.positions, 3))
+      geometry.setIndex(new BufferAttribute(area.indices, 1))
+    }
+    this.changeAreas.geometry = geometry
+    ;(this.changeAreas.material as MeshBasicMaterial).color.set(color)
+    this.changeAreas.visible = !!area?.indices.length
   }
 
   /** Centroid-ish point of a country (largest piece's bounding-box centre) for markers. */
@@ -425,6 +447,8 @@ export class BaseLayers {
     ;(this.borders.material as LineBasicMaterial).dispose()
     this.changeLines.geometry.dispose()
     ;(this.changeLines.material as LineBasicMaterial).dispose()
+    this.changeAreas.geometry.dispose()
+    ;(this.changeAreas.material as MeshBasicMaterial).dispose()
     for (const g of this.outlines.values()) g.dispose()
     this.outlines.clear()
   }

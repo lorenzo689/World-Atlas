@@ -16,6 +16,7 @@ const proxy = {
 export default defineConfig({
   base: process.env.VITE_STATIC_DEMO === 'true' ? '/World-Atlas/' : '/',
   plugins: [react(), tailwindcss()],
+  worker: { format: 'es' },
   server: { proxy },
   preview: { proxy },
   resolve: { alias: { '@': path.resolve(import.meta.dirname, 'src') } },

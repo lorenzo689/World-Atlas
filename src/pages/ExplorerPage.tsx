@@ -22,6 +22,7 @@ import { ErrorState } from '@/components/ui/feedback'
 import { loadHistory, snapshotForYear, type HistoryData } from '@/lib/history'
 import { changedEntities, HISTORY_EVENTS, readHistoryLink } from '@/lib/historyCompare'
 import { differenceBetweenBorders } from '@/lib/historyBoundaryDiff'
+import { loadAreaDifference, type AreaDifference } from '@/lib/historyAreaDiff'
 import type { Pose } from '@/lib/geo'
 import type { GlobeMode } from '@/types'
 
@@ -64,6 +65,8 @@ export default function ExplorerPage() {
   const [historyError, setHistoryError] = useState(false)
   const [historyAttempt, setHistoryAttempt] = useState(0)
   const [historicalSelected, setHistoricalSelected] = useState<string | null>(null)
+  const [areaDiff, setAreaDiff] = useState<AreaDifference | null>(null)
+  const [areaError, setAreaError] = useState(false)
   const [ready, setReady] = useState(false)
   const [comparePose, setComparePose] = useState<Pose | null>(initialPose)
   const webgl = useMemo(hasWebGL, [])
@@ -117,6 +120,20 @@ export default function ExplorerPage() {
   const borderDiff = useMemo(() => history && comparison ? differenceBetweenBorders(history, comparison) : null, [history, comparison])
   const removedLines = useMemo(() => borderDiff ? { segments: borderDiff.removed, color: '#fb7185' } : null, [borderDiff])
   const addedLines = useMemo(() => borderDiff ? { segments: borderDiff.added, color: '#5eead4' } : null, [borderDiff])
+  const lostAreas = useMemo(() => areaDiff ? { mesh: areaDiff.lost, color: '#fb7185' } : null, [areaDiff])
+  const gainedAreas = useMemo(() => areaDiff ? { mesh: areaDiff.gained, color: '#5eead4' } : null, [areaDiff])
+  useEffect(() => {
+    setAreaDiff(null)
+    setAreaError(false)
+    if (!history || !comparison) return
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => {
+      loadAreaDifference(history, comparison, controller.signal).then(setAreaDiff, (error) => {
+        if (error?.name !== 'AbortError') setAreaError(true)
+      })
+    }, 140)
+    return () => { window.clearTimeout(timer); controller.abort() }
+  }, [history, comparison])
   useEffect(() => {
     const url = new URL(window.location.href)
     if (historyYear == null) url.searchParams.delete('year')
@@ -218,6 +235,7 @@ export default function ExplorerPage() {
                 insets={insets}
                 focusNonce={focusNonce}
                 changeLines={removedLines}
+                changeAreas={lostAreas}
               />
             </Suspense>
           </WebGLBoundary>
@@ -230,7 +248,7 @@ export default function ExplorerPage() {
             <GlobeView boundaries={comparison.boundaries} countries={byCode} mode="political" values={null} metric={metric}
               selected={historicalSelected} onSelect={onGlobeSelect} historicalEntities={comparison.entities}
               onReady={() => {}} onPoseChange={() => {}} initialPose={initialPose} externalPose={comparePose} insets={{ right: 0, bottom: 0 }}
-              focusNonce={focusNonce} changeLines={addedLines} />
+              focusNonce={focusNonce} changeLines={addedLines} changeAreas={gainedAreas} />
           </Suspense></WebGLBoundary>
           <span className="glass pointer-events-none absolute left-3 top-32 rounded-full px-3 py-1 font-serif text-lg">{compareYear}</span>
         </div>
@@ -316,6 +334,11 @@ export default function ExplorerPage() {
             <span className="text-rose-300">● {lang === 'de' ? 'Entfallene Grenzsegmente' : 'Removed border segments'}: {borderDiff.removed.length}</span>
             <span className="text-teal-300">● {lang === 'de' ? 'Neue Grenzsegmente' : 'Added border segments'}: {borderDiff.added.length}</span>
           </div>}
+          {comparison && <p className="mt-1 text-muted-foreground" role="status">{areaError
+            ? (lang === 'de' ? 'Flächenvergleich fehlgeschlagen; Grenzlinien bleiben sichtbar.' : 'Area comparison failed; border lines remain visible.')
+            : areaDiff
+              ? (lang === 'de' ? `Schattierte Flächen zeigen reale Gebietsverluste und -gewinne bei ${areaDiff.changedStates} fortbestehenden Staaten.${areaDiff.failedStates.length ? ` ${areaDiff.failedStates.length} Geometrien konnten nicht verglichen werden.` : ''}` : `Shaded areas show actual territory lost and gained by ${areaDiff.changedStates} continuing states.${areaDiff.failedStates.length ? ` ${areaDiff.failedStates.length} geometries could not be compared.` : ''}`)
+              : (lang === 'de' ? 'Flächen werden berechnet…' : 'Computing area difference…')}</p>}
           {compareYear != null && <p className="mt-2 text-muted-foreground">{lang === 'de' ? 'Farbige Linien zeigen tatsächliche Unterschiede der CShapes-Grenzgeometrie. Staatenwechsel ohne neue Grenzlinie erscheinen in der Ereignisliste. Kartenstand jeweils 1. Januar; die Quelle ist eine wissenschaftliche Rekonstruktion.' : 'Colored lines show actual differences in CShapes boundary geometry. State changes without a new line appear in the event list. Snapshots represent 1 January; the source is an academic reconstruction.'}</p>}
           {compareYear != null && HISTORY_EVENTS.filter((event) => event.before === historyYear && event.after === compareYear).map((event) => <a key={event.id} className="mt-1 block text-primary underline" href={event.source} target="_blank" rel="noreferrer">{event.detail[lang]} · {lang === 'de' ? 'Quelle' : 'Source'} ↗</a>)}
         </section>}
