@@ -69,7 +69,9 @@ public class JwtChannelInterceptor implements ChannelInterceptor {
                     throw new MessageDeliveryException("Destination not allowed");
                 }
             } else if (destination == null || !(destination.equals("/user/queue/match")
-                    || destination.equals("/user/queue/errors") || roomSubscriptionAllowed(destination, user))) {
+                    || destination.equals("/user/queue/errors")
+                    || destination.equals("/user/queue/notifications")
+                    || roomSubscriptionAllowed(destination, user))) {
                 throw new MessageDeliveryException("Subscription not allowed");
             }
         }

@@ -25,6 +25,8 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - name: Production viewer browser smoke (including CSP)
+        run: CHROME_PATH=$(which google-chrome) npm run smoke
 
   backend:
     runs-on: ubuntu-latest # has Docker, which Testcontainers needs for the *IT tests

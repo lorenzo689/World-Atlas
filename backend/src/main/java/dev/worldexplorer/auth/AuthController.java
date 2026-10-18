@@ -10,17 +10,20 @@ import dev.worldexplorer.auth.AuthDtos.ResetPasswordRequest;
 import dev.worldexplorer.auth.AuthDtos.TokenRequest;
 import dev.worldexplorer.auth.AuthDtos.UserDto;
 import dev.worldexplorer.common.config.AppProperties;
+import dev.worldexplorer.common.error.ApiException;
 import dev.worldexplorer.common.security.AuthUser;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.time.Duration;
+import java.util.List;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -46,11 +49,13 @@ public class AuthController {
     private final AuthService auth;
     private final boolean secureCookie;
     private final Duration refreshTtl;
+    private final List<String> allowedOrigins;
 
     public AuthController(AuthService auth, AppProperties props) {
         this.auth = auth;
         this.secureCookie = props.auth().cookieSecure();
         this.refreshTtl = props.jwt().refreshTokenTtl();
+        this.allowedOrigins = props.cors().allowedOrigins();
     }
 
     @PostMapping("/register")
@@ -71,14 +76,18 @@ public class AuthController {
     @Operation(summary = "New access token; the refresh token comes from the cookie (or the body for API clients)")
     @PostMapping("/refresh")
     ResponseEntity<AuthResponse> refresh(@CookieValue(name = COOKIE, required = false) String cookie,
-            @RequestBody(required = false) RefreshRequest body) {
+            @RequestHeader(name = HttpHeaders.ORIGIN, required = false) String origin,
+            @Valid @RequestBody(required = false) RefreshRequest body) {
+        checkCookieOrigin(cookie, origin);
         String token = cookie != null ? cookie : body == null ? null : body.refreshToken();
         return respond(HttpStatus.OK, auth.refresh(token));
     }
 
     @PostMapping("/logout")
     ResponseEntity<Void> logout(@CookieValue(name = COOKIE, required = false) String cookie,
-            @RequestBody(required = false) RefreshRequest body) {
+            @RequestHeader(name = HttpHeaders.ORIGIN, required = false) String origin,
+            @Valid @RequestBody(required = false) RefreshRequest body) {
+        checkCookieOrigin(cookie, origin);
         auth.logout(cookie != null ? cookie : body == null ? null : body.refreshToken());
         return ResponseEntity.noContent().header(HttpHeaders.SET_COOKIE, cookie("", Duration.ZERO).toString()).build();
     }
@@ -125,5 +134,11 @@ public class AuthController {
                 .path("/api/auth")
                 .maxAge(maxAge)
                 .build();
+    }
+
+    private void checkCookieOrigin(String cookie, String origin) {
+        if (cookie != null && (origin == null || !allowedOrigins.contains(origin))) {
+            throw ApiException.forbidden("Cookie authentication requires an allowed Origin.");
+        }
     }
 }

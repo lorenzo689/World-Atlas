@@ -180,8 +180,10 @@ public class RoomService {
         }
     }
 
-    public RoomView get(String code) {
-        return view(load(code));
+    public RoomView get(String code, AuthUser user) {
+        Room room = load(code);
+        requireMember(room, user);
+        return view(room);
     }
 
     public List<OpenRoom> openRooms() {
@@ -383,12 +385,17 @@ public class RoomService {
         broadcast.toRoom(code, "CHAT", new ChatEvent(user.id(), room.player(user.id()).name, clean));
     }
 
-    public byte[] flag(String code, int round) {
+    public byte[] flag(String code, int round, AuthUser user) {
         Room room = load(code);
+        requireMember(room, user);
         if (room.status != Room.Status.RUNNING || round != room.round) throw ApiException.notFound("Flag", round);
         Question q = room.currentQuestion();
         if (q == null || q.type() != QuestionType.FLAG) throw ApiException.notFound("Flag", round);
         return flags.svg(q.target()).orElseThrow(() -> ApiException.notFound("Flag", round));
+    }
+
+    private static void requireMember(Room room, AuthUser user) {
+        if (!room.has(user.id())) throw ApiException.forbidden("You are not in this room.");
     }
 
     // ================================================================================ helpers =====

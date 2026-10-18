@@ -31,7 +31,8 @@ import tools.jackson.databind.json.JsonMapper;
  *
  * <ul>
  *   <li>Stateless: no HTTP session, every request carries {@code Authorization: Bearer <jwt>}.
- *   <li>CSRF is off because browsers never send the bearer token automatically (no cookies).
+ *   <li>Bearer authentication is not sent automatically by browsers. Cookie-backed refresh and logout
+ *       separately enforce an exact allowed Origin.
  *   <li>Roles: GUEST (quick nickname login for games), USER (account), ADMIN.
  * </ul>
  */
@@ -57,10 +58,11 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/me", "/api/auth/verify/resend").authenticated()
                         .requestMatchers("/api/dev/**").permitAll() // the controller refuses unless app.auth.dev-mailbox
                         .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/rooms", "/api/rooms/").permitAll()
                         // public read-only data
                         .requestMatchers(HttpMethod.GET,
                                 "/api/countries/**", "/api/search/**", "/api/indicators/**",
-                                "/api/leaderboard/**", "/api/activity/**", "/api/views/**", "/api/rooms/**",
+                                "/api/leaderboard/**", "/api/activity/**", "/api/views/**",
                                 "/api/challenges/**")
                         .permitAll()
                         // protected areas

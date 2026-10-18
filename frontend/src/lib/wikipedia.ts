@@ -7,6 +7,18 @@ export interface WikiSummary {
 
 const cache = new Map<string, Promise<WikiSummary | null>>()
 
+export function safeWikipediaUrl(candidate: string | undefined, title: string): string {
+  const fallback = `https://en.wikipedia.org/wiki/${encodeURIComponent(title)}`
+  if (!candidate) return fallback
+  try {
+    const url = new URL(candidate)
+    return url.protocol === 'https:' && (url.hostname === 'wikipedia.org' || url.hostname.endsWith('.wikipedia.org'))
+      ? url.href : fallback
+  } catch {
+    return fallback
+  }
+}
+
 async function trySummary(title: string): Promise<WikiSummary | null> {
   const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`)
   if (res.status === 404) return null
@@ -16,7 +28,7 @@ async function trySummary(title: string): Promise<WikiSummary | null> {
   return {
     title: j.title,
     extract: j.extract,
-    url: j.content_urls?.desktop?.page ?? `https://en.wikipedia.org/wiki/${encodeURIComponent(title)}`,
+    url: safeWikipediaUrl(j.content_urls?.desktop?.page, title),
     description: j.description ?? null,
   }
 }

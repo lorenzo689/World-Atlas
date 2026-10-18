@@ -35,6 +35,7 @@ class JwtChannelInterceptorTest {
         assertThatThrownBy(() -> interceptor.preSend(frame("/queue/match", user), null))
                 .isInstanceOf(MessageDeliveryException.class);
         assertThatCode(() -> interceptor.preSend(frame("/user/queue/match", user), null)).doesNotThrowAnyException();
+        assertThatCode(() -> interceptor.preSend(frame("/user/queue/notifications", user), null)).doesNotThrowAnyException();
     }
 
     @Test

@@ -51,8 +51,8 @@ public class RoomController {
     }
 
     @GetMapping("/{code}")
-    RoomView get(@PathVariable String code) {
-        return rooms.get(code.toUpperCase());
+    RoomView get(AuthUser user, @PathVariable String code) {
+        return rooms.get(code.toUpperCase(), user);
     }
 
     @PostMapping("/{code}/join")
@@ -77,9 +77,9 @@ public class RoomController {
     }
 
     @GetMapping("/{code}/rounds/{round}/flag")
-    ResponseEntity<byte[]> flag(@PathVariable String code, @PathVariable int round) {
+    ResponseEntity<byte[]> flag(AuthUser user, @PathVariable String code, @PathVariable int round) {
         return ResponseEntity.ok().contentType(MediaType.valueOf("image/svg+xml")).cacheControl(CacheControl.noStore())
-                .body(rooms.flag(code.toUpperCase(), round));
+                .body(rooms.flag(code.toUpperCase(), round, user));
     }
 
     @Operation(summary = "Enter the quick-match queue; the match arrives on /user/queue/match")

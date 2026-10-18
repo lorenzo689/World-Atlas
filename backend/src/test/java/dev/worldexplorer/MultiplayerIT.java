@@ -35,6 +35,9 @@ class MultiplayerIT extends IntegrationTest {
         var created = post("/api/rooms", host, Map.of("rounds", 3, "roundSeconds", 8, "types", List.of("CAPITAL", "FLAG")));
         assertThat(created.getStatusCode()).as("create room: %s", created.getBody()).isEqualTo(HttpStatus.CREATED);
         String code = created.getBody().get("code").asString();
+        String outsider = guest("Outsider");
+        assertThat(get("/api/rooms/" + code, outsider).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(get("/api/rooms/" + code + "/rounds/0/flag", outsider).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(post("/api/rooms/" + code + "/join", friend, null).getStatusCode()).isEqualTo(HttpStatus.OK);
 
         Player a = connect(host, code);
@@ -57,7 +60,7 @@ class MultiplayerIT extends IntegrationTest {
         JsonNode finished = a.last("GAME_FINISHED");
         assertThat(finished.get("data").get("placements")).hasSize(2);
 
-        assertThat(get("/api/rooms/" + code, null).getBody().get("status").asString()).isEqualTo("FINISHED");
+        assertThat(get("/api/rooms/" + code, host).getBody().get("status").asString()).isEqualTo("FINISHED");
         a.session.disconnect();
         b.session.disconnect();
     }

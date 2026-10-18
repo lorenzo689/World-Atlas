@@ -20,15 +20,16 @@ public final class AuthDtos {
             @NotBlank @Size(min = 8, max = 100, message = "must be 8–100 characters") String password,
             @NotBlank @Size(min = 2, max = 24) @Pattern(regexp = NAME_PATTERN, message = NAME_MESSAGE) String displayName) {}
 
-    public record LoginRequest(@NotBlank @Email String email, @NotBlank String password) {}
+    public record LoginRequest(@NotBlank @Email @Size(max = 254) String email,
+            @NotBlank @Size(max = 100) String password) {}
 
     public record GuestRequest(
             @NotBlank @Size(min = 2, max = 24) @Pattern(regexp = NAME_PATTERN, message = NAME_MESSAGE) String displayName) {}
 
     /** Only for non-browser clients; browsers send the refresh token as an HttpOnly cookie. */
-    public record RefreshRequest(String refreshToken) {}
+    public record RefreshRequest(@Size(max = 512) String refreshToken) {}
 
-    public record ForgotPasswordRequest(@NotBlank @Email String email) {}
+    public record ForgotPasswordRequest(@NotBlank @Email @Size(max = 254) String email) {}
 
     public record ResetPasswordRequest(
             @NotBlank String token,

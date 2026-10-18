@@ -36,6 +36,12 @@ class AuthAndAtlasIT extends IntegrationTest {
         assertThat(setCookie).contains("we_refresh=", "HttpOnly", "SameSite=Strict", "Path=/api/auth");
         String cookie = setCookie.substring(0, setCookie.indexOf(';'));
 
+        assertThat(http.post().uri("/api/auth/refresh").header(HttpHeaders.COOKIE, cookie)
+                .header(HttpHeaders.ORIGIN, "https://untrusted.example")
+                .retrieve().toEntity(JsonNode.class).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(http.post().uri("/api/auth/refresh").header(HttpHeaders.COOKIE, cookie)
+                .retrieve().toEntity(JsonNode.class).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+
         var refreshed = refreshWithCookie(cookie);
         assertThat(refreshed.getStatusCode()).isEqualTo(HttpStatus.OK);
         // refresh tokens rotate: the old one is single-use
@@ -86,6 +92,7 @@ class AuthAndAtlasIT extends IntegrationTest {
 
     private org.springframework.http.ResponseEntity<JsonNode> refreshWithCookie(String cookie) {
         return http.post().uri("/api/auth/refresh").header(HttpHeaders.COOKIE, cookie)
+                .header(HttpHeaders.ORIGIN, "http://localhost:5173")
                 .retrieve().toEntity(JsonNode.class);
     }
 

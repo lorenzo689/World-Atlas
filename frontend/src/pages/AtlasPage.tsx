@@ -19,6 +19,7 @@ import { useExplorer } from '@/store/explorer'
 import { useAuth } from '@/store/auth'
 import { useLang, useT, type MessageKey } from '@/i18n'
 import { INDICATORS } from '@/lib/indicators'
+import { renderSnippet } from '@/lib/searchSnippet'
 import { drawShareImage, shareOrDownload, TRAVEL_COLORS } from '@/lib/shareImage'
 import type { CountryFeature } from '@/lib/geo'
 import { Card, EmptyHint, ErrorText, PageShell, RequireUser } from '@/components/layout/PageShell'
@@ -433,11 +434,9 @@ function NotesTab({ onChange }: { onChange: () => void }) {
                 <button type="button" className="w-full py-3 text-left" onClick={() => setEditing(notes?.find((n) => n.id === h.id) ?? null)}>
                   <p className="font-medium">{h.title}</p>
                   <p className="text-xs text-muted-foreground">{byCode.get(h.countryCode)?.name ?? h.countryName}</p>
-                  {/* the snippet only contains <mark> tags added by Elasticsearch around the user's own text */}
                   <p
                     className="mt-1 text-sm text-foreground/80 [&_mark]:rounded [&_mark]:bg-primary/30 [&_mark]:text-foreground"
-                    dangerouslySetInnerHTML={{ __html: escapeExceptMark(h.snippet) }}
-                  />
+                  >{renderSnippet(h.snippet)}</p>
                 </button>
               </li>
             ))}
@@ -606,13 +605,4 @@ export function useOpenView() {
     },
     [],
   )
-}
-
-function escapeExceptMark(html: string) {
-  return html
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/&lt;mark&gt;/g, '<mark>')
-    .replace(/&lt;\/mark&gt;/g, '</mark>')
 }

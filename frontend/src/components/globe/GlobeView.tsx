@@ -71,7 +71,25 @@ export interface GlobeMarker {
   color: string
 }
 
-const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
+interface TooltipData { image?: string; title: string; subtitle: string }
+
+function setTooltip(tip: HTMLElement, data: TooltipData | null) {
+  const root = document.createElement('div')
+  root.className = 'globe-tip'
+  if (data?.image) {
+    const image = document.createElement('img')
+    image.src = data.image
+    image.alt = ''
+    root.append(image)
+  }
+  const content = document.createElement('div')
+  content.textContent = data?.title ?? ''
+  const subtitle = document.createElement('small')
+  subtitle.textContent = data?.subtitle ?? ''
+  content.append(subtitle)
+  root.append(content)
+  tip.replaceChildren(root)
+}
 
 export function GlobeView({
   boundaries,
@@ -146,29 +164,28 @@ export function GlobeView({
     [mode, baseColor],
   )
 
-  const tooltipHtml = useCallback(
+  const tooltipData = useCallback(
     (code: string) => {
       if (historicalEntities) {
         const entity = historicalEntities.get(code)
-        if (!entity) return ''
-        const flag = entity.flagFile ? `<img src="${esc(commonsFlagUrl(entity.flagFile))}" alt="" />` : ''
-        return `${flag}<div>${esc(entity.name)}<small>${esc(entity.capital ?? '')}</small></div>`
+        if (!entity) return null
+        return { image: entity.flagFile ? commonsFlagUrl(entity.flagFile) : undefined, title: entity.name, subtitle: entity.capital ?? '' }
       }
       const c = countries.get(code)
-      if (!c) return ''
+      if (!c) return null
       let sub = [c.capital[0], c.subregion ?? c.region].filter(Boolean).join(' · ')
       if (mode === 'data') {
         const v = values?.get(code)
         sub = v ? `${metric.format(v.value)} · ${v.year}` : 'No data reported'
       }
-      return `<img src="${BASE}flags/${esc(code)}.svg" alt="" /><div>${esc(c.name)}<small>${esc(sub)}</small></div>`
+      return { image: `${BASE}flags/${encodeURIComponent(code)}.svg`, title: c.name, subtitle: sub }
     },
     [countries, mode, values, metric, historicalEntities],
   )
 
   // Latest values for the scene callbacks (the scene is created once and must not see stale props).
-  const live = useRef({ onSelect, onPoseChange, onReady, highlightStyle, tooltipHtml, selected, tooltips, markers, onMarkerSelect })
-  live.current = { onSelect, onPoseChange, onReady, highlightStyle, tooltipHtml, selected, tooltips, markers, onMarkerSelect }
+  const live = useRef({ onSelect, onPoseChange, onReady, highlightStyle, tooltipData, selected, tooltips, markers, onMarkerSelect })
+  live.current = { onSelect, onPoseChange, onReady, highlightStyle, tooltipData, selected, tooltips, markers, onMarkerSelect }
   const hoverRef = useRef<string | null>(null)
   const tipCode = useRef<string | null>(null)
   const initial = useRef({ initialPose, reduced, mode, features, boundaries })
@@ -206,7 +223,7 @@ export function GlobeView({
         },
         onHover: (code, x, y) => {
           hoverRef.current = code
-          const { selected: sel, highlightStyle: style, tooltipHtml: html } = live.current
+          const { selected: sel, highlightStyle: style, tooltipData: data } = live.current
           if (code && code !== sel) s.layers.hover.style(style(code, false))
           else s.layers.hover.group.visible = false
           const tip = tipRef.current
@@ -217,7 +234,7 @@ export function GlobeView({
             return
           }
           if (tipCode.current !== code) {
-            tip.innerHTML = `<div class="globe-tip">${html(code)}</div>`
+            setTooltip(tip, data(code))
             tipCode.current = code
           }
           tip.style.opacity = '1'
