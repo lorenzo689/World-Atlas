@@ -21,6 +21,8 @@ export default defineConfig({
   resolve: { alias: { '@': path.resolve(import.meta.dirname, 'src') } },
   test: {
     environment: 'jsdom',
+    // JSDOM workers are memory-heavy; bounding them avoids startup timeouts on developer machines.
+    maxWorkers: 2,
     testTimeout: 10000,
     setupFiles: ['./src/test/setup.ts'],
     css: false,
