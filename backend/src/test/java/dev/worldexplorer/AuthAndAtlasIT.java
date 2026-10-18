@@ -36,11 +36,13 @@ class AuthAndAtlasIT extends IntegrationTest {
         assertThat(setCookie).contains("we_refresh=", "HttpOnly", "SameSite=Strict", "Path=/api/auth");
         String cookie = setCookie.substring(0, setCookie.indexOf(';'));
 
-        assertThat(http.post().uri("/api/auth/refresh").header(HttpHeaders.COOKIE, cookie)
+        int hostileOriginStatus = http.post().uri("/api/auth/refresh").header(HttpHeaders.COOKIE, cookie)
                 .header(HttpHeaders.ORIGIN, "https://untrusted.example")
-                .exchange((request, response) -> response.getStatusCode())).isEqualTo(HttpStatus.FORBIDDEN);
-        assertThat(http.post().uri("/api/auth/refresh").header(HttpHeaders.COOKIE, cookie)
-                .exchange((request, response) -> response.getStatusCode())).isEqualTo(HttpStatus.FORBIDDEN);
+                .exchange((request, response) -> response.getStatusCode().value());
+        assertThat(hostileOriginStatus).isEqualTo(HttpStatus.FORBIDDEN.value());
+        int missingOriginStatus = http.post().uri("/api/auth/refresh").header(HttpHeaders.COOKIE, cookie)
+                .exchange((request, response) -> response.getStatusCode().value());
+        assertThat(missingOriginStatus).isEqualTo(HttpStatus.FORBIDDEN.value());
 
         var refreshed = refreshWithCookie(cookie);
         assertThat(refreshed.getStatusCode()).isEqualTo(HttpStatus.OK);
