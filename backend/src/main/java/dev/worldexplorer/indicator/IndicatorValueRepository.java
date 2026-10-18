@@ -8,6 +8,7 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -50,6 +51,25 @@ public class IndicatorValueRepository {
                     ps.setInt(3, o.year());
                     ps.setDouble(4, o.value());
                 });
+    }
+
+    /** Record delivery in the same transaction as the value upsert; duplicate Kafka batches count once. */
+    public void recordReceipts(List<IndicatorObservation> batch) {
+        template.batchUpdate("""
+                        insert into ingestion_receipt (run_id, country_code, year)
+                        values (?, ?, ?)
+                        on conflict do nothing
+                        """,
+                batch, 500, (ps, o) -> {
+                    ps.setObject(1, o.runId());
+                    ps.setString(2, o.countryCode());
+                    ps.setInt(3, o.year());
+                });
+    }
+
+    public int countStored(UUID runId) {
+        return jdbc.sql("select count(*) from ingestion_receipt where run_id = :runId")
+                .param("runId", runId).query(Integer.class).single();
     }
 
     public Map<String, Point> latest(String key, Integer year) {

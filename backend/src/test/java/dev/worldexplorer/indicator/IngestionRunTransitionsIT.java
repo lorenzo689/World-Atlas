@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.worldexplorer.support.IntegrationTest;
 import java.util.UUID;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -13,6 +14,8 @@ class IngestionRunTransitionsIT extends IntegrationTest {
     @Autowired IngestionRunRepository runs;
     @Autowired IngestionRunTransitions transitions;
     @Autowired JdbcClient jdbc;
+    @Autowired IndicatorRawConsumer consumer;
+    @Autowired IndicatorValueRepository values;
 
     @Test
     void onlyOneTerminalTransitionWinsAndWritesOneOutboxEvent() {
@@ -41,6 +44,22 @@ class IngestionRunTransitionsIT extends IntegrationTest {
         assertThat(transitions.completedEmpty(run.getId(), run.getIndicatorKey())).isTrue();
         assertThat(runs.findById(run.getId()).orElseThrow().getStatus())
                 .isEqualTo(IngestionRun.Status.COMPLETED);
+        assertThat(eventCount(run.getId())).isEqualTo(1);
+    }
+
+    @Test
+    void redeliveredKafkaBatchCountsEachObservationOnce() {
+        IngestionRun run = runs.saveAndFlush(new IngestionRun("test-" + UUID.randomUUID().toString().substring(0, 8),
+                IngestionRun.Trigger.MANUAL));
+        var observation = new IndicatorObservation(run.getId(), run.getIndicatorKey(), "DEU", 2023, 42);
+        consumer.onBatch(List.of(observation));
+        consumer.onBatch(List.of(observation));
+
+        assertThat(values.countStored(run.getId())).isEqualTo(1);
+        assertThat(transitions.published(run.getId(), 1)).isTrue();
+        assertThat(transitions.completedStored(run.getId(), run.getIndicatorKey(), values.countStored(run.getId())))
+                .isTrue();
+        assertThat(runs.findById(run.getId()).orElseThrow().getStored()).isEqualTo(1);
         assertThat(eventCount(run.getId())).isEqualTo(1);
     }
 

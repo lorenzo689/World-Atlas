@@ -15,6 +15,9 @@ outside the state-change transaction. An empty run completed without an event.
   machine; an update affecting zero rows means another worker already won or the state changed.
 - Terminal state changes and `IndicatorIngested` outbox inserts share one database transaction.
   Empty runs emit a success event as well.
+- Kafka consumers commit value upserts and unique per-run receipts in one PostgreSQL transaction.
+  The monitor counts receipts, so redelivered batches do not inflate completion progress.
+- Terminal-run receipts older than seven days are pruned in bounded hourly batches.
 
 ## Consequences
 
