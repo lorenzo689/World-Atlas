@@ -25,6 +25,14 @@ public class QuestionGenerator {
 
     private final List<Country> countries;
     private final Map<String, Double> population;
+    private final Map<QuestionType, Strategy> strategies;
+
+    @FunctionalInterface
+    private interface QuestionBuilder {
+        Question build(int index, Country country, List<Country> pool, RandomGenerator random);
+    }
+
+    private record Strategy(Predicate<Country> eligible, QuestionBuilder builder) {}
 
     /**
      * @param countries  the catalog
@@ -33,12 +41,21 @@ public class QuestionGenerator {
     public QuestionGenerator(List<Country> countries, Map<String, Double> population) {
         this.countries = countries.stream().filter(Country::isUnMember).toList();
         this.population = population;
+        Map<QuestionType, Strategy> available = new java.util.EnumMap<>(QuestionType.class);
+        available.put(QuestionType.LOCATE, new Strategy(c -> c.getAreaKm2() != null
+                && c.getAreaKm2() >= MIN_LOCATE_AREA_KM2 && c.getLat() != null,
+                (i, c, pool, rnd) -> locate(i, c)));
+        available.put(QuestionType.CAPITAL, new Strategy(c -> c.getCapital() != null, this::capital));
+        available.put(QuestionType.FLAG, new Strategy(c -> true, this::flag));
+        if (population.size() > 20) {
+            available.put(QuestionType.POPULATION,
+                    new Strategy(c -> population.containsKey(c.getCode()), this::population));
+        }
+        this.strategies = Map.copyOf(available);
     }
 
     public List<Question> generate(List<QuestionType> types, String region, int count, RandomGenerator rnd) {
-        List<QuestionType> usable = types.stream()
-                .filter(t -> t != QuestionType.POPULATION || population.size() > 20)
-                .toList();
+        List<QuestionType> usable = types.stream().filter(strategies::containsKey).toList();
         if (usable.isEmpty()) usable = List.of(QuestionType.LOCATE, QuestionType.CAPITAL, QuestionType.FLAG);
 
         List<Country> pool = region == null ? countries
@@ -49,13 +66,9 @@ public class QuestionGenerator {
         List<Question> out = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             QuestionType type = usable.get(i % usable.size()); // even mix, order shuffled below
-            out.add(switch (type) {
-                case LOCATE -> locate(i, pick(pool, used, rnd, c -> c.getAreaKm2() != null
-                        && c.getAreaKm2() >= MIN_LOCATE_AREA_KM2 && c.getLat() != null), rnd);
-                case CAPITAL -> capital(i, pick(pool, used, rnd, c -> c.getCapital() != null), pool, rnd);
-                case FLAG -> flag(i, pick(pool, used, rnd, c -> true), pool, rnd);
-                case POPULATION -> population(i, pick(pool, used, rnd, c -> population.containsKey(c.getCode())), pool, rnd);
-            });
+            Strategy strategy = strategies.get(type);
+            Country country = pick(pool, used, rnd, strategy.eligible());
+            out.add(strategy.builder().build(i, country, pool, rnd));
         }
         // shuffle question order but keep indexes 0..n-1
         Collections.shuffle(out, rnd);
@@ -69,7 +82,7 @@ public class QuestionGenerator {
 
     private static final String[] LETTERS = {"A", "B", "C", "D"};
 
-    private Question locate(int i, Country c, RandomGenerator rnd) {
+    private Question locate(int i, Country c) {
         return new Question(i, QuestionType.LOCATE, "Find " + c.getName() + " on the globe", c.getCode(), c.getCode(), List.of());
     }
 

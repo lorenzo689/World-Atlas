@@ -95,4 +95,12 @@ class QuestionGeneratorTest {
         assertThat(p.hasFlag()).isTrue();
         assertThat(p.toString()).doesNotContain("answer=");
     }
+
+    @Test
+    void fallsBackToSupportedStrategiesWhenPopulationIsUnavailable() {
+        var withoutPopulation = new QuestionGenerator(COUNTRIES, Map.of());
+        var questions = withoutPopulation.generate(List.of(QuestionType.POPULATION), null, 6,
+                RandomGeneratorFactory.of("L64X128MixRandom").create(9));
+        assertThat(questions).hasSize(6).noneMatch(q -> q.type() == QuestionType.POPULATION);
+    }
 }
