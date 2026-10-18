@@ -1,11 +1,11 @@
 import { BufferGeometry, Float32BufferAttribute, Group, LineBasicMaterial, LineSegments, PerspectiveCamera, Scene, Vector3 } from 'three'
 import type { Pose } from '@/lib/geo'
 import { GLOBE_RADIUS, polarToXYZ } from '@/lib/globeLayers'
+import { TileStore } from '@/lib/tileStore'
 
 type Kind = 'borders' | 'admin1' | 'rivers' | 'lakes' | 'roads'
 type Manifest = { cols: number; rows: number; step: number; kinds: Record<Kind, Record<string, number>> }
 type Place = { name: string; lng: number; lat: number; population: number; capital: boolean }
-type Tile = { mesh: LineSegments; used: number }
 const BASE = `${import.meta.env.BASE_URL}data/map-detail/`
 const MAX_CACHE = 40
 const MAX_REQUESTS = 6
@@ -23,11 +23,7 @@ export class MapDetail {
   private places: Place[] = []
   private labels: HTMLDivElement[] = []
   private overlay: HTMLDivElement
-  private cache = new Map<string, Tile>()
-  private wanted = new Set<string>()
-  private queue: string[] = []
-  private loading = new Set<string>()
-  private failed = new Set<string>()
+  private tiles: TileStore<LineSegments>
   private worker: Worker | null = null
   private decodeId = 0
   private pending = new Map<number, (positions: Float32Array) => void>()
@@ -51,6 +47,13 @@ export class MapDetail {
     this.overlay = document.createElement('div')
     this.overlay.className = 'globe-place-labels'
     container.appendChild(this.overlay)
+    this.tiles = new TileStore({
+      maxCache: MAX_CACHE,
+      maxRequests: MAX_REQUESTS,
+      load: (key, signal) => this.loadTile(key, signal),
+      dispose: (mesh) => { mesh.removeFromParent(); mesh.geometry.dispose() },
+      onLoaded: (_key, mesh) => { this.group.add(mesh); this.requestRender() },
+    })
   }
 
   setEnabled(enabled: boolean) {
@@ -69,12 +72,12 @@ export class MapDetail {
   }
 
   coversBorders() {
-    const borderTiles = [...this.wanted].filter((key) => key.startsWith('borders/'))
-    const ready = this.enabled && this.fullBorderCoverage && borderTiles.length > 0 && borderTiles.every((key) => this.cache.has(key))
+    const borderTiles = [...this.tiles.wantedKeys()].filter((key) => key.startsWith('borders/'))
+    const ready = this.enabled && this.fullBorderCoverage && borderTiles.length > 0 && borderTiles.every((key) => this.tiles.has(key))
     // Switch the two border levels together, including while tiles are streaming in.
     for (const key of borderTiles) {
-      const tile = this.cache.get(key)
-      if (tile) tile.mesh.visible = ready
+      const tile = this.tiles.get(key)
+      if (tile) tile.visible = ready
     }
     return ready
   }
@@ -82,8 +85,8 @@ export class MapDetail {
   getDiagnostics() {
     return {
       bordersReady: this.coversBorders(),
-      borderTiles: [...this.wanted].filter((key) => key.startsWith('borders/')).length,
-      roadsVisible: [...this.wanted].filter((key) => key.startsWith('roads/') && this.cache.has(key)).length,
+      borderTiles: [...this.tiles.wantedKeys()].filter((key) => key.startsWith('borders/')).length,
+      roadsVisible: [...this.tiles.wantedKeys()].filter((key) => key.startsWith('roads/') && this.tiles.has(key)).length,
     }
   }
 
@@ -127,14 +130,11 @@ export class MapDetail {
         if (this.manifest.kinds[kind]?.[tile]) { want.add(`${kind}/${tile}`); count++ }
       }
     }
-    this.wanted = want
-    for (const [key, entry] of this.cache) {
-      if (want.has(key)) { entry.used = now; this.group.add(entry.mesh) }
-      else this.group.remove(entry.mesh)
+    this.tiles.setWanted(want, now)
+    for (const [key, mesh] of this.tiles.entries()) {
+      if (want.has(key)) this.group.add(mesh)
+      else this.group.remove(mesh)
     }
-    this.queue = [...want].filter((key) => !this.cache.has(key) && !this.loading.has(key) && !this.failed.has(key))
-    this.pump()
-    this.trim()
     this.updateLabels(pose)
   }
 
@@ -153,37 +153,23 @@ export class MapDetail {
     }
   }
 
-  private pump() {
-    while (!this.disposed && this.loading.size < MAX_REQUESTS && this.queue.length) {
-      const key = this.queue.shift()!
-      if (!this.wanted.has(key) || this.loading.has(key)) continue
-      this.loading.add(key)
-      this.loadTile(key).finally(() => { this.loading.delete(key); this.pump() })
-    }
-  }
-
-  private async loadTile(key: string) {
-    try {
-      const response = await fetch(`${BASE}${key}.bin`)
-      if (!response.ok) { this.failed.add(key); return }
-      const packed = await response.arrayBuffer()
-      if (this.disposed || !this.wanted.has(key)) return
-      const [kind, tile] = key.split('/') as [Kind, string]
-      const [x, y] = tile.split('-').map(Number)
-      const positions = await this.decode(packed, x, y)
-      if (this.disposed || !this.wanted.has(key)) return
-      const geometry = new BufferGeometry()
-      geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
-      geometry.computeBoundingSphere()
-      const mesh = new LineSegments(geometry, this.materials[kind])
-      mesh.renderOrder = 1
-      mesh.raycast = () => {}
-      this.cache.set(key, { mesh, used: performance.now() })
-      if (kind === 'borders') mesh.visible = false
-      this.group.add(mesh)
-      this.trim()
-      this.requestRender()
-    } catch { this.failed.add(key) /* keep the base map if a tile fails */ }
+  private async loadTile(key: string, signal: AbortSignal): Promise<LineSegments> {
+    const response = await fetch(`${BASE}${key}.bin`, { signal })
+    if (!response.ok) throw new Error(`Map tile ${key}: HTTP ${response.status}`)
+    const packed = await response.arrayBuffer()
+    if (signal.aborted) throw new DOMException('Map tile cancelled', 'AbortError')
+    const [kind, tile] = key.split('/') as [Kind, string]
+    const [x, y] = tile.split('-').map(Number)
+    const positions = await this.decode(packed, x, y)
+    if (signal.aborted || this.disposed) throw new DOMException('Map tile cancelled', 'AbortError')
+    const geometry = new BufferGeometry()
+    geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
+    geometry.computeBoundingSphere()
+    const mesh = new LineSegments(geometry, this.materials[kind])
+    mesh.renderOrder = 1
+    mesh.raycast = () => {}
+    if (kind === 'borders') mesh.visible = false
+    return mesh
   }
 
   private decode(packed: ArrayBuffer, x: number, y: number): Promise<Float32Array> {
@@ -239,22 +225,11 @@ export class MapDetail {
     })
   }
 
-  private trim() {
-    if (this.cache.size <= MAX_CACHE) return
-    const stale = [...this.cache].filter(([key]) => !this.wanted.has(key)).sort((a, b) => a[1].used - b[1].used)
-    for (const [key, entry] of stale.slice(0, this.cache.size - MAX_CACHE)) {
-      this.group.remove(entry.mesh)
-      entry.mesh.geometry.dispose()
-      this.cache.delete(key)
-    }
-  }
-
   private hide() {
     if (!this.active) return
     this.active = false
     this.fullBorderCoverage = false
-    this.wanted.clear()
-    this.queue.length = 0
+    this.tiles.setWanted([])
     this.group.clear()
     this.overlay.replaceChildren()
     this.labels = []
@@ -268,8 +243,7 @@ export class MapDetail {
     this.pending.clear()
     this.group.removeFromParent()
     this.overlay.remove()
-    for (const { mesh } of this.cache.values()) mesh.geometry.dispose()
+    this.tiles.dispose()
     Object.values(this.materials).forEach((m) => m.dispose())
-    this.cache.clear()
   }
 }
