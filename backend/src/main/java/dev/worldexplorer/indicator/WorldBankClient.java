@@ -21,10 +21,7 @@ import tools.jackson.databind.json.JsonMapper;
  * retries transient failures with exponential back-off: 1 s, 2 s, 4 s.
  */
 @Component
-public class WorldBankClient {
-
-    /** One row from the API. Aggregates (regions like "WLD") are filtered out later by country code. */
-    public record Row(String countryCode, int year, double value) {}
+public class WorldBankClient implements IndicatorSource {
 
     private final RestClient http;
     private final JsonMapper json;
@@ -39,6 +36,7 @@ public class WorldBankClient {
         this.timer = Timer.builder("worldbank.fetch").description("World Bank API fetch duration").register(meters);
     }
 
+    @Override
     @Retryable(maxRetries = 3, delay = 1000, multiplier = 2)
     public List<Row> fetchAll(String worldBankId, int fromYear) {
         return timer.record(() -> {

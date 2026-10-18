@@ -29,12 +29,12 @@ class WorldBankClientTest {
                   {"countryiso3code":"","date":"2023","value":1},
                   {"countryiso3code":"ITA","date":"2022","value":58940425.5}]]
                 """;
-        List<WorldBankClient.Row> rows = new ArrayList<>();
+        List<IndicatorSource.Row> rows = new ArrayList<>();
         int pages = client.parsePage(body, rows);
         assertThat(pages).isEqualTo(3);
         assertThat(rows).containsExactly(
-                new WorldBankClient.Row("DEU", 2023, 84482267),
-                new WorldBankClient.Row("ITA", 2022, 58940425.5));
+                new IndicatorSource.Row("DEU", 2023, 84482267),
+                new IndicatorSource.Row("ITA", 2022, 58940425.5));
     }
 
     @Test

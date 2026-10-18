@@ -45,7 +45,7 @@ public class IngestionService {
 
     private static final Logger log = LoggerFactory.getLogger(IngestionService.class);
 
-    private final WorldBankClient worldBank;
+    private final IndicatorSource source;
     private final KafkaTemplate<Object, Object> kafka;
     private final IngestionRunRepository runs;
     private final CountryCatalog countries;
@@ -56,9 +56,9 @@ public class IngestionService {
     /** Background work runs on virtual threads: cheap, and blocking HTTP calls are fine there. */
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
-    public IngestionService(WorldBankClient worldBank, KafkaTemplate<Object, Object> kafka, IngestionRunRepository runs,
+    public IngestionService(IndicatorSource source, KafkaTemplate<Object, Object> kafka, IngestionRunRepository runs,
             CountryCatalog countries, RedisLock lock, TransactionTemplate tx, AppProperties props, MeterRegistry meters) {
-        this.worldBank = worldBank;
+        this.source = source;
         this.kafka = kafka;
         this.runs = runs;
         this.countries = countries;
@@ -109,9 +109,9 @@ public class IngestionService {
             return;
         }
         try {
-            List<WorldBankClient.Row> rows = worldBank.fetchAll(def.worldBankId(), config.fromYear());
-            List<WorldBankClient.Row> known = rows.stream().filter(r -> countries.exists(r.countryCode())).toList();
-            for (WorldBankClient.Row r : known) {
+            List<IndicatorSource.Row> rows = source.fetchAll(def.worldBankId(), config.fromYear());
+            List<IndicatorSource.Row> known = rows.stream().filter(r -> countries.exists(r.countryCode())).toList();
+            for (IndicatorSource.Row r : known) {
                 kafka.send(Topics.INDICATOR_RAW, r.countryCode(),
                         new IndicatorObservation(runId, def.key(), r.countryCode(), r.year(), r.value()));
             }

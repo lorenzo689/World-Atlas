@@ -6,7 +6,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
-import dev.worldexplorer.indicator.WorldBankClient.Row;
+import dev.worldexplorer.indicator.IndicatorSource.Row;
 import dev.worldexplorer.support.IntegrationTest;
 import java.time.Duration;
 import java.util.List;
