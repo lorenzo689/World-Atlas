@@ -38,9 +38,9 @@ class AuthAndAtlasIT extends IntegrationTest {
 
         assertThat(http.post().uri("/api/auth/refresh").header(HttpHeaders.COOKIE, cookie)
                 .header(HttpHeaders.ORIGIN, "https://untrusted.example")
-                .retrieve().toEntity(JsonNode.class).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+                .exchange((request, response) -> response.getStatusCode())).isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(http.post().uri("/api/auth/refresh").header(HttpHeaders.COOKIE, cookie)
-                .retrieve().toEntity(JsonNode.class).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+                .exchange((request, response) -> response.getStatusCode())).isEqualTo(HttpStatus.FORBIDDEN);
 
         var refreshed = refreshWithCookie(cookie);
         assertThat(refreshed.getStatusCode()).isEqualTo(HttpStatus.OK);
