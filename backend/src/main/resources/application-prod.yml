@@ -1,9 +1,11 @@
 # Production settings (used by deploy/docker-compose.prod.yml).
 app:
+  jwt:
+    secret: ${APP_JWT_SECRET}
   auth:
     cookie-secure: true
     dev-mailbox: false
-    require-verified-email: false
+    require-verified-email: true
   ingestion:
     bootstrap-on-startup: true
 management:
@@ -15,7 +17,9 @@ management:
       show-details: when-authorized
 springdoc:
   swagger-ui:
-    enabled: true
+    enabled: false
+  api-docs:
+    enabled: false
 server:
   shutdown: graceful
   forward-headers-strategy: framework   # behind the reverse proxy: trust X-Forwarded-* for client IPs

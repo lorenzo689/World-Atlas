@@ -298,6 +298,8 @@ function RoomScreen({ code }: { code: string }) {
   )
 
   useEffect(() => {
+    // Subscribe only after the join request completed; the broker verifies room membership.
+    if (!room) return
     const realtime = createRealtime(setConnected)
     rt.current = realtime
     const offRoom = realtime.subscribe(`/topic/rooms/${code}`, onEvent)
@@ -307,7 +309,7 @@ function RoomScreen({ code }: { code: string }) {
       offErr()
       realtime.close()
     }
-  }, [code, onEvent])
+  }, [code, onEvent, !!room])
 
   const answer = (choice: string) => {
     if (!round || round.picked || round.feedback) return

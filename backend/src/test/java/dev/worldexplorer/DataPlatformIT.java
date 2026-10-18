@@ -10,6 +10,7 @@ import dev.worldexplorer.indicator.IndicatorSource.Row;
 import dev.worldexplorer.support.IntegrationTest;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import tools.jackson.databind.JsonNode;
@@ -26,7 +27,21 @@ class DataPlatformIT extends IntegrationTest {
         when(worldBank.fetchAll(eq("SP.DYN.LE00.IN"), anyInt())).thenReturn(List.of(
                 new Row("DEU", 2023, 81.0), new Row("FRA", 2023, 83.0), new Row("LUX", 2023, 82.5)));
 
-        String admin = register("admin@test.dev");
+        String unverifiedAdmin = register("admin@test.dev");
+        assertThat(get("/api/admin/users", unverifiedAdmin).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(get("/api/auth/me", unverifiedAdmin).getBody().get("roles").toString()).doesNotContain("ADMIN");
+        JsonNode mails = get("/api/dev/mails", null).getBody();
+        String verifyToken = null;
+        for (JsonNode mail : mails) {
+            if ("admin@test.dev".equals(mail.get("to").asString())) {
+                String body = mail.get("body").asString();
+                verifyToken = body.substring(body.indexOf("verify?token=") + "verify?token=".length()).split("\\s")[0];
+                break;
+            }
+        }
+        assertThat(verifyToken).isNotBlank();
+        String admin = post("/api/auth/verify", null, Map.of("token", verifyToken)).getBody().get("accessToken").asString();
+        assertThat(get("/api/admin/users", admin).getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(post("/api/admin/ingestion/gdpPerCapita", newUser(), null).getStatusCode())
                 .isEqualTo(HttpStatus.FORBIDDEN); // admins only
         assertThat(post("/api/admin/ingestion/gdpPerCapita", admin, null).getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);

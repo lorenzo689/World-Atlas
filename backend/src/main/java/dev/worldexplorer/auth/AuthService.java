@@ -65,10 +65,8 @@ public class AuthService {
         if (users.existsByEmailIgnoreCase(email)) {
             throw ApiException.conflict("email_taken", "An account with this e-mail already exists.");
         }
-        List<String> roles = new ArrayList<>(List.of("USER"));
-        // bootstrap: the addresses in app.admin-emails become admins; afterwards admins manage roles
-        if (adminEmails.contains(email)) roles.add("ADMIN");
-        AppUser user = users.save(AppUser.account(email, req.displayName().trim(), passwords.encode(req.password()), roles));
+        // The bootstrap address is not proof of mailbox ownership. Grant ADMIN only after verification.
+        AppUser user = users.save(AppUser.account(email, req.displayName().trim(), passwords.encode(req.password()), List.of("USER")));
         user.touchLogin();
         sendVerification(user);
         events.publish(UserRegistered.of(user.getId(), user.getDisplayName(), false));
@@ -127,6 +125,9 @@ public class AuthService {
                 .orElseThrow(() -> ApiException.badRequest("invalid_token", "This link is invalid or has expired."));
         AppUser user = users.findById(userId).orElseThrow(() -> ApiException.notFound("User", userId));
         user.verifyEmail();
+        if (adminEmails.contains(user.getEmail().toLowerCase()) && !user.getRoles().contains("ADMIN")) {
+            user.setRoles(List.of("USER", "ADMIN"));
+        }
         return session(user);
     }
 

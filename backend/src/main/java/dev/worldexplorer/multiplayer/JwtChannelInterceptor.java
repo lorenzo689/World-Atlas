@@ -1,5 +1,8 @@
 package dev.worldexplorer.multiplayer;
 
+import dev.worldexplorer.common.redis.RedisJson;
+import java.time.Instant;
+import java.util.UUID;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessageDeliveryException;
@@ -12,6 +15,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
 
 /**
@@ -28,10 +32,12 @@ public class JwtChannelInterceptor implements ChannelInterceptor {
 
     private final JwtDecoder decoder;
     private final JwtAuthenticationConverter converter;
+    private final RedisJson rooms;
 
-    public JwtChannelInterceptor(JwtDecoder decoder, JwtAuthenticationConverter converter) {
+    public JwtChannelInterceptor(JwtDecoder decoder, JwtAuthenticationConverter converter, RedisJson rooms) {
         this.decoder = decoder;
         this.converter = converter;
+        this.rooms = rooms;
     }
 
     @Override
@@ -49,12 +55,36 @@ public class JwtChannelInterceptor implements ChannelInterceptor {
                 AbstractAuthenticationToken auth = converter.convert(jwt);
                 accessor.setUser(auth);
             } catch (JwtException e) {
-                throw new MessageDeliveryException("Invalid token: " + e.getMessage());
+                throw new MessageDeliveryException("Invalid token");
             }
-        } else if (accessor.getUser() == null
-                && (StompCommand.SEND.equals(accessor.getCommand()) || StompCommand.SUBSCRIBE.equals(accessor.getCommand()))) {
-            throw new MessageDeliveryException("Not authenticated");
+        } else if (StompCommand.SEND.equals(accessor.getCommand()) || StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
+            if (!(accessor.getUser() instanceof JwtAuthenticationToken user)
+                    || user.getToken().getExpiresAt() == null
+                    || !user.getToken().getExpiresAt().isAfter(Instant.now())) {
+                throw new MessageDeliveryException("Not authenticated");
+            }
+            String destination = accessor.getDestination();
+            if (StompCommand.SEND.equals(accessor.getCommand())) {
+                if (destination == null || !destination.matches("/app/rooms/[A-Z2-9]{5}/(answer|chat)")) {
+                    throw new MessageDeliveryException("Destination not allowed");
+                }
+            } else if (destination == null || !(destination.equals("/user/queue/match")
+                    || destination.equals("/user/queue/errors") || roomSubscriptionAllowed(destination, user))) {
+                throw new MessageDeliveryException("Subscription not allowed");
+            }
         }
         return message;
+    }
+
+    private boolean roomSubscriptionAllowed(String destination, JwtAuthenticationToken user) {
+        if (!destination.matches("/topic/rooms/[A-Z2-9]{5}")) return false;
+        String code = destination.substring("/topic/rooms/".length());
+        UUID userId;
+        try {
+            userId = UUID.fromString(user.getToken().getSubject());
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+        return rooms.get("room:" + code, Room.class).map(room -> room.has(userId)).orElse(false);
     }
 }

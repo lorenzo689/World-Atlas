@@ -1,6 +1,7 @@
 package dev.worldexplorer.common.security;
 
 import dev.worldexplorer.common.config.AppProperties;
+import dev.worldexplorer.auth.AppUserRepository;
 import jakarta.servlet.http.HttpServletResponse;
 import java.net.URI;
 import java.util.List;
@@ -40,7 +41,7 @@ public class SecurityConfig {
 
     @Bean
     SecurityFilterChain api(HttpSecurity http, JwtAuthenticationConverter jwtConverter, JsonMapper json,
-            AppProperties props) throws Exception {
+            AppProperties props, AppUserRepository users) throws Exception {
         boolean requireVerified = props.auth().requireVerifiedEmail();
         http.csrf(c -> c.disable())
                 .cors(c -> {})
@@ -63,7 +64,8 @@ public class SecurityConfig {
                                 "/api/challenges/**")
                         .permitAll()
                         // protected areas
-                        .requestMatchers("/api/admin/**", "/api/analytics/**").hasRole("ADMIN")
+                        .requestMatchers("/api/admin/**", "/api/analytics/**").access((auth, ctx) ->
+                                new AuthorizationDecision(adminAllowed(auth.get(), users)))
                         .requestMatchers("/api/atlas/**").access((auth, ctx) -> new AuthorizationDecision(
                                 atlasAllowed(auth.get(), requireVerified)))
                         .anyRequest().authenticated())
@@ -83,6 +85,18 @@ public class SecurityConfig {
         }
         if (!requireVerified) return true;
         return auth instanceof JwtAuthenticationToken jwt && Boolean.TRUE.equals(jwt.getToken().getClaim("email_verified"));
+    }
+
+    /** Resolve privileged access against current database state: stale JWT roles cannot retain ADMIN. */
+    private static boolean adminAllowed(Authentication auth, AppUserRepository users) {
+        if (!(auth instanceof JwtAuthenticationToken jwt)) return false;
+        try {
+            return users.findById(java.util.UUID.fromString(jwt.getToken().getSubject()))
+                    .filter(user -> user.isEmailVerified() && user.getRoles().contains("ADMIN"))
+                    .isPresent();
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
     }
 
     @Bean
