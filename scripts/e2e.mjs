@@ -53,6 +53,13 @@ const browser = await chromium.launch({
 })
 const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, locale: 'en-US' })
 await ctx.addInitScript(() => localStorage.setItem('world-explorer-lang', JSON.stringify({ state: { lang: 'en' }, version: 0 })))
+// The data-mode check exercises the Spring Boot year endpoint. Keep the optional World Bank
+// fallback deterministic so an external CORS/network outage cannot turn a full-stack CI run red.
+await ctx.route('https://api.worldbank.org/**', (route) => route.fulfill({
+  status: 200,
+  contentType: 'application/json',
+  body: JSON.stringify([{ lastupdated: '2026-10-18' }, [{ countryiso3code: 'DEU', date: '2025', value: 50000 }]]),
+}))
 const page = await ctx.newPage()
 const errors = []
 page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`))
