@@ -1,7 +1,9 @@
+import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import type { HistoricalEntity } from '@/lib/history'
 import { commonsFlagUrl } from '@/lib/history'
-import { useT } from '@/i18n'
+import { comparableIso, fetchHistoricalContext, type HistoricalContext } from '@/lib/historicalContext'
+import { useLang, useT } from '@/i18n'
 
 interface Props {
   entity: HistoricalEntity
@@ -11,6 +13,24 @@ interface Props {
 
 export function HistoricalPreview({ entity, year, onClose }: Props) {
   const t = useT()
+  const lang = useLang((state) => state.lang)
+  const iso = comparableIso(entity, year)
+  const [context, setContext] = useState<HistoricalContext | null>(null)
+  const [loading, setLoading] = useState(false)
+  useEffect(() => {
+    setContext(null)
+    if (!iso) return
+    let live = true
+    setLoading(true)
+    const timer = window.setTimeout(() => {
+      fetchHistoricalContext(iso, year).then(
+        (value) => { if (live) { setContext(value); setLoading(false) } },
+        () => { if (live) setLoading(false) },
+      )
+    }, 180)
+    return () => { live = false; window.clearTimeout(timer) }
+  }, [iso, year])
+  const format = (value: number | null) => value == null ? (lang === 'de' ? 'Keine Beobachtung' : 'No observation') : new Intl.NumberFormat(lang === 'de' ? 'de-DE' : 'en-US').format(value)
   return (
     <article className="px-6 pb-6 pt-5">
       <header className="flex items-start gap-4">
@@ -26,6 +46,24 @@ export function HistoricalPreview({ entity, year, onClose }: Props) {
         <button type="button" onClick={onClose} aria-label={t('explore.close')} className="rounded-full p-1 hover:bg-white/10"><X className="size-4" /></button>
       </header>
       {entity.capital && <p className="mt-5 text-sm"><span className="eyebrow mr-2">{t('compare.capital')}</span>{entity.capital}</p>}
+      <section className="mt-6 rounded-2xl border border-border bg-background/45 p-4" aria-label={lang === 'de' ? 'Historischer Datenkontext' : 'Historical data context'}>
+        <h3 className="font-serif text-lg">{lang === 'de' ? `Daten für ${year}` : `Data for ${year}`}</h3>
+        {!iso ? (
+          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{lang === 'de' ? 'Für diesen historischen Staat ist eine verlässliche Zuordnung zu heutigen Statistikgebieten nicht möglich.' : 'This historical state cannot be reliably matched to a present-day statistical territory.'}</p>
+        ) : (
+          <>
+            <dl className="mt-3 grid gap-3 text-sm">
+              <div><dt className="text-xs text-muted-foreground">{lang === 'de' ? 'Bevölkerung' : 'Population'}</dt><dd className="tabular font-semibold">{loading ? '…' : format(context?.population ?? null)}</dd></div>
+              <div><dt className="text-xs text-muted-foreground">{lang === 'de' ? 'Geflüchtete aus dem Land (Bestand)' : 'Refugees from country (stock)'}</dt><dd className="tabular font-semibold">{loading ? '…' : format(context?.refugees ?? null)}</dd></div>
+            </dl>
+            <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">{lang === 'de' ? 'Exakte Jahreswerte; kein Ersatz durch benachbarte Jahre. UNHCR zählt den Bestand Geflüchteter nach Herkunft, keine jährlichen Fluchtbewegungen. Statistikgebiete können von den gezeigten historischen Grenzen abweichen.' : 'Exact-year observations; adjacent years are never substituted. UNHCR reports refugee stock by origin, not annual flows. Statistical territories may differ from the historical boundaries shown.'}</p>
+            <div className="mt-2 flex flex-wrap gap-x-3 text-xs text-primary">
+              <a target="_blank" rel="noreferrer" href={`https://data.worldbank.org/indicator/SP.POP.TOTL?locations=${iso}`}>World Bank ↗</a>
+              <a target="_blank" rel="noreferrer" href="https://www.unhcr.org/refugee-statistics/">UNHCR ↗</a>
+            </div>
+          </>
+        )}
+      </section>
       <p className="mt-5 text-xs leading-relaxed text-muted-foreground">{t('history.sourceNote')}</p>
       <a href="https://icr.ethz.ch/data/cshapes/" target="_blank" rel="noreferrer" className="mt-2 block text-xs text-primary hover:underline">CShapes 2.0 ↗</a>
       {entity.flagFile && <a href={`https://commons.wikimedia.org/wiki/File:${encodeURIComponent(entity.flagFile.replace(/ /g, '_'))}`} target="_blank" rel="noreferrer" className="mt-1 block text-xs text-primary hover:underline">{t('history.flagSource')} ↗</a>}

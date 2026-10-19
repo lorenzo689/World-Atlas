@@ -12,6 +12,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -54,7 +55,7 @@ public class ConflictService {
                         """).param("id", UUID.randomUUID()).param("brief", brief.id())
                         .param("version", brief.revision()).param("content", json.writeValueAsString(brief))
                         .param("date", LocalDate.parse(brief.sourceDate())).param("url", brief.sourceUrl())
-                        .param("published", Instant.parse(brief.reviewedAt() + "T00:00:00Z")).update();
+                        .param("published", Timestamp.from(Instant.parse(brief.reviewedAt() + "T00:00:00Z"))).update();
             }
         }
     }
@@ -87,8 +88,7 @@ public class ConflictService {
     @Transactional
     public Revision draft(Brief candidate, UUID editor) {
         validate(candidate);
-        jdbc.sql("select pg_advisory_xact_lock(hashtext(:brief))").param("brief", candidate.id())
-                .query(Long.class).single();
+        lockBrief(candidate.id());
         int version = jdbc.sql("select coalesce(max(version),0)+1 from conflict_revision where brief_id=:brief")
                 .param("brief", candidate.id()).query(Integer.class).single();
         Brief brief = withRevision(candidate, version, LocalDate.now().toString());
@@ -105,6 +105,7 @@ public class ConflictService {
     @Transactional
     public Revision publish(UUID id) {
         Revision draft = get(id);
+        lockBrief(draft.briefId());
         if (draft.publishedAt() != null) throw ApiException.conflict("already_published", "Revision is already published.");
         int latest = jdbc.sql("""
                 select coalesce(max(version),0) from conflict_revision
@@ -114,6 +115,11 @@ public class ConflictService {
         jdbc.sql("update conflict_revision set published_at=now() where id=:id and published_at is null")
                 .param("id", id).update();
         return get(id);
+    }
+
+    private void lockBrief(String briefId) {
+        jdbc.sql("select pg_advisory_xact_lock(hashtext(:brief))").param("brief", briefId)
+                .query((rs, row) -> 1).single();
     }
 
     public Revision get(UUID id) {

@@ -11,6 +11,16 @@ Modern 1:10m close-zoom borders, administrative lines, physical details and plac
 for historical years. They cannot be safely projected onto dated CShapes states. The satellite
 texture is January 2004 imagery used as a visual background, not a dated land-cover layer.
 
+Selecting a historical country shows its boundary and flag alongside **exact-year** population
+from the [World Bank](https://data.worldbank.org/indicator/SP.POP.TOTL) and refugee stock by
+country of origin from [UNHCR Refugee Statistics](https://www.unhcr.org/refugee-statistics/).
+The two statistics are fetched only for the selected country, after a short delay while scrubbing,
+and cached in the browser. Missing observations remain empty; values from neighboring years are
+never substituted. The UNHCR number is a stock, **not** the number of people displaced during
+that year. The statistical country and the CShapes footprint may differ. To avoid misleading
+matches, the viewer withholds statistics before 1992 and for known state successions until a
+comparable modern state exists. These limits also apply on the static GitHub Pages demo.
+
 The comparison control shows two selected snapshots side by side. Rose lines show removed boundary
 segments; teal lines show added segments. Translucent areas show geometric losses and gains for
 states present in both snapshots. A Web Worker computes the polygon difference, debounced while

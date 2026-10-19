@@ -174,7 +174,7 @@ export default function ExplorerPage() {
   const changeHistoryYear = useCallback((next: number | null) => {
     setHistoryYear(next)
     if (next == null) { setCompareYear(null); setActiveStory(null); setStoryFocus(null) }
-    setHistoricalSelected(null)
+    if (next == null) setHistoricalSelected(null)
     select(null)
     setSnap('peek')
     if (next != null) setMode('political')
