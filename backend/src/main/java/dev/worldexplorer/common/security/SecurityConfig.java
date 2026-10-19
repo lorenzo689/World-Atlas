@@ -63,6 +63,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET,
                                 "/api/countries/**", "/api/search/**", "/api/indicators/**",
                                 "/api/leaderboard/**", "/api/activity/**", "/api/views/**",
+                                "/api/conflicts", "/api/conflicts/**",
                                 "/api/challenges/**")
                         .permitAll()
                         // protected areas

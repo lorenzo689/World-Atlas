@@ -187,6 +187,7 @@
                 <targetPath>data</targetPath>
                 <includes>
                     <include>countries.json</include>
+                    <include>conflicts.json</include>
                 </includes>
             </resource>
             <!-- flags for flag questions (streamed by the backend so the URL does not reveal the answer) -->

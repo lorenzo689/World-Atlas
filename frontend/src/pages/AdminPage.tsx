@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { ExternalLink, RotateCcw, ShieldCheck } from 'lucide-react'
-import { adminApi, dataApi, type AdminUser, type IndicatorInfo, type OutboxStatus } from '@/lib/backend'
+import { adminApi, dataApi, type AdminUser, type ConflictRevision, type IndicatorInfo, type OutboxStatus } from '@/lib/backend'
+import type { ConflictBrief } from '@/lib/conflicts'
 import { isAdmin, useAuth } from '@/store/auth'
 import { useDocumentMeta } from '@/hooks/useMisc'
 import { useLang, useT } from '@/i18n'
@@ -22,6 +23,7 @@ export default function AdminPage() {
         <IngestionCardLoader />
       </div>
       <OutboxCard />
+      <ConflictEditorialCard />
       <UsersCard />
       <Card className="mt-6">
         <p className="eyebrow mb-3">{t('admin.tools')}</p>
@@ -45,6 +47,48 @@ export default function AdminPage() {
       </Card>
     </PageShell>
   )
+}
+
+function ConflictEditorialCard() {
+  const lang = useLang((s) => s.lang)
+  const [revisions, setRevisions] = useState<ConflictRevision[]>([])
+  const [draft, setDraft] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<unknown>(null)
+  const load = () => adminApi.conflicts().then(setRevisions).catch(setError)
+  useEffect(() => { void load() }, [])
+  const save = async () => {
+    setBusy(true)
+    try {
+      await adminApi.conflictDraft(JSON.parse(draft) as ConflictBrief)
+      setDraft('')
+      await load()
+      setError(null)
+    } catch (e) { setError(e) } finally { setBusy(false) }
+  }
+  const publish = async (id: string) => {
+    setBusy(true)
+    try { await adminApi.conflictPublish(id); await load(); setError(null) }
+    catch (e) { setError(e) } finally { setBusy(false) }
+  }
+  const check = async () => {
+    setBusy(true)
+    try { await adminApi.conflictCheckSources(); await load(); setError(null) }
+    catch (e) { setError(e) } finally { setBusy(false) }
+  }
+  return <Card className="mt-6">
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="eyebrow">{lang === 'de' ? 'Redaktion' : 'Editorial review'}</p><h2 className="font-serif text-xl">{lang === 'de' ? 'Konfliktquellen und Revisionen' : 'Conflict sources and revisions'}</h2></div><button type="button" className="rounded-full border border-input px-3 py-1 text-xs" disabled={busy} onClick={check}>{lang === 'de' ? 'Quellen prüfen' : 'Check sources'}</button></div>
+    <p className="mt-2 text-xs text-muted-foreground">{lang === 'de' ? 'Änderungen werden als Entwurf gespeichert und erst nach Freigabe veröffentlicht. Die Quelle wird täglich geprüft; ein erfolgreicher Link bestätigt nicht den Inhalt.' : 'Edits are saved as drafts and appear publicly only after approval. Sources are checked daily; a working link does not verify its content.'}</p>
+    <div className="mt-4 grid gap-2 sm:grid-cols-2">{revisions.map((revision) => <div key={revision.id} className="rounded-xl border border-input p-3 text-sm">
+      <p className="font-medium">{revision.brief.title[lang]} · v{revision.version}</p>
+      <p className="mt-1 text-xs text-muted-foreground">{revision.publishedAt ? (lang === 'de' ? 'Veröffentlicht' : 'Published') : (lang === 'de' ? 'Entwurf' : 'Draft')} · {revision.brief.sourceDate} · {revision.sourceCheckStatus ?? 'unchecked'}</p>
+      <div className="mt-2 flex gap-2"><button type="button" className="text-xs text-primary underline" onClick={() => setDraft(JSON.stringify(revision.brief, null, 2))}>{lang === 'de' ? 'Bearbeiten' : 'Edit'}</button>{!revision.publishedAt && <button type="button" className="text-xs text-primary underline" disabled={busy} onClick={() => publish(revision.id)}>{lang === 'de' ? 'Freigeben' : 'Publish'}</button>}</div>
+    </div>)}</div>
+    <label className="mt-4 block text-xs" htmlFor="conflict-draft">{lang === 'de' ? 'Entwurf als JSON' : 'Draft JSON'}</label>
+    <textarea id="conflict-draft" className="mt-1 h-48 w-full rounded-xl border border-input bg-background p-3 font-mono text-xs" value={draft} onChange={(event) => setDraft(event.target.value)} spellCheck={false} />
+    <button type="button" className="mt-2 rounded-full border border-primary px-4 py-2 text-sm text-primary disabled:opacity-40" disabled={busy || !draft.trim()} onClick={save}>{lang === 'de' ? 'Entwurf speichern' : 'Save draft'}</button>
+    <ErrorText error={error} />
+  </Card>
 }
 
 function OutboxCard() {

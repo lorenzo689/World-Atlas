@@ -42,6 +42,19 @@ class DataPlatformIT extends IntegrationTest {
         assertThat(verifyToken).isNotBlank();
         String admin = post("/api/auth/verify", null, Map.of("token", verifyToken)).getBody().get("accessToken").asString();
         assertThat(get("/api/admin/users", admin).getStatusCode()).isEqualTo(HttpStatus.OK);
+        JsonNode publicConflicts = get("/api/conflicts", null).getBody();
+        assertThat(publicConflicts.size()).isGreaterThanOrEqualTo(5);
+        JsonNode firstBrief = publicConflicts.get(0);
+        assertThat(post("/api/admin/conflicts/drafts", newUser(), firstBrief).getStatusCode())
+                .isEqualTo(HttpStatus.FORBIDDEN);
+        JsonNode draft = post("/api/admin/conflicts/drafts", admin, firstBrief).getBody();
+        assertThat(draft.get("version").asInt()).isEqualTo(2);
+        assertThat(get("/api/conflicts/" + firstBrief.get("id").asString() + "/history", null).getBody().size())
+                .isEqualTo(1);
+        assertThat(post("/api/admin/conflicts/revisions/" + draft.get("id").asString() + "/publish", admin, null)
+                .getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(get("/api/conflicts/" + firstBrief.get("id").asString() + "/history", null).getBody().size())
+                .isEqualTo(2);
         assertThat(post("/api/admin/ingestion/gdpPerCapita", newUser(), null).getStatusCode())
                 .isEqualTo(HttpStatus.FORBIDDEN); // admins only
         assertThat(post("/api/admin/ingestion/gdpPerCapita", admin, null).getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);

@@ -25,7 +25,8 @@ import { changedEntities, HISTORY_EVENTS, readHistoryLink } from '@/lib/historyC
 import { storyForEvent, storyEvent } from '@/lib/historyStories'
 import { differenceBetweenBorders } from '@/lib/historyBoundaryDiff'
 import { loadAreaDifference, type AreaDifference } from '@/lib/historyAreaDiff'
-import { CONFLICT_BRIEFS, type ConflictBrief } from '@/lib/conflicts'
+import type { ConflictBrief } from '@/lib/conflicts'
+import { useConflictBriefs } from '@/hooks/useConflictBriefs'
 import type { Pose } from '@/lib/geo'
 import type { GlobeMode } from '@/types'
 
@@ -46,6 +47,7 @@ export default function ExplorerPage() {
   const t = useT()
   const lang = useLang((s) => s.lang)
   const isDesktop = useIsDesktop()
+  const conflictBriefs = useConflictBriefs()
   const { byCode, status: countriesStatus, reload } = useCountries()
   const boundaries = useBoundaries()
 
@@ -133,7 +135,7 @@ export default function ExplorerPage() {
   const gainedAreas = useMemo(() => areaDiff ? { mesh: areaDiff.gained, color: '#5eead4' } : null, [areaDiff])
   const story = activeStory ? storyForEvent(activeStory) : undefined
   const eventForStory = activeStory ? storyEvent(activeStory) : undefined
-  const conflictMarkers = useMemo(() => conflictsOpen && historyYear == null ? CONFLICT_BRIEFS.map((brief) => ({ ...brief.location, color: brief.id === activeConflict?.id ? '#ffffff' : brief.status === 'active' ? '#fb7185' : '#fbbf24' })) : [], [conflictsOpen, historyYear, activeConflict])
+  const conflictMarkers = useMemo(() => conflictsOpen && historyYear == null ? conflictBriefs.map((brief) => ({ ...brief.location, color: brief.id === activeConflict?.id ? '#ffffff' : brief.status === 'active' ? '#fb7185' : '#fbbf24' })) : [], [conflictsOpen, historyYear, activeConflict, conflictBriefs])
   useEffect(() => {
     setAreaDiff(null)
     setAreaError(false)
@@ -190,11 +192,11 @@ export default function ExplorerPage() {
       setSnap('peek')
       setFocusNonce((n) => n + 1)
     } else if (conflictsOpen) {
-      const brief = CONFLICT_BRIEFS.find((item) => item.countryCodes.includes(code))
+      const brief = conflictBriefs.find((item) => item.countryCodes.includes(code))
       if (brief) { setActiveConflict(brief); setStoryFocus({ ...brief.location, altitude: 1.25 }); return }
       onSelect(code)
     } else onSelect(code)
-  }, [historyYear, onSelect, conflictsOpen])
+  }, [historyYear, onSelect, conflictsOpen, conflictBriefs])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -255,7 +257,7 @@ export default function ExplorerPage() {
                 changeAreas={lostAreas}
                 focusPose={storyFocus}
                 markers={conflictMarkers}
-                onMarkerSelect={(index) => { const brief = CONFLICT_BRIEFS[index]; if (brief) { setActiveConflict(brief); setStoryFocus({ ...brief.location, altitude: 1.25 }) } }}
+                onMarkerSelect={(index) => { const brief = conflictBriefs[index]; if (brief) { setActiveConflict(brief); setStoryFocus({ ...brief.location, altitude: 1.25 }) } }}
               />
             </Suspense>
           </WebGLBoundary>
@@ -390,7 +392,7 @@ export default function ExplorerPage() {
       )}
 
       {/* Country preview */}
-      {historyYear == null && conflictsOpen && <ConflictPanel lang={lang} selected={activeConflict} onSelect={(brief) => { setActiveConflict(brief); setStoryFocus({ ...brief.location, altitude: 1.25 }); select(null) }} onClose={() => { setConflictsOpen(false); setActiveConflict(null) }} />}
+      {historyYear == null && conflictsOpen && <ConflictPanel briefs={conflictBriefs} lang={lang} selected={activeConflict} onSelect={(brief) => { setActiveConflict(brief); setStoryFocus({ ...brief.location, altitude: 1.25 }); select(null) }} onClose={() => { setConflictsOpen(false); setActiveConflict(null) }} />}
       {historyYear != null && historicalEntity && history &&
         (isDesktop ? (
           <aside key={historicalEntity.code} aria-label={historicalEntity.name} className="glass scrollbar-thin animate-rise absolute bottom-4 right-4 top-[88px] z-20 overflow-y-auto rounded-[28px]" style={{ width: PANEL_WIDTH }}>
