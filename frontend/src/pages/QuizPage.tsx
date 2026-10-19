@@ -6,6 +6,7 @@ import {
   quizApi,
   type AnswerResult,
   type PlayerStats,
+  type LearningOverview,
   type QuestionType,
   type QuestionView,
   type QuizSummary,
@@ -173,11 +174,13 @@ function Setup({ onStart }: { onStart: (body: Parameters<typeof quizApi.start>[0
   const [region, setRegion] = useState<string | null>(null)
   const [types, setTypes] = useState<QuestionType[]>(TYPES)
   const [stats, setStats] = useState<PlayerStats | null>(null)
+  const [learning, setLearning] = useState<LearningOverview | null>(null)
   const [error, setError] = useState<unknown>(null)
   const ranked = region === null && types.length === TYPES.length
 
   useEffect(() => {
     quizApi.stats().then(setStats).catch(() => {})
+    quizApi.learning().then(setLearning).catch(() => {})
   }, [])
 
   const createDuel = async () => {
@@ -226,6 +229,14 @@ function Setup({ onStart }: { onStart: (body: Parameters<typeof quizApi.start>[0
       </Card>
       <div className="flex flex-col gap-6">
         <Card>
+          <h2 className="flex items-center gap-2 text-lg font-medium"><RotateCcw className="size-5 text-primary" />{t('quiz.reviewTitle')}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{t('quiz.reviewHint')}</p>
+          {learning && <p className="mt-3 text-sm">{t('quiz.reviewProgress', { learned: learning.learned, due: learning.due })}</p>}
+          <Button variant="outline" className="mt-4 w-full" disabled={!learning?.due} onClick={() => onStart({ mode: 'REVIEW' })}>
+            {t('quiz.reviewStart')}
+          </Button>
+        </Card>
+        <Card>
           <h2 className="flex items-center gap-2 text-lg font-medium">
             <CalendarDays className="size-5 text-primary" /> {t('quiz.daily')}
           </h2>
@@ -260,6 +271,8 @@ function Summary({ summary, onAgain }: { summary: QuizSummary; onAgain: () => vo
   const scope =
     summary.mode === 'DAILY'
       ? t('quiz.daily')
+      : summary.mode === 'REVIEW'
+        ? t('quiz.reviewTitle')
       : summary.mode === 'CHALLENGE'
         ? t('challenge.title')
         : summary.region

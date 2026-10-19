@@ -7,6 +7,7 @@ import dev.worldexplorer.common.redis.RedisJson;
 import dev.worldexplorer.quiz.QuizSession;
 import dev.worldexplorer.support.IntegrationTest;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -87,5 +88,22 @@ class QuizIT extends IntegrationTest {
         get("/api/quiz/" + id + "/question", token);
         assertThat(post("/api/quiz/" + id + "/answer", token, Map.of("index", 3, "answer", "DEU")).getStatusCode())
                 .isEqualTo(HttpStatus.CONFLICT); // wrong index
+    }
+
+    @Test
+    void wrongAnswersBecomePersonalReviewQuestions() {
+        String token = newUser();
+        String id = post("/api/quiz", token, Map.of("mode", "CLASSIC", "rounds", 5,
+                "types", List.of("LOCATE", "CAPITAL", "FLAG"))).getBody().get("id").asString();
+        for (int i = 0; i < 5; i++) {
+            get("/api/quiz/" + id + "/question", token);
+            post("/api/quiz/" + id + "/answer", token, Map.of("index", i, "answer", "ZZZ"));
+        }
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() ->
+                assertThat(get("/api/quiz/me/learning", token).getBody().get("due").asInt()).isEqualTo(5));
+        JsonNode review = post("/api/quiz", token, Map.of("mode", "REVIEW")).getBody();
+        assertThat(review.get("mode").asString()).isEqualTo("REVIEW");
+        assertThat(review.get("total").asInt()).isEqualTo(5);
+        assertThat(review.get("ranked").asBoolean()).isFalse();
     }
 }

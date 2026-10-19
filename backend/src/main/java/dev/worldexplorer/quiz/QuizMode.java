@@ -6,5 +6,7 @@ public enum QuizMode {
     /** Same 10 questions for everybody today, one attempt per player and day. */
     DAILY,
     /** A shared duel link: same seeded questions for everybody who opens it, one attempt each. */
-    CHALLENGE
+    CHALLENGE,
+    /** Unranked questions chosen from the player's due skills. */
+    REVIEW
 }

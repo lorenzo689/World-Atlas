@@ -32,6 +32,10 @@ public class QuestionFactory {
         return generator().generate(types, region, count, RANDOM.create());
     }
 
+    public List<Question> review(List<QuestionGenerator.Target> targets) {
+        return generator().review(targets, RANDOM.create());
+    }
+
     /** Deterministic: the same seed always yields the same questions. */
     public List<Question> seeded(List<QuestionType> types, String region, int count, long seed) {
         return generator().generate(types, region, count, RANDOM.create(seed));

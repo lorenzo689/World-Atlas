@@ -20,6 +20,8 @@ import java.util.random.RandomGenerator;
  */
 public class QuestionGenerator {
 
+    public record Target(QuestionType type, String countryCode) {}
+
     /** Countries large enough to be clickable on the globe (tiny islands are frustrating to find). */
     private static final double MIN_LOCATE_AREA_KM2 = 8_000;
 
@@ -73,6 +75,26 @@ public class QuestionGenerator {
         // shuffle question order but keep indexes 0..n-1
         Collections.shuffle(out, rnd);
         List<Question> indexed = new ArrayList<>(count);
+        for (int i = 0; i < out.size(); i++) {
+            Question q = out.get(i);
+            indexed.add(new Question(i, q.type(), q.prompt(), q.target(), q.answer(), q.options()));
+        }
+        return indexed;
+    }
+
+    /** Rebuilds questions for exact due skills; the answer remains server-side as in a regular quiz. */
+    public List<Question> review(List<Target> targets, RandomGenerator rnd) {
+        List<Question> out = new ArrayList<>();
+        for (Target target : targets) {
+            Strategy strategy = strategies.get(target.type());
+            if (strategy == null) continue;
+            Country country = countries.stream().filter(c -> c.getCode().equals(target.countryCode()))
+                    .findFirst().orElse(null);
+            if (country == null || !strategy.eligible().test(country)) continue;
+            out.add(strategy.builder().build(out.size(), country, countries, rnd));
+        }
+        Collections.shuffle(out, rnd);
+        List<Question> indexed = new ArrayList<>(out.size());
         for (int i = 0; i < out.size(); i++) {
             Question q = out.get(i);
             indexed.add(new Question(i, q.type(), q.prompt(), q.target(), q.answer(), q.options()));

@@ -58,12 +58,14 @@ public class QuizService {
     private final MeterRegistry meters;
     private final AppProperties.Quiz config;
     private final ChallengeService challenges;
+    private final LearningService learning;
 
     public QuizService(QuestionFactory questions, AnswerChecker checker, RedisJson store, RedisLock lock,
             StringRedisTemplate redis, LeaderboardService leaderboards, QuizResultRepository results,
             EventPublisher events, FlagStore flags, MeterRegistry meters, AppProperties props,
-            ChallengeService challenges) {
+            ChallengeService challenges, LearningService learning) {
         this.challenges = challenges;
+        this.learning = learning;
         this.questions = questions;
         this.checker = checker;
         this.store = store;
@@ -84,7 +86,12 @@ public class QuizService {
         UUID challengeId = null;
         String region = req.region() == null || req.region().isBlank() ? null : req.region().trim();
 
-        if (req.mode() == QuizMode.CHALLENGE) {
+        if (req.mode() == QuizMode.REVIEW) {
+            qs = questions.review(learning.dueTargets(user.id(), 10));
+            if (qs.isEmpty()) throw ApiException.conflict("nothing_due", "No review questions are due yet.");
+            ranked = false;
+            region = null;
+        } else if (req.mode() == QuizMode.CHALLENGE) {
             if (req.challenge() == null) throw ApiException.badRequest("missing_challenge", "Which duel do you want to play?");
             QuizChallenge c = challenges.find(req.challenge());
             // one attempt per player and duel

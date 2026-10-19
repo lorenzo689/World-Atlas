@@ -31,11 +31,14 @@ public class QuizController {
     private final QuizService quiz;
     private final LeaderboardService leaderboards;
     private final PlayerStatsService stats;
+    private final LearningService learning;
 
-    public QuizController(QuizService quiz, LeaderboardService leaderboards, PlayerStatsService stats) {
+    public QuizController(QuizService quiz, LeaderboardService leaderboards, PlayerStatsService stats,
+            LearningService learning) {
         this.quiz = quiz;
         this.leaderboards = leaderboards;
         this.stats = stats;
+        this.learning = learning;
     }
 
     @Operation(summary = "Start a quiz (CLASSIC or DAILY)")
@@ -73,6 +76,11 @@ public class QuizController {
     @GetMapping("/api/quiz/me/stats")
     PlayerStats myStats(AuthUser user) {
         return stats.stats(user.id());
+    }
+
+    @GetMapping("/api/quiz/me/learning")
+    LearningService.Overview myLearning(AuthUser user) {
+        return learning.overview(user.id());
     }
 
     @Operation(summary = "Leaderboard: alltime | weekly | daily | multiplayer (wins)")

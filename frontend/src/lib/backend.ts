@@ -223,7 +223,12 @@ export const atlasApi = {
 
 // ---- quiz ----------------------------------------------------------------------------------
 export type QuestionType = 'LOCATE' | 'CAPITAL' | 'FLAG' | 'POPULATION'
-export type QuizMode = 'CLASSIC' | 'DAILY' | 'CHALLENGE'
+export type QuizMode = 'CLASSIC' | 'DAILY' | 'CHALLENGE' | 'REVIEW'
+export interface LearningOverview {
+  learned: number
+  due: number
+  next: { countryCode: string; type: QuestionType; correct: number; wrong: number; repetitions: number; intervalDays: number; dueAt: string }[]
+}
 export interface Option {
   /** neutral id ("A"–"D") – never a country code, so it does not give the answer away */
   id: string
@@ -321,6 +326,7 @@ export const quizApi = {
   answer: (id: string, index: number, answer: string) => api<AnswerResult>(`/quiz/${id}/answer`, { body: { index, answer } }),
   summary: (id: string) => api<QuizSummary>(`/quiz/${id}`),
   stats: () => api<PlayerStats>('/quiz/me/stats'),
+  learning: () => api<LearningOverview>('/quiz/me/learning'),
   leaderboard: (period: Period, limit = 20) => api<Leaderboard>(`/leaderboard?period=${period}&limit=${limit}`),
 }
 
