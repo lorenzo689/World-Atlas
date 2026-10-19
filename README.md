@@ -1,26 +1,28 @@
 # World Explorer
 
-An interactive 3D atlas: a fullscreen Earth you can rotate and zoom, click any country for a quick card,
-and open detailed pages with population, economy and geography data from the World Bank.
+World Explorer is an interactive 3D atlas and geography learning platform. Its globe connects
+country profiles and World Bank data with historical comparisons, guided lessons and quizzes.
+The full-stack deployment adds accounts, multiplayer, a personal atlas and a data platform.
 
-The globe also has an **interactive historical timeline**: scroll year by year from 1886 to 2019
-to see the boundaries and available dated flags at the start of each year, then return to today's
-map. See [historical data and licensing](docs/HISTORY.md).
+**[Live historical demo](https://lorenzo689.github.io/World-Atlas/)** ·
+[Engineering case study](docs/PORTFOLIO.md) · [Deployment guide](docs/DEPLOY.md) ·
+[Security audit](docs/SECURITY-AUDIT.md)
 
-Zooming into today's map streams [higher-detail boundaries, rivers, lakes, administrative lines,
-place labels and NASA image tiles](docs/MAP-DETAIL.md) only for the visible area. Historical years
-keep their own dated CShapes boundaries and do not overlay current administrative data.
+The **historical timeline** covers 1886–2019 with dated boundaries and available flags. Two years
+can be compared side by side, including geometric border and area changes. Guided lessons and
+source-dated conflict learning points add context. See [historical data and licensing](docs/HISTORY.md).
 
-Compare two historical years side by side with geometric border and area changes, follow guided
-source-backed lessons, and share the comparison URL. The current map also offers source-dated
-conflict learning points with regional markers and context questions. The [engineering case study](docs/PORTFOLIO.md) covers data
-provenance, reliability, security evidence and the measured geometry-file reduction.
+The present-day globe loads [higher-detail borders, rivers, lakes, administrative boundaries,
+place labels and NASA image tiles](docs/MAP-DETAIL.md) for the visible area as the camera zooms in.
+Historical views retain their own dated CShapes boundaries.
 
-**[Try the live historical demo](https://lorenzo689.github.io/World-Atlas/):** The GitHub Pages workflow publishes the historical globe. It has
-no login and resets to the 1989/1991 comparison on a fresh visit. The Spring Boot features
-require the separate deployment in [docs/DEPLOY.md](docs/DEPLOY.md).
+The GitHub Pages demo is a static build without login or backend services. On a fresh visit it
+opens the 1989/1991 comparison. The complete application requires a separate
+[Spring Boot deployment](docs/DEPLOY.md).
 
-With the Spring Boot backend it becomes a full-stack app:
+## Features
+
+The full-stack deployment includes:
 
 - **Geo quiz** – find countries on the globe, capitals, flags, population duels; daily challenge; leaderboards;
   **duels** (share a link, everybody plays the same questions once)
@@ -34,6 +36,8 @@ With the Spring Boot backend it becomes a full-stack app:
 - **German / English** UI incl. localised country names, **PWA** (installable, offline shell), keyboard and
   screen-reader support
 - **Admin console** – system overview, ingestion, users and roles
+
+## Tech stack
 
 **Frontend:** React 19 · TypeScript · Vite · Tailwind CSS v4 · shadcn/ui (Radix) · Three.js (own globe scene) · Recharts · React Router · STOMP
 **Backend:** Spring Boot 4.1 · Java 25 · PostgreSQL · Redis · Kafka · Elasticsearch · Flyway · JWT + HttpOnly refresh cookie · WebSocket · Testcontainers · OpenTelemetry
@@ -80,7 +84,7 @@ parked on per-topic `.dlt` topics, visible in Kafka UI.
 docker run --rm -i -e BASE_URL=http://host.docker.internal:8080 grafana/k6:1.3.0 run - < loadtest/quiz.js
 ```
 
-## Run it
+## Frontend development
 
 ```bash
 cd frontend
@@ -93,11 +97,11 @@ npm run data       # regenerate public/data + public/flags (see below)
 npm run icons      # regenerate the PWA icons from public/favicon.svg
 ```
 
-## What's in it
+## Atlas interface
 
 | Area | Notes |
 | --- | --- |
-| Globe | NASA Blue Marble texture, bump + ocean specular, atmosphere, 1:50m borders, hover highlight, animated fly-to framed by country size, idle auto-rotate (paused for `prefers-reduced-motion`). |
+| Globe | NASA Blue Marble texture, bump + ocean specular, atmosphere, 1:50m borders, hover highlight and animated fly-to framed by country size. The globe does not rotate automatically. |
 | Modes | **Satellite**, **Political** (regional palette), **Data** (quantile choropleth of 9 World Bank indicators; year shown on hover). |
 | Search | ARIA combobox, diacritic-insensitive, matches names, capitals and ISO codes. `/` or `Ctrl/Cmd+K` focuses it. |
 | Preview | Desktop side panel / mobile bottom sheet (drag or tap handle) with flag, capital, population, area, currency, languages, neighbours. The globe re-centres the country in the free area beside the panel. |
@@ -107,7 +111,7 @@ npm run icons      # regenerate the PWA icons from public/favicon.svg
 
 ## Data and sources
 
-Nothing is invented: missing values render as `—` or an explicit empty state, and every chart shows its data years and source.
+Missing values render as `—` or an explicit empty state. Charts show their data years and sources.
 
 - **Statistics**: [World Bank Open Data](https://data.worldbank.org) API (CC BY 4.0), fetched live in the browser and cached per session.
 - **Country metadata**: [mledoze/countries](https://github.com/mledoze/countries) (ODbL), snapshotted in `frontend/scripts/source/countries.json`.
