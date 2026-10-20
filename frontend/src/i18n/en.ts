@@ -436,7 +436,7 @@ export const en = {
   'history.today': 'Today',
   'history.loading': 'Loading map…',
   'history.loadError': 'Historical map could not be loaded.',
-  'history.snapshotNote': 'Borders and names on 1 January of this year · CShapes 2.0 (1886–2019)',
+  'history.snapshotNote': 'Borders and names on 1 January · CShapes 2.0, Reich annexations 1939–1945: OpenHistoricalMap',
   'history.search': 'Search historical countries…',
   'history.noResults': 'No historical country found',
   'history.noFlag': 'No verified flag',

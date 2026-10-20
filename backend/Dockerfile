@@ -7,7 +7,10 @@ WORKDIR /src
 COPY backend/.mvn backend/.mvn
 COPY backend/mvnw backend/pom.xml backend/
 # download dependencies first: this layer is cached as long as pom.xml does not change
-RUN cd backend && ./mvnw -q -B dependency:go-offline
+RUN sed -i 's/\r$//' backend/mvnw \
+    && chmod +x backend/mvnw \
+    && cd backend \
+    && ./mvnw -q -B dependency:go-offline
 COPY backend/src backend/src
 COPY frontend/public/data frontend/public/data
 COPY frontend/public/flags frontend/public/flags

@@ -9,7 +9,7 @@
  *
  * Bump VERSION to drop all old caches.
  */
-const VERSION = 'v4'
+const VERSION = 'v7'
 const STATIC = `we-static-${VERSION}`
 const SHELL = `we-shell-${VERSION}`
 const BASE = new URL(self.registration.scope).pathname

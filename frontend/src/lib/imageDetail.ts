@@ -48,6 +48,8 @@ export class ImageDetail {
   setSatellite(satellite: boolean) { this.satellite = satellite; this.update(this.lastPose, true) }
   setLite(lite: boolean) { this.lite = lite; this.update(this.lastPose, true) }
 
+  getDiagnostics() { return { imageTiles: this.group.children.length } }
+
   update(pose: Pose, force = false) {
     this.lastPose = pose
     if (this.disposed) return

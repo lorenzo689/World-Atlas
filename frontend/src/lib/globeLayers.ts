@@ -162,6 +162,8 @@ export class BaseLayers {
   readonly caps: Mesh
   readonly borders: LineSegments
   readonly changeLines: LineSegments
+  readonly conflictLines: LineSegments
+  readonly ww2Fronts: LineSegments
   readonly changeAreas: Mesh
   readonly hover: HighlightSlot
   readonly selected: HighlightSlot
@@ -269,6 +271,24 @@ export class BaseLayers {
     this.changeLines.renderOrder = 5
     this.changeLines.visible = false
 
+    this.conflictLines = new LineSegments(
+      new BufferGeometry(),
+      new LineBasicMaterial({ color: '#fb7185', transparent: true, opacity: 0.95, depthWrite: false }),
+    )
+    this.conflictLines.frustumCulled = false
+    this.conflictLines.raycast = () => {}
+    this.conflictLines.renderOrder = 6
+    this.conflictLines.visible = false
+
+    this.ww2Fronts = new LineSegments(
+      new BufferGeometry(),
+      new LineBasicMaterial({ color: '#fbbf24', transparent: true, opacity: 0.95, depthWrite: false }),
+    )
+    this.ww2Fronts.frustumCulled = false
+    this.ww2Fronts.raycast = () => {}
+    this.ww2Fronts.renderOrder = 7
+    this.ww2Fronts.visible = false
+
     this.changeAreas = new Mesh(
       new BufferGeometry(),
       new MeshBasicMaterial({ color: '#f6c177', transparent: true, opacity: 0.5, depthWrite: false }),
@@ -303,7 +323,7 @@ export class BaseLayers {
     this.markers.renderOrder = 4
     this.markers.visible = false
 
-    this.group.add(this.caps, this.borders, this.secondary.group, this.selected.group, this.hover.group, this.markers, this.changeAreas, this.changeLines)
+    this.group.add(this.caps, this.borders, this.secondary.group, this.selected.group, this.hover.group, this.markers, this.changeAreas, this.changeLines, this.conflictLines, this.ww2Fronts)
   }
 
   /** Outline of one country (all rings), built on demand and cached. */
@@ -351,6 +371,38 @@ export class BaseLayers {
     g.setAttribute('color', new Float32BufferAttribute(col, 3))
     g.computeBoundingSphere()
     this.markers.visible = markers.length > 0
+  }
+
+  /** Dated conflict geometry is separate from country borders and historical change lines. */
+  setConflictLines(lines: number[][][] | null) {
+    this.setGeographicLines(this.conflictLines, lines)
+  }
+
+  setWw2Fronts(lines: number[][][] | null) {
+    this.setGeographicLines(this.ww2Fronts, lines)
+  }
+
+  private setGeographicLines(target: LineSegments, lines: number[][][] | null) {
+    const positions: number[] = []
+    for (const line of lines ?? []) {
+      for (let i = 1; i < line.length; i++) {
+        const a = line[i - 1]
+        const b = line[i]
+        if (!a || !b || !Number.isFinite(a[0]) || !Number.isFinite(a[1]) || !Number.isFinite(b[0]) || !Number.isFinite(b[1])) continue
+        const steps = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 0.35))
+        for (let step = 0; step < steps; step++) {
+          const first = step / steps
+          const second = (step + 1) / steps
+          polarToXYZ(a[1] + (b[1] - a[1]) * first, a[0] + (b[0] - a[0]) * first, GLOBE_RADIUS * 1.008, positions)
+          polarToXYZ(a[1] + (b[1] - a[1]) * second, a[0] + (b[0] - a[0]) * second, GLOBE_RADIUS * 1.008, positions)
+        }
+      }
+    }
+    target.geometry.dispose()
+    const geometry = new BufferGeometry()
+    geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
+    target.geometry = geometry
+    target.visible = positions.length > 0
   }
 
   /** A single merged draw call for boundaries present in only one compared snapshot. */
@@ -447,6 +499,10 @@ export class BaseLayers {
     ;(this.borders.material as LineBasicMaterial).dispose()
     this.changeLines.geometry.dispose()
     ;(this.changeLines.material as LineBasicMaterial).dispose()
+    this.conflictLines.geometry.dispose()
+    ;(this.conflictLines.material as LineBasicMaterial).dispose()
+    this.ww2Fronts.geometry.dispose()
+    ;(this.ww2Fronts.material as LineBasicMaterial).dispose()
     this.changeAreas.geometry.dispose()
     ;(this.changeAreas.material as MeshBasicMaterial).dispose()
     for (const g of this.outlines.values()) g.dispose()

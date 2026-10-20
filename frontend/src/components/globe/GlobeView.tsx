@@ -54,6 +54,8 @@ interface GlobeViewProps {
   paint?: ((code: string) => string | null) | null
   /** Dots on the globe, e.g. where the other players clicked. */
   markers?: GlobeMarker[]
+  conflictLines?: number[][][] | null
+  ww2Fronts?: number[][][] | null
   onMarkerSelect?: (index: number) => void
   /** Geometric difference from the other historical snapshot. */
   changeLines?: { segments: BorderSegment[]; color: string } | null
@@ -108,6 +110,8 @@ export function GlobeView({
   secondary = null,
   paint = null,
   markers,
+  conflictLines = null,
+  ww2Fronts = null,
   onMarkerSelect,
   changeLines = null,
   changeAreas = null,
@@ -206,7 +210,7 @@ export function GlobeView({
         satellite: mode0 === 'satellite',
         detailEnabled: historicalEntities === null,
         detailLowEnd: LOW_END,
-        imageDetailEnabled: !LOW_END && historicalEntities === null,
+        imageDetailEnabled: !LOW_END,
         reducedMotion: red,
         fixedQuality: PERF_DEBUG && !/[?&]adaptive=1/.test(window.location.search),
       },
@@ -272,8 +276,20 @@ export function GlobeView({
     tipCode.current = null
     scene.replaceMap(features, boundaries.borders, boundaries.geometry)
     scene.setMapDetailEnabled(historicalEntities === null)
-    scene.setImageDetailEnabled(!LOW_END && historicalEntities === null)
+    scene.setImageDetailEnabled(!LOW_END)
   }, [scene, boundaries, features, historicalEntities])
+
+  useEffect(() => {
+    if (!scene) return
+    scene.layers.setConflictLines(conflictLines)
+    scene.requestRender()
+  }, [scene, boundaries, conflictLines])
+
+  useEffect(() => {
+    if (!scene) return
+    scene.layers.setWw2Fronts(ww2Fronts)
+    scene.requestRender()
+  }, [scene, boundaries, ww2Fronts])
 
   // ---- base map colours / mode --------------------------------------------------------------
   useEffect(() => {
@@ -358,16 +374,18 @@ export function GlobeView({
 
   // ---- perf probe (?debug=1): overlay + window.__perf for scripts/perf.mjs -------------------
   useEffect(() => {
-    if (!PERF_DEBUG || !scene || !ready) return
-    window.__globePose = () => scene.getPose()
-    window.__globeDetail = () => scene.getDetailDiagnostics()
+    if (!PERF_DEBUG || !scene || !ready || externalPose) return
+    const getPose = () => scene.getPose()
+    const getDetail = () => scene.getDetailDiagnostics()
+    window.__globePose = getPose
+    window.__globeDetail = getDetail
     const stop = startPerfProbe(() => scene.renderer)
     return () => {
       stop()
-      delete window.__globePose
-      delete window.__globeDetail
+      if (window.__globePose === getPose) delete window.__globePose
+      if (window.__globeDetail === getDetail) delete window.__globeDetail
     }
-  }, [scene, ready])
+  }, [scene, ready, externalPose])
 
   return (
     <div ref={wrapRef} className="absolute inset-0" aria-hidden="true">

@@ -3,9 +3,35 @@
 The globe has two map timelines:
 
 - **History, 1886–2019:** one selectable year per step, representing **1 January** of that year.
-  The active country-periods, borders and names come from CShapes 2.0. The political map is
-  deliberately separate from the World Bank indicator timeline.
+  The active country-periods, borders and names primarily come from CShapes 2.0; the
+  1939–1945 German annexation footprints and Free City of Danzig use OpenHistoricalMap.
+  The political map is deliberately separate from the World Bank indicator timeline.
 - **Today:** the existing Natural Earth map and current country metadata.
+
+## World War II German annexation geometry
+
+CShapes alone is inconsistent for 1939–1945: its 1940 snapshot leaves Vienna in Austria,
+Klaipėda in Lithuania, and Poznań in Poland, but includes Sudetenland and Danzig in Germany.
+The build now replaces the German polygon at each 1 January snapshot from 1939 through 1945
+with a dated [OpenHistoricalMap](https://www.openhistoricalmap.org/copyright) CC0 boundary
+relation. The OHM parent relation also includes the *Generalgouvernement* and the
+*Protektorat Böhmen und Mähren*; both are explicitly subtracted using their own dated
+relations. CShapes country polygons are clipped against the replacement Reich polygon.
+The Free City of Danzig is added for 1921–1939 (through its 1939 endpoint); it is not
+part of the German 1 January 1939 polygon.
+
+This is a reconstruction of **annexed/administratively incorporated territory**, not
+military occupation or front-line control. Other European state changes not covered by
+this correction still follow CShapes; the OHM relations themselves carry a “needs source
+for boundary lines” note, so their fine-scale geometry is approximate. No exact surveying
+accuracy is claimed. The [USHMM account](https://encyclopedia.ushmm.org/content/en/article/invasion-of-poland-fall-1939)
+distinguishes annexed western Poland from the General Government. An independent spot
+check against Stanford's April 1940 research map gave Germany for Vienna, Danzig,
+Klaipėda, and Poznań, General Government for Warsaw, and Protectorate for Prague.
+
+Rebuild with `npm run data:ww2` followed by `npm run data:history`. The verifier checks
+the resulting topology with point-in-polygon tests for all six locations, including
+the 1939/1940 Danzig transition. The manifest stores both source licenses and hashes.
 
 Modern 1:10m close-zoom borders, administrative lines, physical details and place labels are disabled
 for historical years. They cannot be safely projected onto dated CShapes states. The satellite
@@ -33,9 +59,12 @@ parameters, so the same view opens on the GitHub Pages demo without an account.
 The **Conflicts** control switches to Today and opens five source-dated regional learning points.
 Selecting a point in the list or on the globe shows context, a question and the underlying UN
 report. This is an editorial selection, not a complete conflict registry. Markers are approximate
-regional anchors, not battle sites, front lines, territorial control or safety advice. Each card
-shows its source date and flags a report older than 60 days for review. Gaza is classified as a
-fragile ceasefire, following the cited OCHA report.
+regional anchors, not battle sites or safety advice. Ukraine also has a dated pink line derived
+from VIINA settlement-control categories. It is an **estimated category boundary**, not a surveyed,
+verified or live tactical frontline. Its date and license are shown in the panel; data older than
+14 days are flagged. No line is drawn for the other conflicts without a reliable reusable geometry.
+Each card shows its source date and flags a report older than 60 days for review. Gaza is
+classified as a fragile ceasefire, following the cited OCHA report.
 
 There is no historical boundary source in this project for 2020–2025. The slider therefore ends
 at 2019 and offers a separate Today button; it does not silently reuse today's borders for those
@@ -49,10 +78,20 @@ SHA-256, and builds `public/data/historical-topology.json` plus a binary cache o
 country-period caps. The 26 MB upstream file is ignored by Git. A single 710-period TopoJSON stores
 shared boundaries; the browser selects valid periods and copies their precomputed geometry when a
 year changes. It keeps the WebGL renderer, textures and camera alive. The geometry stores
-per-period indices as unsigned 16-bit values and expands them on load, reducing the transferred
-binary from 18,376,160 to 12,376,220 bytes. `historical-manifest.json` records source provenance,
+per-period indices as unsigned 16-bit values (or 32-bit if a rebuilt period requires them) and
+expands them on load. Less aggressive topology simplification and denser pre-triangulation preserve
+more of the source's shape at close zoom, but cannot add detail absent from CShapes. `historical-manifest.json` records source provenance,
 license, schema and SHA-256 checksums. `npm run data:history:verify` checks annual coverage, dates,
 geometry and generated files and runs in CI.
+
+`npm run data:conflicts -- --refresh` downloads the current annual VIINA control archive and
+GeoNames settlement tessellation, uses **only `status_boost`** (VIINA reports and crowdsourced
+Wikipedia status), and writes `public/data/conflict-lines.json`. It does not use the dataset's
+ISW-based `status` column. The result carries observation date, source hashes and ODbL metadata.
+GitHub Pages attempts a refresh every Monday; a failed upstream download leaves the checked-in
+snapshot in place, visibly dated and flagged when old. The derived data is available at
+`/data/conflict-lines.json` (or `/World-Atlas/data/conflict-lines.json` on GitHub Pages).
+Source: [VIINA 2.0](https://github.com/zhukovyuri/VIINA), [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/).
 
 From `frontend/`, after `npm run build`, run `npm run preview -- --port 4173` and `npm run smoke:history` in separate
 terminals to check the real browser interaction.

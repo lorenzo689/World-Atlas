@@ -77,8 +77,10 @@ export function loadHistory(): Promise<HistoryData> {
 
 function decodeIndices(bin: ArrayBuffer, meta: { vertices: number; indices: number; ranges: [number, number, number, number, number][]; indexEncoding?: string }): Uint32Array {
   const offset = meta.vertices * 2 * 4
-  if (meta.indexEncoding !== 'local-u16') return new Uint32Array(bin, offset, meta.indices)
-  const local = new Uint16Array(bin, offset, meta.indices)
+  if (!meta.indexEncoding) return new Uint32Array(bin, offset, meta.indices)
+  const local = meta.indexEncoding === 'local-u16'
+    ? new Uint16Array(bin, offset, meta.indices)
+    : new Uint32Array(bin, offset, meta.indices)
   const global = new Uint32Array(local.length)
   for (const [, vStart, , iStart, iCount] of meta.ranges) {
     for (let i = iStart; i < iStart + iCount; i++) global[i] = local[i] + vStart

@@ -16,7 +16,9 @@ try {
   const pageErrors = []
   page.on('pageerror', (error) => pageErrors.push(error.message))
   page.on('console', (message) => { if (message.type() === 'error') console.error('Browser console:', message.text()) })
-  await page.goto(process.env.SMOKE_URL ?? 'http://localhost:4173/', { waitUntil: 'domcontentloaded' })
+  const smokeUrl = new URL(process.env.SMOKE_URL ?? 'http://localhost:4173/')
+  smokeUrl.searchParams.set('debug', '1')
+  await page.goto(smokeUrl.href, { waitUntil: 'domcontentloaded' })
   const slider = page.getByRole('slider', { name: /Year|Jahr/i }).first()
   await slider.waitFor()
   const setYear = async (year) => {
@@ -46,6 +48,19 @@ try {
     const image = document.querySelector('aside img')
     return image?.complete && image.naturalWidth > 0
   }, null, { timeout: 15000 })
+  const satellite = page.getByRole('radio', { name: /Satellite|Satellit/i }).first()
+  if (await satellite.isVisible()) {
+    await satellite.click()
+    await page.mouse.move(500, 410)
+    for (let i = 0; i < 6 && await page.evaluate(() => window.__globePose?.().altitude > 0.4); i++) await page.mouse.wheel(0, -500)
+    try {
+      await page.waitForFunction(() => window.__globePose?.().altitude < 0.45 && window.__globeDetail?.().imageTiles > 0, null, { timeout: 20000 })
+    } catch (error) {
+      console.error('Historical detail diagnostics:', await page.evaluate(() => ({ pose: window.__globePose?.(), detail: window.__globeDetail?.() })))
+      throw error
+    }
+    await page.getByRole('note').getByText(/January 2004|Januar 2004/).waitFor()
+  }
   if (process.env.SCREENSHOT_PATH) {
     await page.waitForTimeout(3000)
     await page.screenshot({ path: process.env.SCREENSHOT_PATH })
@@ -67,6 +82,7 @@ try {
     throw error
   }
   await page.getByRole('link', { name: /Source|Quelle/ }).waitFor()
+  await page.evaluate(() => { const url = new URL(window.location.href); url.searchParams.set('debug', '1'); window.history.replaceState(null, '', url.href) })
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.getByLabel(/Comparison year 1991|Vergleichsjahr 1991/).waitFor()
   await page.getByRole('button', { name: /Today|Heute/i }).click()
@@ -74,6 +90,18 @@ try {
   await page.getByRole('button', { name: /Conflicts|Konflikte/ }).click()
   const conflictPanel = page.getByRole('complementary', { name: /Understand conflicts|Konflikte verstehen/ })
   await conflictPanel.waitFor()
+  try {
+    await page.waitForFunction(() => window.__globeDetail?.().conflictLineSegments > 0, null, { timeout: 15000 })
+  } catch (error) {
+    console.error('Conflict detail diagnostics:', await page.evaluate(() => ({ pose: window.__globePose?.(), detail: window.__globeDetail?.(), panels: [...document.querySelectorAll('aside')].map((a) => a.textContent?.slice(0, 100)) })))
+    throw error
+  }
+  await conflictPanel.getByText(/estimated contact zone|geschätzte Kontaktzone/i).first().waitFor()
+  if (process.env.CONFLICT_SCREENSHOT_PATH) {
+    await conflictPanel.getByRole('button', { name: /Ukraine/ }).click()
+    await page.waitForTimeout(1800)
+    await page.screenshot({ path: process.env.CONFLICT_SCREENSHOT_PATH })
+  }
   await conflictPanel.getByRole('button', { name: /Gaza/ }).click()
   await conflictPanel.getByText(/Fragile ceasefire|Fragile Waffenruhe/).waitFor()
   await conflictPanel.getByRole('link', { name: /UN OCHA/ }).waitFor()

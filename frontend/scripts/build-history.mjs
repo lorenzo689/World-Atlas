@@ -2,10 +2,12 @@
 // Source: ETH Zurich CShapes 2.0, CC BY-NC-SA 4.0 (1886–2019).
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { gunzipSync } from 'node:zlib'
 import { topology } from 'topojson-server'
 import { presimplify, quantile, simplify } from 'topojson-simplify'
 import { feature } from 'topojson-client'
 import earcut from 'earcut'
+import polygonClipping from 'polygon-clipping'
 
 const sourcePath = 'scripts/source/historical/CShapes-2.0.geojson'
 const sourceUrl = 'https://icr.ethz.ch/data/cshapes/CShapes-2.0.geojson'
@@ -64,28 +66,104 @@ for (const f of raw.features) {
 const date = (p, prefix) => p[`${prefix}year`] * 10000 + p[`${prefix}month`] * 100 + p[`${prefix}day`]
 // CShapes rings are counterclockwise; d3-geo and the existing globe selection expect
 // clockwise exterior rings. Reverse every ring, including holes, before building topology.
-const globeWinding = (geometry) => ({
+const signedRingArea = (ring) => ring.reduce((sum, point, index) => {
+  const next = ring[(index + 1) % ring.length]
+  return sum + point[0] * next[1] - next[0] * point[1]
+}, 0) / 2
+const polygonArea = (polygons) => polygons.reduce((total, polygon) => total + Math.abs(signedRingArea(polygon[0])), 0)
+const globeWinding = (geometry, normalize = false) => ({
   ...geometry,
   coordinates: geometry.type === 'Polygon'
-    ? geometry.coordinates.map((ring) => [...ring].reverse())
-    : geometry.coordinates.map((polygon) => polygon.map((ring) => [...ring].reverse())),
+    ? geometry.coordinates.map((ring, index) => normalize && (signedRingArea(ring) < 0) === (index === 0) ? [...ring] : [...ring].reverse())
+    : geometry.coordinates.map((polygon) => polygon.map((ring, index) => normalize && (signedRingArea(ring) < 0) === (index === 0) ? [...ring] : [...ring].reverse())),
 })
-const features = raw.features.map((f, period) => {
+const sourceFeatures = raw.features.map((f) => {
   const p = f.properties
   return {
     type: 'Feature',
     properties: {
-      code: `H${p.gwcode}`, period, name: p.cntry_name, start: date(p, 'gws'), end: date(p, 'gwe'),
+      code: `H${p.gwcode}`, name: p.cntry_name, start: date(p, 'gws'), end: date(p, 'gwe'),
       capital: p.capname || null, lat: p.caplat, lng: p.caplong, iso: isoByGw[p.gwcode] ?? null,
     },
-    geometry: globeWinding(f.geometry),
+    geometry: f.geometry,
   }
 })
 
-console.log(`CShapes periods: ${features.length}; building shared topology...`)
+// CShapes is a state-system dataset, not a complete wartime annexation atlas.
+// Correct the 1 January 1939–1945 Reich footprint with CC0 OHM boundaries,
+// explicitly subtracting the General Government and Czech Protectorate. This
+// is an annexation/administration layer, not a military-control layer.
+const annexationPath = 'scripts/data/ww2-annexations.geojson.gz'
+if (!existsSync(annexationPath)) throw new Error('Build WWII annexations first: npm run data:ww2')
+const annexationSource = readFileSync(annexationPath)
+const annexations = JSON.parse(gunzipSync(annexationSource).toString('utf8')).features
+const danzigFeature = JSON.parse(readFileSync('scripts/data/ww2-free-city-danzig.geojson', 'utf8'))
+if (annexations.length !== 7 || annexations.some((f, i) => f.properties.year !== 1939 + i)) {
+  throw new Error('WWII annexation file must contain annual 1939–1945 footprints')
+}
+const annexationByYear = new Map(annexations.map((f) => [f.properties.year, f.geometry.coordinates]))
+const multipolygon = (geometry) => geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.coordinates
+const bounds = (coordinates) => {
+  let west = Infinity, east = -Infinity, south = Infinity, north = -Infinity
+  const visit = (value) => {
+    if (typeof value[0] === 'number') {
+      west = Math.min(west, value[0]); east = Math.max(east, value[0])
+      south = Math.min(south, value[1]); north = Math.max(north, value[1])
+    } else for (const child of value) visit(child)
+  }
+  visit(coordinates)
+  return [west, south, east, north]
+}
+const overlaps = (a, b) => a[0] <= b[2] && b[0] <= a[2] && a[1] <= b[3] && b[1] <= a[3]
+const annexationBounds = new Map([...annexationByYear].map(([year, coordinates]) => [year, bounds(coordinates)]))
+const wartime = []
+for (const sourceFeature of sourceFeatures) {
+  const props = sourceFeature.properties
+  if (props.end < 19390101 || props.start > 19450101) { wartime.push(sourceFeature); continue }
+  const sourcePolygon = multipolygon(sourceFeature.geometry)
+  const sourceBounds = bounds(sourcePolygon)
+  const relevantYears = [...annexationByYear.keys()].filter((year) => {
+    const day = year * 10000 + 101
+    return props.start <= day && day <= props.end && overlaps(sourceBounds, annexationBounds.get(year))
+  })
+  const affected = props.code === 'H255' || relevantYears.some((year) => polygonClipping.intersection(sourcePolygon, annexationByYear.get(year)).length > 0)
+  if (!affected) { wartime.push(sourceFeature); continue }
+  const append = (geometry, start, end, reconstructed = false) => {
+    if (start > end || !geometry?.coordinates?.length) return
+    wartime.push({ type: 'Feature', properties: { ...props, start, end }, geometry, reconstructed })
+  }
+  if (props.start < 19390101) append(sourceFeature.geometry, props.start, Math.min(props.end, 19381231))
+  for (let year = 1939; year <= 1945; year++) {
+    const day = year * 10000 + 101
+    if (props.start > day || props.end < day || props.code === 'H255') continue
+    const annexed = annexationByYear.get(year)
+    const coordinates = relevantYears.includes(year)
+      ? polygonClipping.difference(sourcePolygon, annexed)
+      : sourcePolygon
+    // Distinct source boundary traces leave microscopic slivers after clipping.
+    // Do not invent an "Austria" made up of these numerical leftovers.
+    const clean = coordinates.filter((polygon) => Math.abs(signedRingArea(polygon[0])) >= 0.00005)
+    if (polygonArea(clean) < polygonArea(sourcePolygon) * 0.03) continue
+    append({ type: 'MultiPolygon', coordinates: clean }, day, Math.min(props.end, year * 10000 + 1231), true)
+  }
+  if (props.end >= 19460101) append(sourceFeature.geometry, Math.max(props.start, 19460101), props.end)
+}
+wartime.push({ ...danzigFeature, reconstructed: true })
+for (const annexation of annexations) {
+  const year = annexation.properties.year
+  const germany = sourceFeatures.find((f) => f.properties.code === 'H255' && f.properties.start <= year * 10000 + 101 && f.properties.end >= year * 10000 + 101)
+  if (!germany) throw new Error(`No CShapes Germany metadata for ${year}`)
+  wartime.push({ type: 'Feature', properties: { ...germany.properties, start: year * 10000 + 101, end: Math.min(germany.properties.end, year * 10000 + 1231), source: 'OHM-WWII-annexations' }, geometry: annexation.geometry, reconstructed: true })
+}
+const features = wartime.map((f, period) => ({
+  type: 'Feature', properties: { ...f.properties, period }, geometry: globeWinding(f.geometry, f.reconstructed),
+}))
+
+console.log(`CShapes + WWII-annexation periods: ${features.length}; building shared topology...`)
 const base = topology({ periods: { type: 'FeatureCollection', features } }, 100000)
 const weighted = presimplify(base)
-const compact = simplify(weighted, quantile(weighted, 0.45))
+// Keep small bends that become visible at close zoom. CShapes remains the source limit.
+const compact = simplify(weighted, quantile(weighted, 0.75))
 // The simplified weights are only needed at build time.
 compact.arcs = compact.arcs.map((arc) => arc.map(([x, y]) => [x, y]))
 writeFileSync('public/data/historical-topology.json', JSON.stringify(compact))
@@ -113,7 +191,7 @@ const appendTriangle = (a, b, c, depth = 0) => {
     Math.abs(a[0] - b[0]), Math.abs(b[0] - c[0]), Math.abs(c[0] - a[0]),
     Math.abs(a[1] - b[1]), Math.abs(b[1] - c[1]), Math.abs(c[1] - a[1]),
   )
-  if (span > 5.5 && depth < 7) {
+  if (span > 2.5 && depth < 8) {
     const ab = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]
     const bc = [(b[0] + c[0]) / 2, (b[1] + c[1]) / 2]
     const ca = [(c[0] + a[0]) / 2, (c[1] + a[1]) / 2]
@@ -164,11 +242,10 @@ for (const [featureIndex, f] of decoded.features.entries()) {
   }
   ranges.push([f.properties.period, vStart, lnglat.length / 2 - vStart, iStart, indices.length - iStart])
 }
-// Each period has its own vertex range. Store indices relative to that range as 16-bit
-// values; the browser restores global offsets after download. This saves about 6 MB.
-const packedIndices = new Uint16Array(indices.length)
+// Keep compact per-period indices when possible, but preserve detailed periods that exceed 16 bits.
+const use32BitIndices = ranges.some(([, , vCount]) => vCount > 65536)
+const packedIndices = use32BitIndices ? new Uint32Array(indices.length) : new Uint16Array(indices.length)
 for (const [, vStart, vCount, iStart, iCount] of ranges) {
-  if (vCount > 65536) throw new Error(`Period exceeds 16-bit index range: ${vCount}`)
   for (let i = iStart; i < iStart + iCount; i++) packedIndices[i] = indices[i] - vStart
 }
 writeFileSync('public/data/historical-geometry.bin', Buffer.concat([
@@ -176,7 +253,7 @@ writeFileSync('public/data/historical-geometry.bin', Buffer.concat([
   Buffer.from(packedIndices.buffer),
 ]))
 writeFileSync('public/data/historical-geometry.json', JSON.stringify({
-  vertices: lnglat.length / 2, indices: indices.length, ranges, indexEncoding: 'local-u16',
+  vertices: lnglat.length / 2, indices: indices.length, ranges, indexEncoding: use32BitIndices ? 'local-u32' : 'local-u16',
 }))
 
 const flagsByQid = new Map()

@@ -7,6 +7,32 @@
     "license": "CC BY-NC-SA 4.0",
     "sha256": "384b1ea90b9419f30a858d7ec237c85a22c60d1b35b5f85f215a1204f9989d42"
   },
+  "ww2Source": {
+    "title": "OpenHistoricalMap dated boundary relations",
+    "url": "https://www.openhistoricalmap.org/",
+    "license": "CC0",
+    "method": "German administrative footprint minus General Government and Protectorate; 1 January yearly snapshots; approximate OHM geometry",
+    "relations": [
+      2704711,
+      2704716,
+      2704713,
+      2692712,
+      2693083,
+      2693084,
+      2704750,
+      2691478
+    ],
+    "files": {
+      "ww2-annexations.geojson.gz": {
+        "bytes": 5361551,
+        "sha256": "b20918e6e200bfefa972b1ae30bf0fe5295cff55526d894efd8875badb02f350"
+      },
+      "ww2-free-city-danzig.geojson": {
+        "bytes": 17342,
+        "sha256": "2c6f94fa27b49d4de0081128f9141ffe6be1d21836d6d6b5b6e317157289d5d3"
+      }
+    }
+  },
   "flags": {
     "source": "https://commons.wikimedia.org/wiki/Data:FlagsData.tab",
     "filesAreHotlinked": true
@@ -15,24 +41,24 @@
     1886,
     2019
   ],
-  "periods": 710,
+  "periods": 805,
   "geometry": {
-    "vertices": 797035,
-    "indices": 2999970,
+    "vertices": 2783689,
+    "indices": 12468069,
     "indexEncoding": "local-u16"
   },
   "files": {
     "historical-topology.json": {
-      "bytes": 3704556,
-      "sha256": "ab083d9399545cc6c716de7aa9135af5c118813d46933d1680bcd9ccc388d8a0"
+      "bytes": 7185377,
+      "sha256": "8e8f61d2450075c8a58ac8ac17303c0bd8565c7c52d518ff951af8abdcf0ef56"
     },
     "historical-geometry.json": {
-      "bytes": 20508,
-      "sha256": "ab6f6f71557a63da80dabea2244bd495bc116b690b0e531cf5518a6c5c66cd94"
+      "bytes": 25245,
+      "sha256": "644efc63a33e053bf1b961418f872da8a0c0a96928e6b54534d9145bdc2188a0"
     },
     "historical-geometry.bin": {
-      "bytes": 12376220,
-      "sha256": "f6979446c2812b82fb6b7b7f988e7de1b553301f5b876abaaf9af5e908b85775"
+      "bytes": 47205650,
+      "sha256": "6de915c6fdde1c29d1f5697b42ab87aa2c719bb51822aa613f92769689f468b1"
     },
     "historical-flags.json": {
       "bytes": 43699,

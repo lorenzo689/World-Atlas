@@ -11,6 +11,9 @@ The full-stack deployment adds accounts, multiplayer, a personal atlas and a dat
 The **historical timeline** covers 1886–2019 with dated boundaries and available flags. Two years
 can be compared side by side, including geometric border and area changes. Guided lessons and
 source-dated conflict learning points add context. See [historical data and licensing](docs/HISTORY.md).
+The [World War II learning view](docs/WW2.md) adds seven dated 1939–1945 source cards, selected
+schematic front sections, theater filters, event locations and short interpretation questions.
+It does not claim complete military-front or occupation coverage.
 
 The present-day globe loads [higher-detail borders, rivers, lakes, administrative boundaries,
 place labels and NASA image tiles](docs/MAP-DETAIL.md) for the visible area as the camera zooms in.

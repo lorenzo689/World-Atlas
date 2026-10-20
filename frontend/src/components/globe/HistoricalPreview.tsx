@@ -46,6 +46,15 @@ export function HistoricalPreview({ entity, year, onClose }: Props) {
         <button type="button" onClick={onClose} aria-label={t('explore.close')} className="rounded-full p-1 hover:bg-white/10"><X className="size-4" /></button>
       </header>
       {entity.capital && <p className="mt-5 text-sm"><span className="eyebrow mr-2">{t('compare.capital')}</span>{entity.capital}</p>}
+      {year >= 1939 && year <= 1945 && (entity.code === 'H255' || entity.code === 'H290' || entity.code === 'H368' || entity.code === 'HDANZIG') && (
+        <aside className="mt-5 rounded-xl border border-primary/40 bg-primary/10 p-3 text-xs leading-relaxed" role="note">
+          <strong>{lang === 'de' ? 'Grenztyp: Annexion, nicht Besatzung.' : 'Boundary type: annexation, not occupation.'}</strong>{' '}
+          {lang === 'de'
+            ? 'Die Reichsfläche für den 1. Januar dieses Jahres wurde mit datierten OpenHistoricalMap-Grenzen korrigiert. Generalgouvernement und Protektorat Böhmen und Mähren sind ausdrücklich ausgenommen. Die übrigen Länder folgen weiterhin CShapes; Grenzverläufe sind näherungsweise rekonstruiert.'
+            : 'The Reich footprint for 1 January of this year was corrected using dated OpenHistoricalMap boundaries. The General Government and Protectorate of Bohemia and Moravia are explicitly excluded. Other countries still follow CShapes; boundary geometry remains approximate.'}
+          <a href="https://www.openhistoricalmap.org/copyright" target="_blank" rel="noreferrer" className="mt-2 block text-primary underline">OpenHistoricalMap ↗</a>
+        </aside>
+      )}
       <section className="mt-6 rounded-2xl border border-border bg-background/45 p-4" aria-label={lang === 'de' ? 'Historischer Datenkontext' : 'Historical data context'}>
         <h3 className="font-serif text-lg">{lang === 'de' ? `Daten für ${year}` : `Data for ${year}`}</h3>
         {!iso ? (

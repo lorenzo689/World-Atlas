@@ -38,7 +38,7 @@ declare global {
     __perf?: PerfApi
     /** Current camera pose; only with ?debug=1 (used by scripts/smoke.mjs). */
     __globePose?: () => { lat: number; lng: number; altitude: number }
-    __globeDetail?: () => { bordersReady: boolean; borderTiles: number; roadsVisible: number; baseBordersVisible: boolean; autoRotate: boolean }
+    __globeDetail?: () => { bordersReady: boolean; borderTiles: number; roadsVisible: number; imageTiles: number; conflictLineSegments: number; ww2FrontSegments: number; baseBordersVisible: boolean; autoRotate: boolean }
   }
 }
 

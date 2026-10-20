@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  schedule:
+    - cron: '17 5 * * 1'
 
 permissions:
   contents: read
@@ -27,6 +29,9 @@ jobs:
       - run: npm ci
       - run: npm run data:history:verify
       - run: npm run data:detail:verify
+      - name: Refresh dated conflict geometry
+        run: npm run data:conflicts -- --refresh
+        continue-on-error: true
       - run: npm test
       - run: npm run build
         env:
@@ -36,6 +41,7 @@ jobs:
           VITE_STATIC_DEMO=true npm run preview -- --host 127.0.0.1 --port 4173 > preview.log 2>&1 &
           for i in $(seq 1 30); do curl -sf http://127.0.0.1:4173/World-Atlas/ && break; sleep 1; done
           SMOKE_URL=http://127.0.0.1:4173/World-Atlas/ CHROME_PATH=$(which google-chrome) npm run smoke:history
+          SMOKE_URL=http://127.0.0.1:4173/World-Atlas/ CHROME_PATH=$(which google-chrome) npm run smoke:ww2
       - run: cp dist/index.html dist/404.html && touch dist/.nojekyll
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4

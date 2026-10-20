@@ -1,4 +1,5 @@
 import dataset from '../../public/data/conflicts.json'
+import lineDataset from '../../public/data/conflict-lines.json'
 
 type Localized = { de: string; en: string }
 
@@ -23,6 +24,22 @@ export interface ConflictBrief {
 
 /** Last reviewed static snapshot for GitHub Pages and backend outages. */
 export const CONFLICT_BRIEFS = dataset.briefs as ConflictBrief[]
+
+export interface ConflictLineDataset {
+  schemaVersion: number
+  asOf: string
+  conflictId: string
+  type: 'estimated-control-boundary'
+  source: string
+  sourceUrl: string
+  license: string
+  licenseUrl: string
+  caveat: string
+  lines: number[][][]
+}
+
+/** VIINA's dated settlement-control transition. Never present it as a live tactical front. */
+export const CONFLICT_LINES = lineDataset as ConflictLineDataset
 
 export function sourceAgeDays(sourceDate: string, now = new Date()): number {
   return Math.max(0, Math.floor((now.getTime() - new Date(`${sourceDate}T00:00:00Z`).getTime()) / 86_400_000))

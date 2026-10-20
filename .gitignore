@@ -5,7 +5,11 @@ dist
 perf-results
 .vscode*.tsbuildinfo
 frontend/scripts/source/historical/CShapes-2.0.geojson
+frontend/scripts/source/historical/ohm-reich-*.json
 frontend/scripts/source/detail/
+frontend/scripts/source/conflicts/
 frontend/scripts/source/textures/earth-blue-marble-hires.jpg
 backend/run.log
 backend/run-error.log
+frontend/vite.out.log
+frontend/vite.err.log

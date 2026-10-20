@@ -20,6 +20,7 @@ export function formatCurrencyCompact(value: number | null | undefined): string 
     style: 'currency',
     currency: 'USD',
     notation: 'compact',
+    minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   }).format(value)
 }

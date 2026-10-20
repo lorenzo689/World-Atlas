@@ -425,7 +425,7 @@ export const de: Partial<Record<MessageKey, string>> = {
   'history.today': 'Heute',
   'history.loading': 'Karte lädt…',
   'history.loadError': 'Historische Karte konnte nicht geladen werden.',
-  'history.snapshotNote': 'Grenzen und Namen am 1. Januar dieses Jahres · CShapes 2.0 (1886–2019)',
+  'history.snapshotNote': 'Grenzen und Namen am 1. Januar · CShapes 2.0, Reichsannexionen 1939–1945: OpenHistoricalMap',
   'history.search': 'Historische Länder suchen…',
   'history.noResults': 'Kein historisches Land gefunden',
   'history.noFlag': 'Keine belegte Flagge',
