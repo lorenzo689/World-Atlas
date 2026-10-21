@@ -16,11 +16,11 @@ const MODES = [
   { id: 'data', icon: Layers },
 ] as const satisfies readonly { id: GlobeMode; icon: unknown }[]
 
-export function ModeSwitcher({ mode, onChange, className }: { mode: GlobeMode; onChange: (m: GlobeMode) => void; className?: string }) {
+export function ModeSwitcher({ mode, onChange, className, allowedModes }: { mode: GlobeMode; onChange: (m: GlobeMode) => void; className?: string; allowedModes?: readonly GlobeMode[] }) {
   const t = useT()
   return (
     <div role="radiogroup" aria-label={t('explore.mode')} className={cn('glass inline-flex rounded-full p-1', className)}>
-      {MODES.map(({ id, icon: Icon }) => {
+      {MODES.filter(({ id }) => !allowedModes || allowedModes.includes(id)).map(({ id, icon: Icon }) => {
         const active = mode === id
         return (
           <button

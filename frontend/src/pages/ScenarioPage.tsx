@@ -14,19 +14,19 @@ const scenarios = [
     label: { de: 'Gegenwart', en: 'Present day' }, accent: 'from-sky-400/35 via-blue-900/30 to-slate-950',
   },
   {
-    id: 'ww2', href: '/explore?ww2=1&year=1939', era: '1939—1945',
+    id: 'ww2', href: '/explore?scenario=ww2&year=1939', era: '1939—1945',
     title: { de: 'Zweiter Weltkrieg', en: 'World War II' },
     text: { de: 'Verfolge datierte Grenzveränderungen, Quellenereignisse und ausgewählte Kriegsschauplätze.', en: 'Follow dated border changes, sourced events and selected theaters of war.' },
     label: { de: 'Szenario', en: 'Scenario' }, accent: 'from-orange-500/35 via-rose-950/50 to-slate-950',
   },
   {
-    id: 'ww1', href: '/explore?ww1=1&year=1914', era: '1914—1918',
+    id: 'ww1', href: '/explore?scenario=ww1&year=1914', era: '1914—1918',
     title: { de: 'Erster Weltkrieg', en: 'World War I' },
     text: { de: 'Ordne zentrale Wendepunkte des Krieges auf einer zeitgenössischen historischen Grenzkarte ein.', en: 'Place key turning points of the war on a historical boundary map.' },
     label: { de: 'Szenario', en: 'Scenario' }, accent: 'from-amber-400/30 via-stone-900/55 to-slate-950',
   },
   {
-    id: 'borders', href: '/explore?year=1886&compare=1914', era: '1886—2019',
+    id: 'borders', href: '/explore?scenario=borders&year=1886&compare=1914', era: '1886—2019',
     title: { de: 'Grenzen im Wandel', en: 'Changing borders' },
     text: { de: 'Vergleiche beliebige Jahre und untersuche territoriale Veränderungen mit Quellen und Lernpfaden.', en: 'Compare years and investigate territorial change through sources and guided lessons.' },
     label: { de: 'Zeitreise', en: 'Time travel' }, accent: 'from-emerald-400/25 via-teal-950/50 to-slate-950',

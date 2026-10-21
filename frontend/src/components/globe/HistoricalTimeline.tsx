@@ -11,9 +11,10 @@ interface Props {
   onRetry: () => void
   onReset?: () => void
   resetLabel?: string
+  allowToday?: boolean
 }
 
-export function HistoricalTimeline({ year, onChange, loading, error, onRetry, onReset, resetLabel }: Props) {
+export function HistoricalTimeline({ year, onChange, loading, error, onRetry, onReset, resetLabel, allowToday = true }: Props) {
   const t = useT()
   const [playing, setPlaying] = useState(false)
 
@@ -76,9 +77,9 @@ export function HistoricalTimeline({ year, onChange, loading, error, onRetry, on
           onChange={(event) => change(Number(event.target.value))}
           className="h-2 min-w-0 flex-1 cursor-pointer accent-[#6fa8ff]"
         />
-        <button type="button" onClick={() => change(null)} aria-pressed={year == null} className="rounded-full border border-input px-3 py-1.5 text-xs hover:bg-white/10 aria-pressed:border-primary aria-pressed:text-primary">
+        {allowToday && <button type="button" onClick={() => change(null)} aria-pressed={year == null} className="rounded-full border border-input px-3 py-1.5 text-xs hover:bg-white/10 aria-pressed:border-primary aria-pressed:text-primary">
           {t('history.today')}
-        </button>
+        </button>}
       </div>
       <div className="tabular mt-1 flex justify-between pl-11 pr-16 text-[10px] text-muted-foreground">
         <span>{FIRST_HISTORICAL_YEAR}</span><span>1945</span><span>1991</span><span>{LAST_HISTORICAL_YEAR}</span>

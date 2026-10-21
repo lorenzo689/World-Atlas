@@ -24,11 +24,11 @@ export default function LandingPage() {
         <span className="font-serif text-2xl tracking-tight">World Explorer</span>
       </Link>
       <nav className="flex items-center gap-2 sm:gap-4">
-        <Link to="/scenarios" className="hidden rounded-full px-3 py-2 text-sm text-white/65 hover:text-white sm:block">{de ? 'Szenarien' : 'Scenarios'}</Link>
+        <Link to="/explore?scenario=today" className="hidden rounded-full px-3 py-2 text-sm text-white/65 hover:text-white sm:block">{de ? 'Atlas entdecken' : 'Explore the atlas'}</Link>
         <div role="group" aria-label={de ? 'Sprache' : 'Language'} className="flex rounded-full border border-white/10 p-0.5 text-[10px]">
           {(['de', 'en'] as const).map((code) => <button key={code} type="button" lang={code} aria-pressed={lang === code} onClick={() => setLang(code)} className={`rounded-full px-2 py-1 uppercase ${lang === code ? 'bg-white/15 text-white' : 'text-white/45 hover:text-white'}`}>{code}</button>)}
         </div>
-        {!staticDemo && (user ? <Link to="/scenarios" className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-blue-100">{de ? 'Weiter erkunden' : 'Continue exploring'}</Link> : <>
+        {!staticDemo && (user ? <Link to="/explore?scenario=today" className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-blue-100">{de ? 'Weiter erkunden' : 'Continue exploring'}</Link> : <>
           <Link to="/login" className="rounded-full px-3 py-2 text-sm text-white/75 hover:text-white">{de ? 'Anmelden' : 'Sign in'}</Link>
           <Link to="/login?tab=register" className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-blue-100">{de ? 'Konto erstellen' : 'Create account'}</Link>
         </>)}
@@ -43,7 +43,7 @@ export default function LandingPage() {
           <h1 className="max-w-[680px] font-serif text-[clamp(3.7rem,8vw,7rem)] leading-[.88] tracking-[-.045em]">{de ? <>Die Welt ist<br/><span className="text-blue-300">in Bewegung.</span></> : <>The world is<br/><span className="text-blue-300">always changing.</span></>}</h1>
           <p className="mt-7 max-w-xl text-base leading-7 text-slate-300 sm:text-lg sm:leading-8">{de ? 'Erkunde Grenzen, Konflikte und Wendepunkte auf einem interaktiven Globus. Springe von der Weltkarte heute mitten hinein in die Geschichte.' : 'Explore borders, conflicts and turning points on an interactive globe. Move from today’s world map into the heart of history.'}</p>
           <div className="mt-9 flex flex-wrap items-center gap-3">
-            <Link to="/scenarios" className="group inline-flex h-12 items-center gap-3 rounded-full bg-blue-300 px-6 text-sm font-semibold text-slate-950 transition hover:bg-blue-200">{user ? (de ? 'Weiter erkunden' : 'Continue exploring') : (de ? 'Szenario wählen' : 'Choose a scenario')}<ArrowRight className="size-4 transition-transform group-hover:translate-x-1"/></Link>
+            <Link to="/explore?scenario=today" className="group inline-flex h-12 items-center gap-3 rounded-full bg-blue-300 px-6 text-sm font-semibold text-slate-950 transition hover:bg-blue-200">{user ? (de ? 'Weiter erkunden' : 'Continue exploring') : (de ? 'Jetzt entdecken' : 'Explore now')}<ArrowRight className="size-4 transition-transform group-hover:translate-x-1"/></Link>
             {!staticDemo && !user && <Link to="/login?tab=register" className="inline-flex h-12 items-center rounded-full border border-white/15 px-5 text-sm text-white/80 transition hover:border-white/35 hover:text-white">{de ? 'Kostenloses Konto erstellen' : 'Create a free account'}</Link>}
           </div>
           <div className="mt-12 flex flex-wrap gap-x-7 gap-y-3 text-xs text-slate-400">
@@ -84,7 +84,7 @@ export default function LandingPage() {
       </section>
 
       <footer className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-7 text-xs text-slate-500 sm:px-8">
-        <span>© 2026 World Explorer</span><div className="flex gap-5"><Link to="/scenarios" className="hover:text-white">{de ? 'Szenarien' : 'Scenarios'}</Link>{!staticDemo && <Link to="/login" className="hover:text-white">{de ? 'Anmelden' : 'Sign in'}</Link>}<Link to="/explore?scenario=today" className="hover:text-white">{de ? 'Karte öffnen' : 'Open the map'}</Link></div>
+        <span>© 2026 World Explorer</span><div className="flex gap-5"><Link to="/explore?scenario=today" className="hover:text-white">{de ? 'Atlas entdecken' : 'Explore the atlas'}</Link>{!staticDemo && <Link to="/login" className="hover:text-white">{de ? 'Anmelden' : 'Sign in'}</Link>}<Link to="/explore?scenario=today" className="hover:text-white">{de ? 'Karte öffnen' : 'Open the map'}</Link></div>
       </footer>
     </main>
   </div>

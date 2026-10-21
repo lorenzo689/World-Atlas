@@ -7,6 +7,7 @@ import { useDocumentMeta } from '@/hooks/useMisc'
 import { restoreSession } from '@/lib/api'
 import { Notifications } from '@/components/layout/Notifications'
 import { useT } from '@/i18n'
+import { readScenarioLink } from '@/lib/scenarios'
 
 const ExplorerPage = lazy(() => import('@/pages/ExplorerPage'))
 const LandingPage = lazy(() => import('@/pages/LandingPage'))
@@ -53,7 +54,13 @@ function HomeRoute() {
   const { search } = useLocation()
   const params = new URLSearchParams(search)
   const opensMap = ['year', 'compare', 'ww1', 'ww2', 'debug'].some((key) => params.has(key))
-  return opensMap ? <ExplorerPage /> : <LandingPage />
+  return opensMap ? <ExplorerRoute /> : <LandingPage />
+}
+
+function ExplorerRoute() {
+  const { search } = useLocation()
+  const { scenario } = readScenarioLink(search)
+  return <ExplorerPage key={scenario.id} />
 }
 
 export default function App() {
@@ -69,7 +76,7 @@ export default function App() {
             <Routes>
               <Route path="/" element={<HomeRoute />} />
               <Route path="/scenarios" element={<ScenarioPage />} />
-              <Route path="/explore" element={<ExplorerPage />} />
+              <Route path="/explore" element={<ExplorerRoute />} />
               {!staticDemo && <Route path="/countries/:code/:tab?" element={<CountryPage />} />}
               {!staticDemo && <Route path="/login" element={<LoginPage />} />}
               {!staticDemo && <Route path="/quiz" element={<QuizPage />} />}
