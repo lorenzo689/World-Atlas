@@ -46,7 +46,7 @@ export function decodeBorders(buffer: ArrayBuffer, z: number, x: number, y: numb
           out.push(BORDER_SURFACE * Math.cos(la) * Math.sin(ln), BORDER_SURFACE * Math.sin(la), BORDER_SURFACE * Math.cos(la) * Math.cos(ln))
         }
         for (let k = 0; k < steps; k++) { point(k / steps); point((k + 1) / steps) }
-        if (out.length > 3_000_000) throw Error('Border geometry budget exceeded')
+        if (borders.length + disputed.length + coast.length > 600_000) throw Error('Border geometry budget exceeded')
       }
     }
   }

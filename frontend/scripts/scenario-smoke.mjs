@@ -42,6 +42,15 @@ try {
   await page.waitForURL(/year=1914/)
   await areas()
   if (await page.getByRole('radio', { name: /Data|Daten/ }).count() || await page.getByRole('button', { name: /Conflicts|Konflikte/, exact: true }).count() || await page.getByRole('slider').count()) throw new Error('WWI exposes another scenario’s tools')
+  // Close zoom is where modern border streaming would activate; history must remain isolated.
+  await page.mouse.move(900, 400)
+  for (let i = 0; i < 20; i++) {
+    if ((await page.evaluate(() => window.__globePose().altitude)) < 0.3) break
+    await page.mouse.wheel(0, -400)
+    await page.waitForTimeout(80)
+  }
+  await page.waitForTimeout(250)
+  if (requests.slice(historicRequests).some((url) => url.startsWith('https://tiles.openfreemap.org/'))) throw new Error('Historical close zoom requested modern borders')
   await page.getByRole('group', { name: /War year|Kriegsjahr/ }).getByRole('button', { name: '1918' }).click()
   await panel.locator('time[datetime="1918-05-01"]').waitFor()
   await areas()

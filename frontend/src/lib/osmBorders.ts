@@ -82,7 +82,13 @@ export class OsmBorders {
   private refresh() {
     if (!this.dirty) return
     const keys = [...this.store.wantedKeys()]
-    const ready = keys.length > 0 && keys.every((key) => this.store.has(key))
+    const complete = keys.length > 0 && keys.every((key) => this.store.has(key))
+    // A pathological coastal tile must not turn a bounded request count into unbounded GPU work.
+    const floats = complete ? keys.reduce((sum, key) => {
+      const tile = this.store.get(key)!
+      return sum + tile.borders.length + tile.disputed.length + tile.coast.length
+    }, 0) : 0
+    const ready = complete && floats <= 2_000_000
     if (ready && this.dirty) {
       for (const { kind, mesh } of this.meshes) {
         const arrays = keys.map((key) => this.store.get(key)![kind])
@@ -113,7 +119,7 @@ export class OsmBorders {
   private async load(key: string, signal: AbortSignal): Promise<BorderTile> {
     const [z, x, y] = key.split('/').map(Number)
     const url = this.template!.replace('{z}', String(z)).replace('{x}', String(x)).replace('{y}', String(y))
-    const response = await fetch(url, { signal })
+    const response = await fetch(url, { signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]) })
     if (!response.ok) throw Error('Border tile unavailable')
     const packed = await response.arrayBuffer()
     if (signal.aborted || packed.byteLength > 8_000_000) throw Error('Border tile cancelled or oversized')
