@@ -13,6 +13,14 @@ if (!chrome) throw new Error('Chrome/Edge is required for the history smoke test
 const browser = await chromium.launch({ executablePath: chrome, headless: true, args: ['--ignore-gpu-blocklist'] })
 try {
   const page = await browser.newPage({ viewport: { width: 1360, height: 850 } })
+  await page.route('https://api.worldbank.org/**/country/SYR/indicator/SP.POP.TOTL**', (route) => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify([{ lastupdated: '2026-10-19' }, [{ date: '2015', value: 18300000 }]]),
+  }))
+  await page.route('https://api.unhcr.org/population/v1/population/**', (route) => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ items: [{ year: 2015, coo_iso: 'SYR', refugees: 4873236 }] }),
+  }))
   const pageErrors = []
   page.on('pageerror', (error) => pageErrors.push(error.message))
   page.on('console', (message) => { if (message.type() === 'error') console.error('Browser console:', message.text()) })
@@ -85,6 +93,14 @@ try {
   await page.evaluate(() => { const url = new URL(window.location.href); url.searchParams.set('debug', '1'); window.history.replaceState(null, '', url.href) })
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.getByLabel(/Comparison year 1991|Vergleichsjahr 1991/).waitFor()
+  await setYear(2015)
+  await search.fill('Syria')
+  await page.getByRole('button', { name: /Syria/ }).click()
+  const context = page.getByLabel(/Historical data context|Historischer Datenkontext/)
+  await context.getByText('18,300,000').waitFor({ timeout: 20000 })
+  await context.getByText('4,873,236').waitFor()
+  await setYear(2014)
+  await context.getByText(/No observation|Keine Beobachtung/).first().waitFor()
   await page.getByRole('button', { name: /Today|Heute/i }).click()
   await page.waitForFunction(() => [...document.querySelectorAll('section strong')].some((node) => /Today|Heute/.test(node.textContent ?? '')))
   await page.getByRole('button', { name: /Conflicts|Konflikte/ }).click()
@@ -111,7 +127,7 @@ try {
     await page.getByLabel(/Comparison year 1991|Vergleichsjahr 1991/).waitFor()
   }
   if (pageErrors.length) throw new Error(pageErrors.join('; '))
-  console.log('Historical browser smoke: dated borders/flag, event comparison, deep link, Today: PASS')
+  console.log('Historical browser smoke: dated borders/flag, exact-year population/refugees, event comparison, deep link, Today: PASS')
 } finally {
   await browser.close()
 }

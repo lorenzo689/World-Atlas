@@ -15,7 +15,7 @@ const proxy = {
 
 // GitHub Pages cannot set response headers. A build-time meta policy protects the static demo;
 // the Caddy deployment additionally sends CSP as an HTTP header (including frame-ancestors).
-const staticCsp = "default-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.wikimedia.org https://*.wikipedia.org; font-src 'self' data:; connect-src 'self' https://api.worldbank.org https://en.wikipedia.org wss:; worker-src 'self' blob:; manifest-src 'self'"
+const staticCsp = "default-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.wikimedia.org https://*.wikipedia.org; font-src 'self' data:; connect-src 'self' https://api.worldbank.org https://api.unhcr.org https://en.wikipedia.org wss:; worker-src 'self' blob:; manifest-src 'self'"
 
 export default defineConfig({
   base: process.env.VITE_STATIC_DEMO === 'true' ? '/World-Atlas/' : '/',

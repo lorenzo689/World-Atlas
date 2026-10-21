@@ -8,7 +8,9 @@ The full-stack deployment adds accounts, multiplayer, a personal atlas and a dat
 [Engineering case study](docs/PORTFOLIO.md) · [Deployment guide](docs/DEPLOY.md) ·
 [Security audit](docs/SECURITY-AUDIT.md)
 
-The **historical timeline** covers 1886–2019 with dated boundaries and available flags. Two years
+The **historical timeline** covers 1886–2019 with dated boundaries and available flags. Selecting
+a country adds exact-year World Bank population and UNHCR refugee stock where a defensible
+statistical match exists. Two years
 can be compared side by side, including geometric border and area changes. Guided lessons and
 source-dated conflict learning points add context. See [historical data and licensing](docs/HISTORY.md).
 The [World War II learning view](docs/WW2.md) adds seven dated 1939–1945 source cards, selected
@@ -28,7 +30,8 @@ opens the 1989/1991 comparison. The complete application requires a separate
 The full-stack deployment includes:
 
 - **Geo quiz** – find countries on the globe, capitals, flags, population duels; daily challenge; leaderboards;
-  **duels** (share a link, everybody plays the same questions once)
+  **duels** (share a link, everybody plays the same questions once); adaptive review schedules missed
+  country and question types for spaced practice
 - **Multiplayer** – live rooms over WebSocket, quick-match, chat, live answer markers on the globe
 - **Data platform** – World Bank indicators ingested through Kafka into PostgreSQL; rankings, trends,
   distributions, correlations, a **1990–2025 time slider** on the globe
@@ -38,7 +41,8 @@ The full-stack deployment includes:
 - **Compare** two countries on the globe and across indicators
 - **German / English** UI incl. localised country names, **PWA** (installable, offline shell), keyboard and
   screen-reader support
-- **Admin console** – system overview, ingestion, users and roles
+- **Admin console** – system overview, ingestion, users and roles; versioned conflict briefs with
+  draft and publish actions, source-age checks and published revision history
 
 ## Tech stack
 
