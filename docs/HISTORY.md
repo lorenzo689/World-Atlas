@@ -56,7 +56,7 @@ the left camera. Four guided lessons explain selected transitions, focus the map
 each links to a primary source. A copied URL includes `year` and `compare`
 parameters, so the same view opens on the GitHub Pages demo without an account.
 
-The **Conflicts** control switches to Today and opens five source-dated regional learning points.
+The **Conflicts** control is available only in Today and opens five source-dated regional learning points.
 Selecting a point in the list or on the globe shows context, a question and the underlying UN
 report. This is an editorial selection, not a complete conflict registry. Markers are approximate
 regional anchors, not battle sites or safety advice. Ukraine also has a dated pink line derived
@@ -67,9 +67,13 @@ Each card shows its source date and flags a report older than 60 days for review
 classified as a fragile ceasefire, following the cited OCHA report.
 
 There is no historical boundary source in this project for 2020–2025. The slider therefore ends
-at 2019 and offers a separate Today button; it does not silently reuse today's borders for those
+at 2019. The scenario menu opens Today explicitly; it does not silently reuse today's borders for those
 years. CShapes is a scholarly reconstruction. Territorial changes below the source's threshold,
 wartime changes, dependent territories and disputed boundaries reflect its coding choices.
+
+The independent occupation/control layer adds exact-year, actor-attributed snapshots where data
+exists. Historical areas are schematic regional reconstructions; missing years remain unshaded.
+See [scenario boundaries and territorial control](SCENARIOS.md) for sources and coverage limits.
 
 ## Data pipeline
 

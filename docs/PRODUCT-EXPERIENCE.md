@@ -1,6 +1,7 @@
 # Product experience
 
-World Explorer opens with a public landing page, then offers a scenario catalogue before the globe.
+World Explorer opens with a public landing page. **Explore now** opens the present-day atlas;
+its scenario menu opens independently scoped historical views.
 Visitors can browse the static GitHub Pages demo without an account. The full deployment also offers
 registration, sign-in, guest sessions, email verification and password recovery.
 
@@ -11,9 +12,9 @@ registration, sign-in, guest sessions, email verification and password recovery.
 | `/` | Product landing page |
 | `/scenarios` | Scenario catalogue |
 | `/explore` | Current globe and map tools |
-| `/explore?ww1=1&year=1914` | First World War learning scenario |
-| `/explore?ww2=1&year=1939` | Second World War learning scenario |
-| `/explore?year=1886&compare=1914` | Historical boundary comparison |
+| `/explore?scenario=ww1&year=1914` | First World War learning scenario |
+| `/explore?scenario=ww2&year=1939` | Second World War learning scenario |
+| `/explore?scenario=borders&year=1886&compare=1914` | Historical boundary comparison |
 | `/login` | Sign in, create an account, continue as guest or request a reset link |
 | `/reset-password?token=…` | Set a replacement password from a single-use email link |
 
@@ -26,13 +27,14 @@ authentication API and Spring Boot auth module.
 ## Historical scenarios
 
 The First World War view uses CShapes 2.0 boundaries at 1 January of the selected year and a small,
-curated set of dated event locations. It intentionally does not draw front lines or claim territorial
-control. Event locations are approximate map anchors; each event links to an archival or museum
+curated set of dated event locations. A separate occupation layer adds schematic regional
+reconstructions with independent source dates and actor filters. Event locations are approximate map anchors; each event links to an archival or museum
 source. The historical boundary snapshot and event date are shown separately because they can be
 months apart.
 
 The Second World War scenario uses its existing dated boundary, event and schematic front layers.
 Its panel explains the source dates and distinguishes front outlines from annexation and occupation.
+See [scenario rules, control-layer coverage, limitations and licensing](SCENARIOS.md).
 
 ## First World War sources
 

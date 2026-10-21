@@ -35,6 +35,8 @@ import { useConflictBriefs } from '@/hooks/useConflictBriefs'
 import type { Pose } from '@/lib/geo'
 import type { GlobeMode } from '@/types'
 import { readScenarioLink, scenarioYear } from '@/lib/scenarios'
+import { useTerritories } from '@/hooks/useTerritories'
+import { TerritoryPanel } from '@/components/globe/TerritoryPanel'
 
 // Boundaries + pre-triangulated geometry start loading as soon as this module is evaluated.
 prefetchBoundaries()
@@ -56,7 +58,7 @@ export default function ExplorerPage() {
   const t = useT()
   const lang = useLang((s) => s.lang)
   const isDesktop = useIsDesktop()
-  const conflictBriefs = useConflictBriefs()
+  const conflictBriefs = useConflictBriefs(scenario.capabilities.conflicts)
   const { byCode, status: countriesStatus, reload } = useCountries()
   const boundaries = useBoundaries()
 
@@ -69,6 +71,7 @@ export default function ExplorerPage() {
   const select = useExplorer((s) => s.select)
   const setView = useExplorer((s) => s.setView)
   useEffect(() => {
+    if (scenario.id === 'today' && new URLSearchParams(window.location.search).get('restore') === '1') return
     select(null)
     setMode(scenario.id === 'today' ? 'satellite' : 'political')
   }, [scenario.id, select, setMode])
@@ -79,6 +82,26 @@ export default function ExplorerPage() {
   const [year, setYear] = useState<number | null>(null)
   const [historyYear, setHistoryYear] = useState<number | null>(entry.year)
   const [compareYear, setCompareYear] = useState<number | null>(entry.compare)
+  const [ww2Theater, setWw2Theater] = useState<Ww2Theater | 'all'>('all')
+  const [territoriesEnabled, setTerritoriesEnabled] = useState(scenario.id !== 'borders')
+  const [hiddenActors, setHiddenActors] = useState<Set<string>>(() => new Set())
+  const [territoryAttempt, setTerritoryAttempt] = useState(0)
+  const [selectedTerritoryId, setSelectedTerritoryId] = useState<string | null>(null)
+  useEffect(() => setSelectedTerritoryId(null), [historyYear, compareYear, ww2Theater])
+  const territories = useTerritories(scenario.id, historyYear, territoriesEnabled, territoryAttempt)
+  const comparisonTerritories = useTerritories(scenario.id, compareYear, territoriesEnabled && compareYear != null, territoryAttempt)
+  const territoryDisplay = useMemo(() => {
+    const snapshot = territories.snapshot
+    if (!snapshot || scenario.id !== 'ww2' || ww2Theater === 'all' || ww2Theater === 'europe') return snapshot
+    return { ...snapshot, features: [], coverage: { de: 'Für diesen Kriegsschauplatz liegen noch keine belegten Gebietsflächen vor. Der aktuelle Datensatz deckt ausgewählte europäische Räume ab.', en: 'No sourced territory areas are available for this theater. The current dataset covers selected European regions.' } }
+  }, [territories.snapshot, scenario.id, ww2Theater])
+  const visibleTerritories = useMemo(() => new Set(territoryDisplay?.features.filter((feature) => !hiddenActors.has(feature.actorId)).map((feature) => feature.id) ?? []), [territoryDisplay, hiddenActors])
+  const visibleComparisonTerritories = useMemo(() => new Set(comparisonTerritories.snapshot?.features.filter((feature) => !hiddenActors.has(feature.actorId)).map((feature) => feature.id) ?? []), [comparisonTerritories.snapshot, hiddenActors])
+  const toggleActor = useCallback((id: string) => setHiddenActors((previous) => {
+    const next = new Set(previous)
+    if (next.has(id)) next.delete(id); else next.add(id)
+    return next
+  }), [])
   const [historyData, setHistoryData] = useState<HistoryData | null>(null)
   const [historyError, setHistoryError] = useState(false)
   const [historyAttempt, setHistoryAttempt] = useState(0)
@@ -94,7 +117,6 @@ export default function ExplorerPage() {
   const ww2Open = scenario.id === 'ww2'
   const ww1Open = scenario.id === 'ww1'
   const [selectedWw1EventId, setSelectedWw1EventId] = useState<string | null>(null)
-  const [ww2Theater, setWw2Theater] = useState<Ww2Theater | 'all'>('all')
   const [ww2ShowFronts, setWw2ShowFronts] = useState(true)
   const [ww2ShowEvents, setWw2ShowEvents] = useState(true)
   const [selectedWw2EventId, setSelectedWw2EventId] = useState<string | null>(null)
@@ -289,7 +311,11 @@ export default function ExplorerPage() {
                 insets={insets}
                 focusNonce={focusNonce}
                 changeLines={removedLines}
-                changeAreas={lostAreas}
+                changeAreas={territoriesEnabled ? null : lostAreas}
+                territoryAreas={territoriesEnabled ? territories.areas : undefined}
+                visibleTerritories={visibleTerritories}
+                territoryFeatures={territoriesEnabled ? territoryDisplay?.features : undefined}
+                onTerritorySelect={setSelectedTerritoryId}
                 focusPose={storyFocus}
                 markers={ww1Open ? firstWarMarkers : ww2Open ? warMarkers : conflictMarkers}
                 conflictLines={conflictsOpen && historyYear == null ? CONFLICT_LINES.lines : null}
@@ -311,9 +337,12 @@ export default function ExplorerPage() {
             <GlobeView boundaries={comparison.boundaries} countries={byCode} mode="political" values={null} metric={metric}
               selected={historicalSelected} onSelect={onGlobeSelect} historicalEntities={comparison.entities}
               onReady={() => {}} onPoseChange={() => {}} initialPose={initialPose} externalPose={comparePose} insets={{ right: 0, bottom: 0 }}
-              focusNonce={focusNonce} changeLines={addedLines} changeAreas={gainedAreas} />
+              focusNonce={focusNonce} changeLines={addedLines} changeAreas={territoriesEnabled ? null : gainedAreas}
+              territoryAreas={territoriesEnabled ? comparisonTerritories.areas : undefined} visibleTerritories={visibleComparisonTerritories}
+              territoryFeatures={territoriesEnabled ? comparisonTerritories.snapshot?.features : undefined} onTerritorySelect={setSelectedTerritoryId} />
           </Suspense></WebGLBoundary>
           <span className="glass pointer-events-none absolute left-3 top-32 rounded-full px-3 py-1 font-serif text-lg">{compareYear}</span>
+
         </div>
       )}
       {comparison && history && <span className="glass pointer-events-none absolute left-4 top-32 z-10 rounded-full px-3 py-1 font-serif text-lg">{historyYear}</span>}
@@ -357,13 +386,16 @@ export default function ExplorerPage() {
           {scenario.capabilities.conflicts && <button type="button" className={`pointer-events-auto shrink-0 rounded-full border px-3 py-2 text-xs sm:text-sm ${conflictsOpen ? 'border-rose-300 bg-rose-300/20 text-rose-100' : 'border-input bg-background/75 text-foreground'}`} aria-pressed={conflictsOpen} onClick={() => { if (historyYear != null) changeHistoryYear(null); setConflictsOpen((open) => !open); setActiveConflict(null); select(null) }}>{lang === 'de' ? 'Konflikte' : 'Conflicts'}</button>}
           <UserMenu className="pointer-events-auto shrink-0" />
         </div>
+        <p className="text-xs text-primary lg:hidden">{scenario.title[lang]}{historyYear != null ? ` ? ${historyYear}` : ` ? ${new Date().getFullYear()}`}</p>
         <div className="pointer-events-auto md:hidden" style={{ display: import.meta.env.VITE_STATIC_DEMO === 'true' ? 'none' : undefined }}>
           <ModeSwitcher mode={mode} onChange={changeMode} allowedModes={scenario.modes} />
         </div>
       </header>
 
       {/* Data layer */}
-      <div className="absolute bottom-4 left-4 z-20 flex flex-col gap-3 sm:bottom-6 sm:left-6" style={{ bottom: showPanel && !isDesktop ? '38vh' : undefined }}>
+      <div className="scrollbar-thin absolute bottom-4 left-4 z-20 flex max-h-[calc(100dvh-150px)] flex-col gap-3 overflow-y-auto sm:bottom-6 sm:left-6" style={{ bottom: showPanel && !isDesktop ? '38vh' : undefined }}>
+        {territoriesEnabled && compareYear != null && <div className="space-y-2"><p className="text-xs text-primary">{lang === 'de' ? 'Vergleichsjahr' : 'Comparison year'}: {compareYear}</p><TerritoryPanel lang={lang} enabled={territoriesEnabled} onEnabledChange={setTerritoriesEnabled} status={comparisonTerritories.status} snapshot={comparisonTerritories.snapshot} selectedTerritoryId={selectedTerritoryId} onTerritorySelect={setSelectedTerritoryId} hiddenActors={hiddenActors} onActorToggle={toggleActor} onFocus={(lat, lng) => setStoryFocus({ lat, lng, altitude: 0.9 })} onRetry={() => setTerritoryAttempt((n) => n + 1)} /></div>}
+        <TerritoryPanel lang={lang} enabled={territoriesEnabled} onEnabledChange={setTerritoriesEnabled} status={territories.status} snapshot={territoryDisplay} hiddenActors={hiddenActors} onActorToggle={toggleActor} onFocus={(lat, lng) => setStoryFocus({ lat, lng, altitude: 0.9 })} onRetry={() => setTerritoryAttempt((n) => n + 1)} comparisonDate={comparisonTerritories.snapshot?.date} selectedTerritoryId={selectedTerritoryId} onTerritorySelect={setSelectedTerritoryId} />
         {mode === 'data' && historyYear == null && !(showPanel && !isDesktop) && (
           <DataPanel
             metricKey={metricKey}

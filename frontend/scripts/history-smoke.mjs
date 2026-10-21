@@ -26,6 +26,8 @@ try {
   page.on('console', (message) => { if (message.type() === 'error') console.error('Browser console:', message.text()) })
   const smokeUrl = new URL(process.env.SMOKE_URL ?? 'http://localhost:4173/')
   smokeUrl.searchParams.set('debug', '1')
+  smokeUrl.searchParams.set('scenario', 'borders')
+  smokeUrl.searchParams.set('year', '1990')
   await page.goto(smokeUrl.href, { waitUntil: 'domcontentloaded' })
   const slider = page.getByRole('slider', { name: /Year|Jahr/i }).first()
   await slider.waitFor()
@@ -101,8 +103,11 @@ try {
   await context.getByText('4,873,236').waitFor()
   await setYear(2014)
   await context.getByText(/No observation|Keine Beobachtung/).first().waitFor()
-  await page.getByRole('button', { name: /Today|Heute/i }).click()
-  await page.waitForFunction(() => [...document.querySelectorAll('section strong')].some((node) => /Today|Heute/.test(node.textContent ?? '')))
+  await page.getByRole('link', { name: /Scenarios|Szenarien/, exact: true }).click()
+  await page.getByRole('link', { name: /The world today|Die Welt heute/ }).click()
+  await page.waitForURL(/scenario=today/)
+  const todayUrl = new URL(page.url()); todayUrl.searchParams.set('debug', '1')
+  await page.goto(todayUrl.href, { waitUntil: 'domcontentloaded' })
   await page.getByRole('button', { name: /Conflicts|Konflikte/ }).click()
   const conflictPanel = page.getByRole('complementary', { name: /Understand conflicts|Konflikte verstehen/ })
   await conflictPanel.waitFor()
@@ -122,10 +127,6 @@ try {
   await conflictPanel.getByText(/Fragile ceasefire|Fragile Waffenruhe/).waitFor()
   await conflictPanel.getByRole('link', { name: /UN OCHA/ }).waitFor()
   await conflictPanel.getByRole('button', { name: /Close conflicts|Konflikte schließen/ }).click()
-  if (process.env.SMOKE_URL?.includes('/World-Atlas/')) {
-    await page.getByRole('button', { name: /Reset demo|Demo zurücksetzen/ }).click()
-    await page.getByLabel(/Comparison year 1991|Vergleichsjahr 1991/).waitFor()
-  }
   if (pageErrors.length) throw new Error(pageErrors.join('; '))
   console.log('Historical browser smoke: dated borders/flag, exact-year population/refugees, event comparison, deep link, Today: PASS')
 } finally {

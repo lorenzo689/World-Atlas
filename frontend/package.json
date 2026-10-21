@@ -14,6 +14,7 @@
     "data:history": "node scripts/build-history.mjs",
     "data:ww2": "node scripts/build-ww2-annexations.mjs",
     "data:conflicts": "node scripts/build-conflict-lines.mjs",
+    "data:territories": "node scripts/build-territories.mjs",
     "data:detail": "node scripts/build-map-detail.mjs",
     "data:detail:verify": "node scripts/verify-map-detail.mjs",
     "data:history:verify": "node scripts/verify-history.mjs",
@@ -21,6 +22,7 @@
     "smoke": "node scripts/smoke.mjs",
     "smoke:history": "node scripts/history-smoke.mjs",
     "smoke:ww2": "node scripts/ww2-smoke.mjs",
+    "smoke:scenarios": "node scripts/scenario-smoke.mjs",
     "smoke:detail": "node scripts/detail-smoke.mjs",
     "e2e": "node scripts/e2e.mjs",
     "icons": "node scripts/build-icons.mjs"

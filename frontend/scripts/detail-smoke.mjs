@@ -34,14 +34,8 @@ try {
   page.on('response', (response) => {
     if (/\/(earth-detail|map-detail)\//.test(response.url())) detailRequests.push({ url: response.url(), status: response.status() })
   })
-  await page.goto(`${url}/?debug=1`, { waitUntil: 'commit' })
+  await page.goto(`${url}/?scenario=today&debug=1`, { waitUntil: 'commit' })
   await page.waitForFunction(() => window.__perf?.ready && window.__globePose, null, { timeout: 120000 })
-  // GitHub Pages opens its historical demo by default; switch to today's map first.
-  const staticDemo = !!(await page.getByPlaceholder('Search historical countries…').count())
-  if (staticDemo) {
-    await page.getByRole('button', { name: 'Today' }).click()
-    await page.getByPlaceholder('Search countries, capitals…').waitFor()
-  }
   await page.waitForTimeout(3500)
   if (detailRequests.length) throw new Error(`Detail loaded at world zoom: ${detailRequests.length} requests`)
   const idlePose = await page.evaluate(() => window.__globePose())

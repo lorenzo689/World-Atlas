@@ -12,6 +12,7 @@ import { PERF_DEBUG, startPerfProbe } from '@/lib/perf'
 import { commonsFlagUrl, type HistoricalEntity } from '@/lib/history'
 import type { BorderSegment } from '@/lib/historyBoundaryDiff'
 import type { AreaMesh } from '@/lib/historyAreaDiff'
+import { pickTerritory, type TerritoryArea, type Territory } from '@/lib/territories'
 
 const BASE = import.meta.env.BASE_URL
 // Phones and low-memory devices get the 2k colour map (a quarter of the GPU memory).
@@ -60,6 +61,10 @@ interface GlobeViewProps {
   /** Geometric difference from the other historical snapshot. */
   changeLines?: { segments: BorderSegment[]; color: string } | null
   changeAreas?: { mesh: AreaMesh; color: string } | null
+  territoryAreas?: TerritoryArea[]
+  visibleTerritories?: ReadonlySet<string>
+  territoryFeatures?: Territory[]
+  onTerritorySelect?: (id: string) => void
   /** Historical entities have their own names and dated flags, separate from current country metadata. */
   historicalEntities?: Map<string, HistoricalEntity> | null
   /** Follow a camera controlled by another globe (historical side-by-side view). */
@@ -115,6 +120,10 @@ export function GlobeView({
   onMarkerSelect,
   changeLines = null,
   changeAreas = null,
+  territoryAreas,
+  visibleTerritories,
+  territoryFeatures,
+  onTerritorySelect,
   historicalEntities = null,
   externalPose = null,
   focusPose = null,
@@ -188,8 +197,8 @@ export function GlobeView({
   )
 
   // Latest values for the scene callbacks (the scene is created once and must not see stale props).
-  const live = useRef({ onSelect, onPoseChange, onReady, highlightStyle, tooltipData, selected, tooltips, markers, onMarkerSelect })
-  live.current = { onSelect, onPoseChange, onReady, highlightStyle, tooltipData, selected, tooltips, markers, onMarkerSelect }
+  const live = useRef({ onSelect, onPoseChange, onReady, highlightStyle, tooltipData, selected, tooltips, markers, onMarkerSelect, territoryFeatures, visibleTerritories, onTerritorySelect })
+  live.current = { onSelect, onPoseChange, onReady, highlightStyle, tooltipData, selected, tooltips, markers, onMarkerSelect, territoryFeatures, visibleTerritories, onTerritorySelect }
   const hoverRef = useRef<string | null>(null)
   const tipCode = useRef<string | null>(null)
   const initial = useRef({ initialPose, reduced, mode, features, boundaries })
@@ -219,11 +228,14 @@ export function GlobeView({
         onClick: (code) => live.current.onSelect(code),
         onGlobeClick: (lat, lng) => {
           const { markers: dots, onMarkerSelect: choose } = live.current
-          if (!dots?.length || !choose) return false
-          const closest = dots.map((dot, index) => ({ index, distance: Math.hypot(dot.lat - lat, (dot.lng - lng) * Math.cos(lat * Math.PI / 180)) })).sort((a, b) => a.distance - b.distance)[0]
-          if (!closest || closest.distance > 5) return false
-          choose(closest.index)
-          return true
+          if (dots?.length && choose) {
+            const closest = dots.map((dot, index) => ({ index, distance: Math.hypot(dot.lat - lat, (dot.lng - lng) * Math.cos(lat * Math.PI / 180)) })).sort((a, b) => a.distance - b.distance)[0]
+            if (closest && closest.distance <= 5) { choose(closest.index); return true }
+          }
+          const { territoryFeatures: areas, visibleTerritories: visible, onTerritorySelect: selectArea } = live.current
+          const territory = areas && visible && selectArea ? pickTerritory(areas, visible, lng, lat) : null
+          if (territory) { selectArea?.(territory.id); return true }
+          return false
         },
         onHover: (code, x, y) => {
           hoverRef.current = code
@@ -290,6 +302,12 @@ export function GlobeView({
     scene.layers.setWw2Fronts(ww2Fronts)
     scene.requestRender()
   }, [scene, boundaries, ww2Fronts])
+
+  useEffect(() => {
+    if (!scene) return
+    scene.layers.setTerritories(territoryAreas ?? [], visibleTerritories ?? new Set())
+    scene.requestRender()
+  }, [scene, boundaries, territoryAreas, visibleTerritories])
 
   // ---- base map colours / mode --------------------------------------------------------------
   useEffect(() => {

@@ -19,7 +19,7 @@ export default function SharedViewPage() {
       .view(slug)
       .then((v) => {
         openView(v)
-        navigate('/', { replace: true })
+        navigate('/explore?scenario=today&restore=1', { replace: true })
       })
       .catch(setError)
   }, [slug, navigate, openView])

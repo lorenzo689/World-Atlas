@@ -462,6 +462,8 @@ export class GlobeScene {
       ...this.imageDetail.getDiagnostics(),
       conflictLineSegments: this.layers.conflictLines.visible ? this.layers.conflictLines.geometry.getAttribute('position').count / 2 : 0,
       ww2FrontSegments: this.layers.ww2Fronts.visible ? this.layers.ww2Fronts.geometry.getAttribute('position').count / 2 : 0,
+      territoryAreas: this.layers.territories.children.filter((child) => child.visible).length,
+      territoryTriangles: this.layers.territories.children.reduce((sum, child) => sum + (child.visible ? ((child as Mesh).geometry.index?.count ?? 0) / 3 : 0), 0),
       baseBordersVisible: this.layers.borders.visible,
       autoRotate: this.controls.autoRotate,
     }

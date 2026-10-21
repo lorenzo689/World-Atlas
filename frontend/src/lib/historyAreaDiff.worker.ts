@@ -1,4 +1,5 @@
 import { differenceBetweenAreas, type PolygonPair } from './historyAreaMath'
+import { globePolygon } from './globePolygon'
 
 // The geometry package checks window.THREE at module evaluation, although its math also runs in a
 // worker. Give it an empty browser-global shim before importing; no DOM or WebGL is used here.
@@ -9,7 +10,7 @@ function mesh(polygons: number[][][][], ConicPolygonGeometry: (typeof import('th
   const positions: number[] = []
   const indices: number[] = []
   for (const polygon of polygons) {
-    const geometry = new ConicPolygonGeometry(polygon, 100.008, 100.008, false, true, false, 6)
+    const geometry = new ConicPolygonGeometry(globePolygon(polygon), 100.6, 100.6, false, true, false, 2)
     const points = geometry.getAttribute('position').array
     const base = positions.length / 3
     for (let i = 0; i < points.length; i++) positions.push(points[i])

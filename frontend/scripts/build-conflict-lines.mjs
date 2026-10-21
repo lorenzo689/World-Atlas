@@ -4,7 +4,8 @@ import { createHash } from 'node:crypto'
 import { createReadStream, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { Unzip, UnzipInflate } from 'fflate'
 import { topology } from 'topojson-server'
-import { mesh } from 'topojson-client'
+import { mesh, merge } from 'topojson-client'
+import { presimplify, simplify } from 'topojson-simplify'
 
 const root = 'scripts/source/conflicts/'
 const year = new Date().getUTCFullYear()
@@ -101,3 +102,18 @@ const result = {
 }
 writeFileSync(output, JSON.stringify(result))
 console.log(`Wrote ${output}: ${lines.length} paths, ${(JSON.stringify(result).length / 1024).toFixed(0)} KiB`)
+
+// Keep controller identity in a separate area product; linework alone cannot encode either side.
+const simplified = simplify(presimplify(topo), 0.000002)
+const actors = {
+  RU: { actor: { de: 'Russische Streitkräfte', en: 'Russian forces' }, color: '#fb7185', kind: 'occupation' },
+  UA: { actor: { de: 'Ukrainische Streitkräfte', en: 'Ukrainian forces' }, color: '#38bdf8', kind: 'control' },
+  CONTESTED: { actor: { de: 'Kontrolle umstritten', en: 'Contested control' }, color: '#fbbf24', kind: 'contested' },
+}
+const features = Object.entries(actors).flatMap(([actorId, actor]) => {
+  const geometries = simplified.objects.cells.geometries.filter((cell) => cell.properties.status === actorId)
+  if (!geometries.length) return []
+  return [{ id: `ua-${actorId}`, actorId, ...actor, title: { de: 'Ukraine · geschätzte Siedlungskontrolle', en: 'Ukraine · estimated settlement control' }, precision: 'settlement-estimate', source: { title: 'VIINA 2.0 · status_boost / GeoNames', url: result.sourceUrl, date, license: result.license, licenseUrl: result.licenseUrl }, geometry: merge(simplified, geometries) }]
+})
+writeFileSync('public/data/territories-today.json', JSON.stringify({ schemaVersion: 1, snapshots: [{ id: `ukraine-${date}`, scenario: 'today', year: Number(date.slice(0, 4)), date, coverage: { de: 'Ukraine: Siedlungszellen mit dokumentierter Kontrolle. Keine weltweite Vollabdeckung; unbekannte Zellen bleiben frei.', en: 'Ukraine: settlement cells with documented control. Not worldwide coverage; unknown cells remain unshaded.' }, features }], sourceSha256: result.sourceSha256 }))
+console.log('Wrote territories-today.json with controller polygons and independent source date')

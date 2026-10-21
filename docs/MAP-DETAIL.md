@@ -16,7 +16,7 @@ The image source is NASA Earth Observatory's [January 2004 Blue Marble Next Gene
 
 The historic 1886–2019 view intentionally disables modern high-resolution boundaries, administrative divisions, river/lake overlays and labels. Its borders come only from CShapes 2.0, rebuilt with less simplification and denser geometry. On desktop in satellite mode it now loads the same close-zoom NASA image tiles as Today. The imagery still depicts January 2004, **not** historical land cover; the UI labels this distinction. CShapes remains the limiting source for the precision of dated borders.
 
-GitHub Pages opens the static historical demo in 1989 and uses political mode. The browser smoke switches to **Today** to verify the modern vector detail there; the satellite image path is checked by the regular CI browser test.
+GitHub Pages opens the product landing page. **Explore now** opens Today; historical scenarios start in political mode. The browser smoke opens Today explicitly to verify modern vector detail; the satellite image path is checked by the regular CI browser test.
 
 ## Rebuild and verify
 

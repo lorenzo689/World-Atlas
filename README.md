@@ -8,10 +8,15 @@ The full-stack deployment adds accounts, multiplayer, a personal atlas and a dat
 [Engineering case study](docs/PORTFOLIO.md) · [Deployment guide](docs/DEPLOY.md) ·
 [Security audit](docs/SECURITY-AUDIT.md)
 
-The product starts with a landing page and scenario catalogue, then opens the live atlas, the First
-or Second World War learning view, or a historical boundary comparison. Registration, email
+The product starts with a landing page. **Explore now** opens the present-day atlas; its scenario
+menu opens isolated First or Second World War learning views and historical boundary comparison. Registration, email
 verification and password recovery are available in the full deployment. See the
 [product experience and scenario sources](docs/PRODUCT-EXPERIENCE.md).
+
+Each scenario enforces its own years, tools and data layers. A separate [occupation and control
+layer](docs/SCENARIOS.md) adds actor filters, dated source attribution and selectable colored areas.
+Current coverage includes VIINA estimates for Ukraine; historical coverage includes 12 regional,
+schematic occupation snapshots. Unavailable years and regions are explicitly identified.
 
 The **historical timeline** covers 1886–2019 with dated boundaries and available flags. Selecting
 a country adds exact-year World Bank population and UNHCR refugee stock where a defensible
@@ -27,7 +32,7 @@ place labels and NASA image tiles](docs/MAP-DETAIL.md) for the visible area as t
 Historical views retain their own dated CShapes boundaries.
 
 The GitHub Pages demo is a static build without login or backend services. On a fresh visit it
-opens the 1989/1991 comparison. The complete application requires a separate
+opens the product landing page. The complete application requires a separate
 [Spring Boot deployment](docs/DEPLOY.md).
 
 ## Features

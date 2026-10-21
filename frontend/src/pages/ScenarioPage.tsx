@@ -33,6 +33,13 @@ const scenarios = [
   },
 ]
 
+const tools: Record<string, { de: string; en: string }> = {
+  today: { de: 'Gegenwart · Länderprofile · Datenebenen · aktuelle Konflikte', en: 'Present day · country profiles · data layers · current conflicts' },
+  ww1: { de: '1914–1918 · Jahreskapitel · Ereignisse · Besatzungsräume', en: '1914–1918 · annual chapters · events · occupation areas' },
+  ww2: { de: '1939–1945 · Kriegsschauplätze · Frontabschnitte · Besatzungsräume', en: '1939–1945 · theaters · front sections · occupation areas' },
+  borders: { de: '1886–2019 · Zeitleiste · Jahresvergleich · Grenzänderungen', en: '1886–2019 · timeline · year comparison · border changes' },
+}
+
 export default function ScenarioPage() {
   const lang = useLang((state) => state.lang)
   const user = useAuth((state) => state.user)
@@ -49,7 +56,7 @@ export default function ScenarioPage() {
           <div className="absolute inset-0 -z-10 opacity-20" style={{ backgroundImage: `url('${import.meta.env.BASE_URL}textures/earth-blue-marble-2k.webp')`, backgroundPosition: `${38 + index * 14}% center`, backgroundSize: 'cover', mixBlendMode: 'screen' }} />
           <div className="absolute -right-20 -top-20 -z-10 size-64 rounded-full border border-white/10"/><div className="absolute -right-12 -top-12 -z-10 size-48 rounded-full border border-white/[.08]"/>
           <div className="flex items-center justify-between"><span className="rounded-full border border-white/15 bg-black/20 px-3 py-1 text-[10px] uppercase tracking-[.16em] text-white/75">{scenario.label[lang]}</span><Globe2 className="size-4 text-white/50"/></div>
-          <div className="mt-auto"><p className="tabular text-sm tracking-[.12em] text-white/65">{scenario.era}</p><h2 className="mt-2 font-serif text-3xl leading-tight">{scenario.title[lang]}</h2><p className="mt-3 min-h-[72px] text-sm leading-6 text-white/70">{scenario.text[lang]}</p><span className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-white">{de ? 'Szenario öffnen' : 'Open scenario'}<ArrowRight className="size-4 transition-transform group-hover:translate-x-1"/></span></div>
+          <div className="mt-auto"><p className="tabular text-sm tracking-[.12em] text-white/65">{scenario.era}</p><h2 className="mt-2 font-serif text-3xl leading-tight">{scenario.title[lang]}</h2><p className="mt-3 min-h-[72px] text-sm leading-6 text-white/70">{scenario.text[lang]}</p><p className="mt-4 border-t border-white/10 pt-3 text-[11px] leading-5 text-white/65">{tools[scenario.id][lang]}</p><span className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-white">{de ? 'Szenario öffnen' : 'Open scenario'}<ArrowRight className="size-4 transition-transform group-hover:translate-x-1"/></span></div>
         </Link>)}
       </div>
       <div className="mt-8 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-white/[.08] bg-white/[.025] px-5 py-4">

@@ -15,6 +15,7 @@ import {
 import ConicPolygonGeometry from 'three-conic-polygon-geometry'
 import { geoContains } from 'd3-geo'
 import type { CountryFeature } from '@/lib/geo'
+import type { TerritoryArea } from './territories'
 
 // The globe sphere has radius 100 and (lat, lng) map to xyz with this convention (same as three-globe).
 export const GLOBE_RADIUS = 100
@@ -165,6 +166,8 @@ export class BaseLayers {
   readonly conflictLines: LineSegments
   readonly ww2Fronts: LineSegments
   readonly changeAreas: Mesh
+  readonly territories = new Group()
+  private territoryMeshes = new Map<string, { area: TerritoryArea; mesh: Mesh }>()
   readonly hover: HighlightSlot
   readonly selected: HighlightSlot
   /** a second, persistent highlight (country comparison) */
@@ -323,7 +326,7 @@ export class BaseLayers {
     this.markers.renderOrder = 4
     this.markers.visible = false
 
-    this.group.add(this.caps, this.borders, this.secondary.group, this.selected.group, this.hover.group, this.markers, this.changeAreas, this.changeLines, this.conflictLines, this.ww2Fronts)
+    this.group.add(this.caps, this.borders, this.secondary.group, this.selected.group, this.hover.group, this.markers, this.changeAreas, this.changeLines, this.conflictLines, this.ww2Fronts, this.territories)
   }
 
   /** Outline of one country (all rings), built on demand and cached. */
@@ -380,6 +383,33 @@ export class BaseLayers {
 
   setWw2Fronts(lines: number[][][] | null) {
     this.setGeographicLines(this.ww2Fronts, lines)
+  }
+
+  /** Actor toggles reuse GPU buffers; changing the dated snapshot releases old resources. */
+  setTerritories(areas: TerritoryArea[], visibleIds: ReadonlySet<string>) {
+    const active = new Map(areas.map((area) => [area.id, area]))
+    for (const [id, entry] of this.territoryMeshes) {
+      if (active.get(id) === entry.area) continue
+      this.territories.remove(entry.mesh)
+      entry.mesh.geometry.dispose()
+      ;(entry.mesh.material as MeshBasicMaterial).dispose()
+      this.territoryMeshes.delete(id)
+    }
+    for (const area of areas) {
+      let entry = this.territoryMeshes.get(area.id)
+      if (!entry) {
+        const geometry = new BufferGeometry()
+        geometry.setAttribute('position', new BufferAttribute(area.mesh.positions, 3))
+        geometry.setIndex(new BufferAttribute(area.mesh.indices, 1))
+        const mesh = new Mesh(geometry, new MeshBasicMaterial({ color: area.color, transparent: true, opacity: 0.58, depthWrite: false }))
+        mesh.renderOrder = 3
+        mesh.raycast = () => {}
+        entry = { area, mesh }
+        this.territoryMeshes.set(area.id, entry)
+        this.territories.add(mesh)
+      }
+      entry.mesh.visible = visibleIds.has(area.id)
+    }
   }
 
   private setGeographicLines(target: LineSegments, lines: number[][][] | null) {
@@ -505,6 +535,7 @@ export class BaseLayers {
     ;(this.ww2Fronts.material as LineBasicMaterial).dispose()
     this.changeAreas.geometry.dispose()
     ;(this.changeAreas.material as MeshBasicMaterial).dispose()
+    this.setTerritories([], new Set())
     for (const g of this.outlines.values()) g.dispose()
     this.outlines.clear()
   }

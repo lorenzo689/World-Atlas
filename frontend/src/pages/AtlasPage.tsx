@@ -560,7 +560,7 @@ function ViewsTab() {
                 {v.metric && ` · ${v.metric}`} · {v.isPublic ? t('atlas.public') : t('atlas.private')}
               </p>
             </div>
-            <Button size="sm" variant="outline" onClick={() => { openView(v); navigate('/') }}>
+            <Button size="sm" variant="outline" onClick={() => { openView(v); navigate('/explore?scenario=today&restore=1') }}>
               <Globe2 /> {t('atlas.open')}
             </Button>
             {v.isPublic && (
