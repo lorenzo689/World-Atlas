@@ -86,8 +86,10 @@ const stamp = Date.now()
 const email = `e2e-${stamp}@example.com`
 const password = 'correct-horse-battery'
 
-await check('home page shows the globe', async () => {
+await check('landing page opens the present-day atlas', async () => {
   await page.goto(url, { waitUntil: 'domcontentloaded' })
+  await page.getByRole('link', { name: 'Explore now', exact: true }).click()
+  await page.waitForURL(/scenario=today/)
   await page.waitForSelector('canvas', { timeout: 60_000 })
 })
 
@@ -180,7 +182,7 @@ await check('achievements page lists badges and the streak', async () => {
 })
 
 await check('time slider changes the data layer', async () => {
-  await page.goto(url, { waitUntil: 'domcontentloaded' })
+  await page.goto(`${url}/explore?scenario=today`, { waitUntil: 'domcontentloaded' })
   await page.getByRole('radio', { name: 'Data' }).click()
   const slider = page.locator('#year-slider')
   await slider.waitFor({ timeout: 20_000 })
