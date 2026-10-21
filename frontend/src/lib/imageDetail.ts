@@ -88,11 +88,11 @@ export class ImageDetail {
     texture.anisotropy = 4
     const [x, y] = key.split('-').map(Number)
     const geometry = new SphereGeometry(
-      GLOBE_RADIUS * 1.00025, 24, 24,
+      GLOBE_RADIUS, 64, 64,
       x * 2 * Math.PI / COLS, 2 * Math.PI / COLS,
       y * Math.PI / ROWS, Math.PI / ROWS,
     )
-    const material = new MeshPhongMaterial({ map: texture, specular: '#35527a', shininess: 14 })
+    const material = new MeshPhongMaterial({ map: texture, specular: '#35527a', shininess: 14, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 })
     const mesh = new Mesh(geometry, material)
     mesh.raycast = () => {}
     return { mesh, texture }

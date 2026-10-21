@@ -88,6 +88,9 @@ jobs:
       - name: Close-zoom map detail
         run: CHROME_PATH=$(which google-chrome) npm run smoke:detail
         working-directory: frontend
+      - name: Detailed OSM border streaming (pinned fixture, production CSP)
+        run: CHROME_PATH=$(which google-chrome) npm run smoke:detail -- --osm-fixture
+        working-directory: frontend
       - uses: actions/upload-artifact@v4
         if: always()
         with:

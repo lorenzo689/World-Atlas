@@ -1,6 +1,6 @@
 // Browser check for lazy close-zoom imagery, vector detail, labels and render budget.
 // npm run smoke:detail -- --url http://localhost:5173
-import { existsSync, mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { spawn } from 'node:child_process'
 import { chromium } from 'playwright-core'
 
@@ -28,6 +28,16 @@ if (!(await reachable())) {
 const browser = await chromium.launch({ executablePath: chrome, headless: true, args: ['--ignore-gpu-blocklist', '--enable-gpu-rasterization'] })
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, locale: 'en-US' })
+  // Default CI run exercises the offline fallback. The fixture run exercises CSP, Worker decode,
+  // atomic layer replacement and bounded draw calls without depending on an external CDN.
+  if (args.includes('--osm-fixture')) {
+    const fixture = readFileSync('src/lib/__tests__/fixtures/osm-6-34-21.pbf')
+    await page.route('https://tiles.openfreemap.org/**', (route) => route.fulfill(route.request().url().endsWith('/planet')
+      ? { json: { tiles: ['https://tiles.openfreemap.org/planet/test_fixture/{z}/{x}/{y}.pbf'] } }
+      : { body: fixture, contentType: 'application/x-protobuf' }))
+  } else if (!args.includes('--live-osm')) {
+    await page.route('https://tiles.openfreemap.org/**', (route) => route.abort())
+  }
   const errors = []
   const detailRequests = []
   page.on('pageerror', (error) => errors.push(error.message))
@@ -67,6 +77,9 @@ try {
     throw new Error(`Detailed borders did not become ready: ${JSON.stringify(state)}, responses=${JSON.stringify(detailRequests.slice(-12))}, errors=${JSON.stringify(errors)}`)
   }
   const altitude = await page.evaluate(() => window.__globePose().altitude)
+  if (args.includes('--osm-fixture') || args.includes('--live-osm')) {
+    await page.waitForFunction(() => window.__globeDetail?.().osmReady, null, { timeout: 60000 })
+  }
   const detail = await page.evaluate(() => window.__globeDetail())
   const snapshot = await page.evaluate(() => window.__perf.snapshot())
   const labels = await page.locator('.globe-place-label').count()
@@ -113,7 +126,9 @@ try {
     await page.waitForTimeout(500)
     await page.screenshot({ path: `${dir}/detail.png` })
   }
-  console.log(`Detail smoke PASS: idle globe, altitude ${altitude.toFixed(2)}, ${borders} border tiles, ${images} image tiles, ${labels} labels, ${snapshot.drawCalls}/${closeSnapshot.drawCalls} draw calls, close-zoom roads`)
+  const finalDetail = await page.evaluate(() => window.__globeDetail())
+  if (finalDetail.osmTiles > 40) throw new Error(`OSM tile budget exceeded: ${finalDetail.osmTiles}`)
+  console.log(`Detail smoke PASS: idle globe, altitude ${altitude.toFixed(2)}, ${borders} border tiles, ${images} image tiles, ${labels} labels, anchor error ${anchorError.toFixed(3)}px, ${snapshot.drawCalls}/${closeSnapshot.drawCalls} draw calls, OSM ${JSON.stringify({ ready: finalDetail.osmReady, tiles: finalDetail.osmTiles })}`)
 } finally {
   await browser.close()
   if (server) {

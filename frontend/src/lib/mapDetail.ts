@@ -3,6 +3,7 @@ import type { Pose } from '@/lib/geo'
 import { GLOBE_RADIUS, polarToXYZ } from '@/lib/globeLayers'
 import { TileStore } from '@/lib/tileStore'
 import { projectPlace } from './placeProjection'
+import { OsmBorders } from './osmBorders'
 
 type Kind = 'borders' | 'admin1' | 'rivers' | 'lakes' | 'roads'
 type Manifest = { cols: number; rows: number; step: number; kinds: Record<Kind, Record<string, number>> }
@@ -19,6 +20,8 @@ const angle = (a: Pose, lat: number, lng: number) => Math.acos(Math.max(-1, Math
 /** Extra current-day map data. Nothing is fetched until the camera enters a close zoom. */
 export class MapDetail {
   private group = new Group()
+  private osm: OsmBorders
+  private surfaceRadius = GLOBE_RADIUS
   private manifest: Manifest | null = null
   private manifestRequest: Promise<void> | null = null
   private places: Place[] = []
@@ -46,6 +49,7 @@ export class MapDetail {
   constructor(scene: Scene, private camera: PerspectiveCamera, container: HTMLElement, private requestRender: () => void, private lowEnd = false) {
     this.group.renderOrder = 1
     scene.add(this.group)
+    this.osm = new OsmBorders(scene, camera, container, requestRender, lowEnd)
     this.overlay = document.createElement('div')
     this.overlay.className = 'globe-place-labels'
     container.appendChild(this.overlay)
@@ -66,6 +70,10 @@ export class MapDetail {
   }
 
   setSatellite(satellite: boolean) {
+    this.surfaceRadius = satellite ? GLOBE_RADIUS : 100.3
+    this.group.scale.setScalar((satellite ? 100.0005 : 100.305) / 100.38)
+    for (const { anchor } of this.labels.values()) anchor.setLength(this.surfaceRadius)
+    this.osm.setSatellite(satellite)
     this.materials.borders.color.set(satellite ? '#d6e7ff' : '#172136')
     this.materials.borders.opacity = satellite ? 0.72 : 0.82
     this.materials.admin1.color.set(satellite ? '#e1e9f2' : '#24324b')
@@ -79,9 +87,9 @@ export class MapDetail {
     // Switch the two border levels together, including while tiles are streaming in.
     for (const key of borderTiles) {
       const tile = this.tiles.get(key)
-      if (tile) tile.visible = ready
+      if (tile) tile.visible = ready && !this.osm.coversBorders()
     }
-    return ready
+    return ready || this.osm.coversBorders()
   }
 
   getDiagnostics() {
@@ -96,6 +104,7 @@ export class MapDetail {
       labelsProjected++
     }
     return {
+      ...this.osm.getDiagnostics(),
       labelMaxErrorPx, labelsProjected,
       bordersReady: this.coversBorders(),
       borderTiles: [...this.tiles.wantedKeys()].filter((key) => key.startsWith('borders/')).length,
@@ -106,6 +115,7 @@ export class MapDetail {
   update(pose: Pose, force = false) {
     this.lastPose = pose
     if (this.disposed || !this.enabled) return
+    this.osm.update(pose, this.enabled)
     const now = performance.now()
     if (!force && now - this.lastUpdate < 120) return
     this.lastUpdate = now
@@ -216,7 +226,7 @@ export class MapDetail {
     for (const { place } of nearby) {
       if (selected.size >= (pose.altitude < 0.16 ? 36 : 24)) break
       const xyz: number[] = []
-      polarToXYZ(place.lat, place.lng, GLOBE_RADIUS, xyz)
+      polarToXYZ(place.lat, place.lng, this.surfaceRadius, xyz)
       const anchor = this.labels.get(place)?.anchor ?? new Vector3(...xyz as [number, number, number])
       const screen = projectPlace(anchor, this.camera, width, height, v)
       if (!screen) continue
@@ -251,6 +261,7 @@ export class MapDetail {
   }
 
   private hide() {
+    this.osm.hide()
     if (!this.active) return
     this.active = false
     this.fullBorderCoverage = false
@@ -263,6 +274,7 @@ export class MapDetail {
 
   dispose() {
     this.disposed = true
+    this.osm.dispose()
     this.worker?.terminate()
     for (const done of this.pending.values()) done(new Float32Array())
     this.pending.clear()

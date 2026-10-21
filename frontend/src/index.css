@@ -110,6 +110,12 @@
 }
 
 /* globe.gl hover tooltip */
+.globe-border-credit {
+  position: absolute; right: 16px; bottom: 4px; z-index: 5;
+  max-width: calc(100% - 32px); padding: 2px 6px;
+  font-size: 10px; color: #c8d5e8; background: #080f1dd9; border-radius: 4px;
+}
+.globe-border-credit a { color: inherit; text-decoration: underline; }
 .globe-place-labels {
   position: absolute;
   inset: 0;
