@@ -209,7 +209,7 @@ export default function ExplorerPage() {
     else url.searchParams.delete('ww2')
     if (ww1Open && ww1Moment(historyYear)) url.searchParams.set('ww1', '1')
     else url.searchParams.delete('ww1')
-    window.history.replaceState(null, '', url)
+    window.history.replaceState(window.history.state, '', url)
   }, [historyYear, compareYear, ww2Open, ww1Open, scenario.id])
   const historicalEntity = historicalSelected ? history?.entities.get(historicalSelected) : undefined
   const neighbours = useMemo(

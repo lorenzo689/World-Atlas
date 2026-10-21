@@ -75,7 +75,7 @@ try {
   const failures = detailRequests.filter((request) => request.status !== 200)
   if (altitude >= 0.38) throw new Error(`Zoom did not reach detail level: ${altitude}`)
   if (detail.baseBordersVisible || detail.autoRotate) throw new Error(`Incorrect border/rotation state: ${JSON.stringify(detail)}`)
-  if (!borders || (!staticDemo && !images) || !labels) throw new Error(`Missing detail: borders=${borders}, imagery=${images}, labels=${labels}`)
+  if (!borders || !images || !labels) throw new Error(`Missing detail: borders=${borders}, imagery=${images}, labels=${labels}`)
   if (failures.length) throw new Error(`Detail HTTP failures: ${JSON.stringify(failures.slice(0, 3))}`)
   if (snapshot.drawCalls > 65) throw new Error(`Too many draw calls: ${snapshot.drawCalls}`)
   if (errors.length) throw new Error(`Browser errors: ${errors.join('; ')}`)

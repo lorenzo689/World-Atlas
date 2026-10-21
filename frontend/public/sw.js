@@ -48,6 +48,24 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
+  // Dated control datasets are updated at their stable URLs. Prefer fresh provenance/geometry,
+  // retaining the last dated response for offline use instead of freezing a first-visit snapshot.
+  if (/\/territories-(?:today|history)\.json$/.test(url.pathname)) {
+    event.respondWith(caches.open(STATIC).then(async (cache) => {
+      try {
+        const res = await fetch(req, { signal: AbortSignal.timeout(5000) })
+        if (res.ok) {
+          event.waitUntil(cache.put(req, res.clone()).catch(() => {}))
+          return res
+        }
+        return (await cache.match(req)) ?? res
+      } catch {
+        return (await cache.match(req)) ?? Response.error()
+      }
+    }))
+    return
+  }
+
   if (CACHE_FIRST.some((re) => re.test(url.pathname))) {
     event.respondWith(
       caches.open(STATIC).then(async (cache) => {
