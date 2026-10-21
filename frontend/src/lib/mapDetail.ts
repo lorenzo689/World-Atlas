@@ -2,6 +2,7 @@ import { BufferGeometry, Float32BufferAttribute, Group, LineBasicMaterial, LineS
 import type { Pose } from '@/lib/geo'
 import { GLOBE_RADIUS, polarToXYZ } from '@/lib/globeLayers'
 import { TileStore } from '@/lib/tileStore'
+import { projectPlace } from './placeProjection'
 
 type Kind = 'borders' | 'admin1' | 'rivers' | 'lakes' | 'roads'
 type Manifest = { cols: number; rows: number; step: number; kinds: Record<Kind, Record<string, number>> }
@@ -21,7 +22,8 @@ export class MapDetail {
   private manifest: Manifest | null = null
   private manifestRequest: Promise<void> | null = null
   private places: Place[] = []
-  private labels: HTMLDivElement[] = []
+  private labels = new Map<Place, { element: HTMLDivElement; anchor: Vector3 }>()
+  private projection = new Vector3()
   private overlay: HTMLDivElement
   private tiles: TileStore<LineSegments>
   private worker: Worker | null = null
@@ -83,7 +85,18 @@ export class MapDetail {
   }
 
   getDiagnostics() {
+    let labelMaxErrorPx = 0; let labelsProjected = 0
+    const rect = this.overlay.getBoundingClientRect()
+    for (const { element, anchor } of this.labels.values()) {
+      if (element.style.visibility !== 'visible') continue
+      const expected = projectPlace(anchor, this.camera, rect.width, rect.height, this.projection)
+      if (!expected) continue
+      const actual = element.getBoundingClientRect()
+      labelMaxErrorPx = Math.max(labelMaxErrorPx, Math.hypot(actual.left + actual.width / 2 - rect.left - expected.x, actual.top + actual.height / 2 - rect.top - expected.y))
+      labelsProjected++
+    }
     return {
+      labelMaxErrorPx, labelsProjected,
       bordersReady: this.coversBorders(),
       borderTiles: [...this.tiles.wantedKeys()].filter((key) => key.startsWith('borders/')).length,
       roadsVisible: [...this.tiles.wantedKeys()].filter((key) => key.startsWith('roads/') && this.tiles.has(key)).length,
@@ -148,6 +161,7 @@ export class MapDetail {
       this.manifest = manifest
       this.places = places
       this.update(this.lastPose, true)
+      this.requestRender()
     } catch {
       // The 1:50m base map remains usable when an optional detail tile is unavailable.
     }
@@ -189,8 +203,8 @@ export class MapDetail {
   }
 
   private updateLabels(pose: Pose) {
-    if (pose.altitude > 0.38 || !this.places.length) { this.overlay.replaceChildren(); this.labels = []; return }
-    const selected: { place: Place; x: number; y: number }[] = []
+    if (pose.altitude > 0.38 || !this.places.length) { this.overlay.replaceChildren(); this.labels.clear(); return }
+    const selected = new Set<Place>()
     const occupied: { x: number; y: number }[] = []
     const width = this.overlay.clientWidth
     const height = this.overlay.clientHeight
@@ -198,31 +212,42 @@ export class MapDetail {
     const nearby = this.places
       .map((place) => ({ place, distance: angle(pose, place.lat, place.lng) }))
       .filter(({ distance }) => distance < Math.min(52, 8 + pose.altitude * 100))
-      .sort((a, b) => a.distance - b.distance || Number(b.place.capital) - Number(a.place.capital))
+      .sort((a, b) => Number(b.place.capital) - Number(a.place.capital) || b.place.population - a.place.population || a.place.name.localeCompare(b.place.name))
     for (const { place } of nearby) {
-      if (selected.length >= (pose.altitude < 0.16 ? 36 : 24)) break
+      if (selected.size >= (pose.altitude < 0.16 ? 36 : 24)) break
       const xyz: number[] = []
-      polarToXYZ(place.lat, place.lng, GLOBE_RADIUS * 1.01, xyz)
-      v.set(xyz[0], xyz[1], xyz[2]).project(this.camera)
-      const x = (v.x + 1) * width / 2
-      const y = (1 - v.y) * height / 2
-      if (v.z > 1 || x < 35 || x > width - 35 || y < 35 || y > height - 35) continue
+      polarToXYZ(place.lat, place.lng, GLOBE_RADIUS, xyz)
+      const anchor = this.labels.get(place)?.anchor ?? new Vector3(...xyz as [number, number, number])
+      const screen = projectPlace(anchor, this.camera, width, height, v)
+      if (!screen) continue
+      const { x, y } = screen
+      if (x < 35 || x > width - 35 || y < 35 || y > height - 35) continue
       if (occupied.some((p) => Math.abs(p.x - x) < 90 && Math.abs(p.y - y) < 25)) continue
       occupied.push({ x, y })
-      selected.push({ place, x, y })
+      selected.add(place)
+      if (!this.labels.has(place)) {
+        const element = document.createElement('div')
+        element.className = 'globe-place-label'
+        element.textContent = place.name
+        element.dataset.lat = String(place.lat)
+        element.dataset.lng = String(place.lng)
+        element.style.visibility = 'hidden'
+        this.overlay.appendChild(element)
+        this.labels.set(place, { element, anchor })
+      }
     }
-    while (this.labels.length < selected.length) {
-      const el = document.createElement('div')
-      el.className = 'globe-place-label'
-      this.overlay.appendChild(el)
-      this.labels.push(el)
+    for (const [place, label] of this.labels) if (!selected.has(place)) { label.element.remove(); this.labels.delete(place) }
+  }
+
+  /** Run once per rendered frame, independently of tile loading and collision/selection throttles. */
+  projectLabels() {
+    if (!this.active || !this.enabled) return
+    const width = this.overlay.clientWidth; const height = this.overlay.clientHeight
+    for (const { element, anchor } of this.labels.values()) {
+      const screen = projectPlace(anchor, this.camera, width, height, this.projection)
+      element.style.visibility = screen ? 'visible' : 'hidden'
+      if (screen) element.style.transform = `translate(${screen.x.toFixed(2)}px, ${screen.y.toFixed(2)}px) translate(-50%, -50%)`
     }
-    while (this.labels.length > selected.length) this.labels.pop()!.remove()
-    selected.forEach(({ place, x, y }, i) => {
-      const el = this.labels[i]
-      el.textContent = place.name
-      el.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px) translate(-50%, -50%)`
-    })
   }
 
   private hide() {
@@ -232,7 +257,7 @@ export class MapDetail {
     this.tiles.setWanted([])
     this.group.clear()
     this.overlay.replaceChildren()
-    this.labels = []
+    this.labels.clear()
     this.requestRender()
   }
 

@@ -511,6 +511,9 @@ export class GlobeScene {
 
     if (this.controls.update()) moving = true
 
+    // OrbitControls changes the camera before WebGLRenderer refreshes its inverse world matrix.
+    // DOM anchors must use the new matrix in the same frame as the globe.
+    this.camera.updateMatrixWorld()
     this.detail.update(this.getPose())
     this.imageDetail.update(this.getPose())
     const detailedBorders = this.detail.coversBorders()
@@ -521,6 +524,7 @@ export class GlobeScene {
 
     if (this.needsRender || moving) {
       this.needsRender = false
+      this.detail.projectLabels()
       this.renderer.render(this.scene, this.camera)
       perfFrame(chained, performance.now() - t0)
       this.sampleFrame(now, moving)

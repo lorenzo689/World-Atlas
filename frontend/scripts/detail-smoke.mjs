@@ -79,6 +79,25 @@ try {
   if (failures.length) throw new Error(`Detail HTTP failures: ${JSON.stringify(failures.slice(0, 3))}`)
   if (snapshot.drawCalls > 65) throw new Error(`Too many draw calls: ${snapshot.drawCalls}`)
   if (errors.length) throw new Error(`Browser errors: ${errors.join('; ')}`)
+  await page.evaluate(() => { window.__labelNames = new WeakMap([...document.querySelectorAll('.globe-place-label')].map((element) => [element, element.textContent])) })
+  await page.mouse.move(720, 450)
+  await page.mouse.down()
+  let anchorError = 0
+  for (let step = 1; step <= 16; step++) {
+    await page.mouse.move(720 + step * 4, 450 + Math.sin(step / 3) * 12)
+    const sample = await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => {
+      const renamed = [...document.querySelectorAll('.globe-place-label')].some((element) => {
+        const original = window.__labelNames.get(element)
+        if (original == null) { window.__labelNames.set(element, element.textContent); return false }
+        return original !== element.textContent
+      })
+      resolve({ ...window.__globeDetail(), renamed })
+    })))
+    if (sample.renamed) throw new Error('A place label was reassigned to another city during rotation')
+    anchorError = Math.max(anchorError, sample.labelMaxErrorPx)
+  }
+  await page.mouse.up()
+  if (anchorError > 1) throw new Error(`Place labels drifted from their geographic anchors: ${anchorError.toFixed(2)}px`)
   for (let i = 0; i < 8; i++) {
     if ((await page.evaluate(() => window.__globePose().altitude)) < 0.15) break
     await page.mouse.wheel(0, -320)
