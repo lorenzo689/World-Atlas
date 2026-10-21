@@ -8,6 +8,11 @@ The full-stack deployment adds accounts, multiplayer, a personal atlas and a dat
 [Engineering case study](docs/PORTFOLIO.md) · [Deployment guide](docs/DEPLOY.md) ·
 [Security audit](docs/SECURITY-AUDIT.md)
 
+The product starts with a landing page and scenario catalogue, then opens the live atlas, the First
+or Second World War learning view, or a historical boundary comparison. Registration, email
+verification and password recovery are available in the full deployment. See the
+[product experience and scenario sources](docs/PRODUCT-EXPERIENCE.md).
+
 The **historical timeline** covers 1886–2019 with dated boundaries and available flags. Selecting
 a country adds exact-year World Bank population and UNHCR refugee stock where a defensible
 statistical match exists. Two years

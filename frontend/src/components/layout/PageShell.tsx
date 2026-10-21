@@ -38,7 +38,7 @@ export function PageShell({
         <div className={cn('mx-auto flex h-16 items-center gap-4 px-4 sm:px-6', wide ? 'max-w-7xl' : 'max-w-5xl')}>
           <Brand />
           <nav className="ml-auto flex items-center gap-1 text-sm">
-            <Link to="/" className="hidden rounded-full px-3 py-2 text-muted-foreground hover:text-foreground sm:block">
+            <Link to="/scenarios" className="hidden rounded-full px-3 py-2 text-muted-foreground hover:text-foreground sm:block">
               {t('nav.globe')}
             </Link>
             <UserMenu />

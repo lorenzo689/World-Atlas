@@ -40,8 +40,8 @@ jobs:
         run: |
           VITE_STATIC_DEMO=true npm run preview -- --host 127.0.0.1 --port 4173 > preview.log 2>&1 &
           for i in $(seq 1 30); do curl -sf http://127.0.0.1:4173/World-Atlas/ && break; sleep 1; done
-          SMOKE_URL=http://127.0.0.1:4173/World-Atlas/ CHROME_PATH=$(which google-chrome) npm run smoke:history
-          SMOKE_URL=http://127.0.0.1:4173/World-Atlas/ CHROME_PATH=$(which google-chrome) npm run smoke:ww2
+          SMOKE_URL=http://127.0.0.1:4173/World-Atlas/explore CHROME_PATH=$(which google-chrome) npm run smoke:history
+          SMOKE_URL=http://127.0.0.1:4173/World-Atlas/explore CHROME_PATH=$(which google-chrome) npm run smoke:ww2
       - run: cp dist/index.html dist/404.html && touch dist/.nojekyll
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4

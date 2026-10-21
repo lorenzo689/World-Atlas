@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useExplorer } from '@/store/explorer'
 import { useCountries } from '@/hooks/useCountries'
 import { prefetchBoundaries, useBoundaries } from '@/hooks/useBoundaries'
@@ -19,6 +20,7 @@ import { HistoricalTimeline } from '@/components/globe/HistoricalTimeline'
 import { HistoricalSearchBox } from '@/components/globe/HistoricalSearchBox'
 import { ConflictPanel } from '@/components/globe/ConflictPanel'
 import { Ww2Panel } from '@/components/globe/Ww2Panel'
+import { Ww1Panel } from '@/components/globe/Ww1Panel'
 import { BottomSheet, type SheetSnap } from '@/components/globe/BottomSheet'
 import { ErrorState } from '@/components/ui/feedback'
 import { loadHistory, snapshotForYear, type HistoryData } from '@/lib/history'
@@ -28,6 +30,7 @@ import { differenceBetweenBorders } from '@/lib/historyBoundaryDiff'
 import { loadAreaDifference, type AreaDifference } from '@/lib/historyAreaDiff'
 import { CONFLICT_LINES, type ConflictBrief } from '@/lib/conflicts'
 import { ww2Moment, type Ww2Theater } from '@/lib/ww2'
+import { ww1Moment } from '@/lib/ww1'
 import { useConflictBriefs } from '@/hooks/useConflictBriefs'
 import type { Pose } from '@/lib/geo'
 import type { GlobeMode } from '@/types'
@@ -68,11 +71,19 @@ export default function ExplorerPage() {
   const [year, setYear] = useState<number | null>(null)
   const [historyYear, setHistoryYear] = useState<number | null>(() => {
     const linked = readHistoryLink(window.location.search).year
-    return new URLSearchParams(window.location.search).get('ww2') === '1'
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('scenario') === 'today') return null
+    return params.get('ww2') === '1'
       ? (ww2Moment(linked) ? linked : 1939)
+      : params.get('ww1') === '1'
+        ? (ww1Moment(linked) ? linked : 1914)
       : linked ?? (import.meta.env.VITE_STATIC_DEMO === 'true' ? 1989 : null)
   })
-  const [compareYear, setCompareYear] = useState<number | null>(() => new URLSearchParams(window.location.search).get('ww2') === '1' ? null : readHistoryLink(window.location.search).compare ?? (import.meta.env.VITE_STATIC_DEMO === 'true' && !window.location.search ? 1991 : null))
+  const [compareYear, setCompareYear] = useState<number | null>(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('ww2') === '1' || params.get('scenario') === 'today') return null
+    return readHistoryLink(window.location.search).compare ?? (import.meta.env.VITE_STATIC_DEMO === 'true' && !window.location.search ? 1991 : null)
+  })
   const [historyData, setHistoryData] = useState<HistoryData | null>(null)
   const [historyError, setHistoryError] = useState(false)
   const [historyAttempt, setHistoryAttempt] = useState(0)
@@ -86,6 +97,8 @@ export default function ExplorerPage() {
   const [conflictsOpen, setConflictsOpen] = useState(false)
   const [activeConflict, setActiveConflict] = useState<ConflictBrief | null>(null)
   const [ww2Open, setWw2Open] = useState(() => new URLSearchParams(window.location.search).get('ww2') === '1')
+  const [ww1Open, setWw1Open] = useState(() => new URLSearchParams(window.location.search).get('ww1') === '1')
+  const [selectedWw1EventId, setSelectedWw1EventId] = useState<string | null>(null)
   const [ww2Theater, setWw2Theater] = useState<Ww2Theater | 'all'>('all')
   const [ww2ShowFronts, setWw2ShowFronts] = useState(true)
   const [ww2ShowEvents, setWw2ShowEvents] = useState(true)
@@ -96,7 +109,7 @@ export default function ExplorerPage() {
   const [focusNonce, setFocusNonce] = useState(0)
   const [snap, setSnap] = useState<SheetSnap>('peek')
 
-  useDocumentMeta({ title: t('explore.metaTitle'), description: t('explore.metaDescription'), path: '/' })
+  useDocumentMeta({ title: t('explore.metaTitle'), description: t('explore.metaDescription'), path: '/explore' })
 
   const metric = INDICATORS[metricKey]
   const latest = useLatestForAll(metricKey, mode === 'data')
@@ -148,11 +161,14 @@ export default function ExplorerPage() {
   const story = activeStory ? storyForEvent(activeStory) : undefined
   const eventForStory = activeStory ? storyEvent(activeStory) : undefined
   const warMoment = ww2Open ? ww2Moment(historyYear) : null
+  const firstWarMoment = ww1Open ? ww1Moment(historyYear) : null
   const warEvents = useMemo(() => warMoment?.events.filter((event) => ww2Theater === 'all' || event.theater === ww2Theater) ?? [], [warMoment, ww2Theater])
   const warLines = useMemo(() => ww2ShowFronts && warMoment ? warMoment.fronts.filter((front) => ww2Theater === 'all' || front.theater === ww2Theater).map((front) => front.line) : null, [ww2ShowFronts, warMoment, ww2Theater])
   const conflictMarkers = useMemo(() => conflictsOpen && historyYear == null ? conflictBriefs.map((brief) => ({ ...brief.location, color: brief.id === activeConflict?.id ? '#ffffff' : brief.status === 'active' ? '#fb7185' : '#fbbf24' })) : [], [conflictsOpen, historyYear, activeConflict, conflictBriefs])
   const warMarkers = useMemo(() => ww2Open && ww2ShowEvents ? warEvents.map((event) => ({ ...event.location, color: event.id === selectedWw2EventId ? '#ffffff' : '#fbbf24' })) : [], [ww2Open, ww2ShowEvents, warEvents, selectedWw2EventId])
+  const firstWarMarkers = useMemo(() => firstWarMoment?.events.map((event) => ({ ...event.location, color: event.id === selectedWw1EventId ? '#ffffff' : '#fbbf24' })) ?? [], [firstWarMoment, selectedWw1EventId])
   useEffect(() => { if (warMoment) setStoryFocus(warMoment.focus) }, [warMoment])
+  useEffect(() => { if (ww1Open) setStoryFocus({ lat: 50, lng: 15, altitude: 1.45 }) }, [ww1Open])
   useEffect(() => {
     setAreaDiff(null)
     setAreaError(false)
@@ -173,8 +189,10 @@ export default function ExplorerPage() {
     else url.searchParams.set('compare', String(compareYear))
     if (ww2Open && ww2Moment(historyYear)) url.searchParams.set('ww2', '1')
     else url.searchParams.delete('ww2')
+    if (ww1Open && ww1Moment(historyYear)) url.searchParams.set('ww1', '1')
+    else url.searchParams.delete('ww1')
     window.history.replaceState(null, '', url)
-  }, [historyYear, compareYear, ww2Open])
+  }, [historyYear, compareYear, ww2Open, ww1Open])
   const historicalEntity = historicalSelected ? history?.entities.get(historicalSelected) : undefined
   const neighbours = useMemo(
     () => (country ? country.borders.map((b) => byCode.get(b)).filter((c): c is NonNullable<typeof c> => !!c) : []),
@@ -191,15 +209,30 @@ export default function ExplorerPage() {
   )
 
   const changeHistoryYear = useCallback((next: number | null) => {
+    if (next !== historyYear) setSelectedWw1EventId(null)
     setHistoryYear(next)
     if (next == null || !ww2Moment(next)) { setWw2Open(false); setSelectedWw2EventId(null) }
+    if (!ww1Moment(next)) { setWw1Open(false); setSelectedWw1EventId(null) }
     if (next == null) { setCompareYear(null); setActiveStory(null); setStoryFocus(null) }
     if (next == null) setHistoricalSelected(null)
     select(null)
     setSnap('peek')
     if (next != null) setMode('political')
     if (next != null) { setConflictsOpen(false); setActiveConflict(null) }
-  }, [select, setMode])
+  }, [historyYear, select, setMode])
+
+  const openWw1 = useCallback(() => {
+    setHistoryYear(1914)
+    setCompareYear(null)
+    setActiveStory(null)
+    setHistoricalSelected(null)
+    setConflictsOpen(false)
+    setWw2Open(false)
+    setWw1Open(true)
+    setSelectedWw1EventId(null)
+    setMode('political')
+    select(null)
+  }, [setMode, select])
 
   const openWw2 = useCallback(() => {
     setHistoryYear(1939)
@@ -207,6 +240,8 @@ export default function ExplorerPage() {
     setActiveStory(null)
     setHistoricalSelected(null)
     setConflictsOpen(false)
+    setWw1Open(false)
+    setSelectedWw1EventId(null)
     setWw2Open(true)
     setWw2Theater('all')
     setSelectedWw2EventId(null)
@@ -220,7 +255,7 @@ export default function ExplorerPage() {
   }, [historyYear, changeHistoryYear, setMode])
 
   const onGlobeSelect = useCallback((code: string) => {
-    if (ww2Open) return
+    if (ww2Open || ww1Open) return
     if (historyYear != null) {
       setHistoricalSelected(code)
       setSnap('peek')
@@ -230,7 +265,7 @@ export default function ExplorerPage() {
       if (brief) { setActiveConflict(brief); setStoryFocus({ ...brief.location, altitude: 1.25 }); return }
       onSelect(code)
     } else onSelect(code)
-  }, [historyYear, onSelect, conflictsOpen, conflictBriefs, ww2Open])
+  }, [historyYear, onSelect, conflictsOpen, conflictBriefs, ww2Open, ww1Open])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -243,7 +278,7 @@ export default function ExplorerPage() {
     return () => window.removeEventListener('keydown', onKey)
   }, [select])
 
-  const showPanel = historyYear != null ? ww2Open || !!historicalEntity : conflictsOpen || !!country
+  const showPanel = historyYear != null ? ww2Open || ww1Open || !!historicalEntity : conflictsOpen || !!country
   const insets = useMemo(
     () => ({
       right: showPanel && isDesktop ? PANEL_WIDTH + 32 : 0,
@@ -290,10 +325,11 @@ export default function ExplorerPage() {
                 changeLines={removedLines}
                 changeAreas={lostAreas}
                 focusPose={storyFocus}
-                markers={ww2Open ? warMarkers : conflictMarkers}
+                markers={ww1Open ? firstWarMarkers : ww2Open ? warMarkers : conflictMarkers}
                 conflictLines={conflictsOpen && historyYear == null ? CONFLICT_LINES.lines : null}
                 ww2Fronts={warLines}
                 onMarkerSelect={(index) => {
+                  if (ww1Open) { const event = firstWarMoment?.events[index]; if (event) { setSelectedWw1EventId(event.id); setStoryFocus({ ...event.location, altitude: 0.85 }) }; return }
                   if (ww2Open) { const event = warEvents[index]; if (event) { setSelectedWw2EventId(event.id); setStoryFocus({ ...event.location, altitude: 0.85 }) }; return }
                   const brief = conflictBriefs[index]; if (brief) { setActiveConflict(brief); setStoryFocus({ ...brief.location, altitude: 1.25 }) }
                 }}
@@ -342,6 +378,7 @@ export default function ExplorerPage() {
       <header className="pointer-events-none absolute inset-x-0 top-0 z-30 flex flex-col gap-3 p-4 sm:p-6">
         <div className="flex items-center gap-3 sm:gap-6">
           <Brand className="pointer-events-auto shrink-0" />
+          <Link to="/scenarios" className="pointer-events-auto hidden shrink-0 rounded-full border border-input bg-background/75 px-3 py-2 text-xs text-foreground hover:border-primary md:inline-flex">{lang === 'de' ? 'Szenarien' : 'Scenarios'}</Link>
           {historyYear != null ? (
             <HistoricalSearchBox entities={history?.entities ?? new Map()} onSelect={onGlobeSelect} className="pointer-events-auto mx-auto w-full max-w-md" />
           ) : (
@@ -381,12 +418,12 @@ export default function ExplorerPage() {
           loading={historyYear != null && !history && !historyError}
           error={historyError}
           onRetry={() => { setHistoryError(false); setHistoryAttempt((n) => n + 1) }}
-          onReset={import.meta.env.VITE_STATIC_DEMO === 'true' ? () => { window.location.href = import.meta.env.BASE_URL } : undefined}
+          onReset={import.meta.env.VITE_STATIC_DEMO === 'true' ? () => { window.location.href = `${import.meta.env.BASE_URL}explore` } : undefined}
           resetLabel={lang === 'de' ? 'Demo zurücksetzen' : 'Reset demo'}
         />
-        {!ww2Open && <button type="button" className="glass w-fit rounded-full border border-amber-300/50 px-3 py-1.5 text-xs text-amber-200 hover:bg-amber-300/10" onClick={openWw2}>{lang === 'de' ? 'Zweiter Weltkrieg · 1939–1945 erkunden' : 'Explore World War II · 1939–1945'}</button>}
+        {!ww2Open && !ww1Open && <div className="flex flex-wrap gap-2"><button type="button" className="glass w-fit rounded-full border border-amber-300/50 px-3 py-1.5 text-xs text-amber-200 hover:bg-amber-300/10" onClick={openWw1}>{lang === 'de' ? 'Erster Weltkrieg · 1914–1918' : 'World War I · 1914–1918'}</button><button type="button" className="glass w-fit rounded-full border border-orange-300/50 px-3 py-1.5 text-xs text-orange-200 hover:bg-orange-300/10" onClick={openWw2}>{lang === 'de' ? 'Zweiter Weltkrieg · 1939–1945' : 'World War II · 1939–1945'}</button></div>}
         {historyYear != null && mode === 'satellite' && <p className="glass max-w-[min(31rem,calc(100vw-2rem))] rounded-xl px-3 py-2 text-[11px] text-muted-foreground" role="note">{lang === 'de' ? 'Satellitenbild: NASA, Januar 2004. Grenzen: CShapes 2.0; Reichsannexionen 1939–1945: OHM. Das Bild zeigt keine historische Landnutzung.' : 'Satellite image: NASA, January 2004. Borders: CShapes 2.0; Reich annexations 1939–1945: OHM. The image does not show historical land cover.'}</p>}
-        {historyYear != null && history && !ww2Open && <section className="glass max-h-[30vh] w-[min(31rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl p-3 text-xs" aria-label={lang === 'de' ? 'Historische Ereignisse und Vergleich' : 'Historical events and comparison'}>
+        {historyYear != null && history && !ww2Open && !ww1Open && <section className="glass max-h-[30vh] w-[min(31rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl p-3 text-xs" aria-label={lang === 'de' ? 'Historische Ereignisse und Vergleich' : 'Historical events and comparison'}>
           <div className="flex flex-wrap items-center gap-2">
             <button type="button" className="rounded-full border border-primary px-3 py-1 text-primary" onClick={() => setCompareYear(compareYear == null ? Math.max(1886, historyYear - 1) : null)}>{compareYear == null ? (lang === 'de' ? 'Jahre vergleichen' : 'Compare years') : (lang === 'de' ? 'Vergleich schließen' : 'Close comparison')}</button>
             <button type="button" className="rounded-full border border-input px-3 py-1" onClick={() => navigator.clipboard.writeText(window.location.href)}>{lang === 'de' ? 'Link kopieren' : 'Copy link'}</button>
@@ -435,7 +472,8 @@ export default function ExplorerPage() {
       {/* Country preview */}
       {historyYear == null && conflictsOpen && <ConflictPanel briefs={conflictBriefs} lang={lang} selected={activeConflict} onSelect={(brief) => { setActiveConflict(brief); setStoryFocus({ ...brief.location, altitude: 1.25 }); select(null) }} onClose={() => { setConflictsOpen(false); setActiveConflict(null) }} />}
       {warMoment && (isDesktop ? <aside className="glass scrollbar-thin absolute bottom-4 right-4 top-[88px] z-20 overflow-y-auto rounded-[28px]" style={{ width: PANEL_WIDTH }} aria-label={lang === 'de' ? 'Zweiter Weltkrieg' : 'World War II'}><Ww2Panel moment={warMoment} lang={lang} theater={ww2Theater} onTheaterChange={setWw2Theater} showFronts={ww2ShowFronts} onShowFrontsChange={setWw2ShowFronts} showEvents={ww2ShowEvents} onShowEventsChange={setWw2ShowEvents} onYearChange={changeHistoryYear} onFocus={(lat, lng) => setStoryFocus({ lat, lng, altitude: 0.85 })} selectedEventId={selectedWw2EventId} onClose={() => { setWw2Open(false); setStoryFocus(null) }} /></aside> : <BottomSheet snap={snap} onSnapChange={setSnap} onDismiss={() => setWw2Open(false)} label={lang === 'de' ? 'Zweiter Weltkrieg' : 'World War II'}><Ww2Panel moment={warMoment} lang={lang} theater={ww2Theater} onTheaterChange={setWw2Theater} showFronts={ww2ShowFronts} onShowFrontsChange={setWw2ShowFronts} showEvents={ww2ShowEvents} onShowEventsChange={setWw2ShowEvents} onYearChange={changeHistoryYear} onFocus={(lat, lng) => setStoryFocus({ lat, lng, altitude: 0.85 })} selectedEventId={selectedWw2EventId} onClose={() => setWw2Open(false)} /></BottomSheet>)}
-      {historyYear != null && historicalEntity && history && !ww2Open &&
+      {firstWarMoment && (isDesktop ? <aside className="glass scrollbar-thin absolute bottom-4 right-4 top-[88px] z-20 overflow-y-auto rounded-[28px]" style={{ width: PANEL_WIDTH }} aria-label={lang === 'de' ? 'Erster Weltkrieg' : 'World War I'}><Ww1Panel moment={firstWarMoment} lang={lang} selectedEventId={selectedWw1EventId} onYearChange={changeHistoryYear} onFocus={(lat, lng) => setStoryFocus({ lat, lng, altitude: 0.85 })} onClose={() => { setWw1Open(false); setStoryFocus(null) }} /></aside> : <BottomSheet snap={snap} onSnapChange={setSnap} onDismiss={() => setWw1Open(false)} label={lang === 'de' ? 'Erster Weltkrieg' : 'World War I'}><Ww1Panel moment={firstWarMoment} lang={lang} selectedEventId={selectedWw1EventId} onYearChange={changeHistoryYear} onFocus={(lat, lng) => setStoryFocus({ lat, lng, altitude: 0.85 })} onClose={() => setWw1Open(false)} /></BottomSheet>)}
+      {historyYear != null && historicalEntity && history && !ww2Open && !ww1Open &&
         (isDesktop ? (
           <aside key={historicalEntity.code} aria-label={historicalEntity.name} className="glass scrollbar-thin animate-rise absolute bottom-4 right-4 top-[88px] z-20 overflow-y-auto rounded-[28px]" style={{ width: PANEL_WIDTH }}>
             <HistoricalPreview entity={historicalEntity} year={historyYear} onClose={() => setHistoricalSelected(null)} />

@@ -14,7 +14,8 @@ export default function LoginPage() {
   useDocumentMeta({ title: `${t('login.title')} · World Explorer`, description: t('login.metaDescription') })
   const [params] = useSearchParams()
   const needsAccount = params.get('account') === '1'
-  const [tab, setTab] = useState<Tab>(needsAccount ? 'register' : 'login')
+  const requestedTab = params.get('tab')
+  const [tab, setTab] = useState<Tab>(needsAccount || requestedTab === 'register' ? 'register' : 'login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
@@ -36,7 +37,7 @@ export default function LoginPage() {
       if (tab === 'login') await authApi.login(email, password)
       else if (tab === 'register') await authApi.register(email, password, name)
       else await authApi.guest(name)
-      navigate(params.get('next') || '/', { replace: true })
+      navigate(safeNext(params.get('next')), { replace: true })
     } catch (err) {
       setError(err instanceof ApiError ? err : new ApiError(0, 'network', t('error.network')))
     } finally {
@@ -128,6 +129,17 @@ export default function LoginPage() {
       </Card>
     </PageShell>
   )
+}
+
+/** Keep post-auth navigation on this origin; a crafted next= URL must not become an open redirect. */
+function safeNext(candidate: string | null): string {
+  if (!candidate || !candidate.startsWith('/') || candidate.startsWith('//') || candidate.includes('\\')) return '/scenarios'
+  try {
+    const target = new URL(candidate, window.location.origin)
+    return target.origin === window.location.origin ? `${target.pathname}${target.search}${target.hash}` : '/scenarios'
+  } catch {
+    return '/scenarios'
+  }
 }
 
 export function Input({

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react'
-import { BrowserRouter, Link, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Link, Route, Routes, useLocation } from 'react-router-dom'
 import { CountriesProvider } from '@/hooks/useCountries'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
@@ -9,6 +9,8 @@ import { Notifications } from '@/components/layout/Notifications'
 import { useT } from '@/i18n'
 
 const ExplorerPage = lazy(() => import('@/pages/ExplorerPage'))
+const LandingPage = lazy(() => import('@/pages/LandingPage'))
+const ScenarioPage = lazy(() => import('@/pages/ScenarioPage'))
 const CountryPage = lazy(() => import('@/pages/CountryPage'))
 // full-stack features (need the Spring Boot backend)
 const LoginPage = lazy(() => import('@/pages/LoginPage'))
@@ -47,6 +49,13 @@ function Splash() {
   )
 }
 
+function HomeRoute() {
+  const { search } = useLocation()
+  const params = new URLSearchParams(search)
+  const opensMap = ['year', 'compare', 'ww1', 'ww2', 'debug'].some((key) => params.has(key))
+  return opensMap ? <ExplorerPage /> : <LandingPage />
+}
+
 export default function App() {
   const staticDemo = import.meta.env.VITE_STATIC_DEMO === 'true'
   useEffect(() => {
@@ -58,7 +67,9 @@ export default function App() {
         <CountriesProvider>
           <Suspense fallback={<Splash />}>
             <Routes>
-              <Route path="/" element={<ExplorerPage />} />
+              <Route path="/" element={<HomeRoute />} />
+              <Route path="/scenarios" element={<ScenarioPage />} />
+              <Route path="/explore" element={<ExplorerPage />} />
               {!staticDemo && <Route path="/countries/:code/:tab?" element={<CountryPage />} />}
               {!staticDemo && <Route path="/login" element={<LoginPage />} />}
               {!staticDemo && <Route path="/quiz" element={<QuizPage />} />}

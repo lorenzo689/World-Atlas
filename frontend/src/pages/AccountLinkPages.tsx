@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { CheckCircle2 } from 'lucide-react'
 import { ApiError, authApi } from '@/lib/api'
 import { useDocumentMeta } from '@/hooks/useMisc'
-import { useT } from '@/i18n'
+import { useLang, useT } from '@/i18n'
 import { Card, ErrorText, PageShell } from '@/components/layout/PageShell'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/pages/LoginPage'
@@ -11,6 +11,7 @@ import { Input } from '@/pages/LoginPage'
 /** /verify?token=… – the link from the confirmation e-mail. */
 export function VerifyEmailPage() {
   const t = useT()
+  const lang = useLang((state) => state.lang)
   useDocumentMeta({ title: `${t('verify.title')} · World Explorer`, description: t('verify.title') })
   const [params] = useSearchParams()
   const [state, setState] = useState<'working' | 'done' | 'error'>('working')
@@ -39,7 +40,7 @@ export function VerifyEmailPage() {
               <CheckCircle2 className="size-5" /> {t('verify.done')}
             </p>
             <Button asChild>
-              <Link to="/atlas">{t('nav.atlas')}</Link>
+              <Link to="/scenarios">{lang === 'de' ? 'Szenarien erkunden' : 'Explore scenarios'}</Link>
             </Button>
           </div>
         )}
@@ -69,7 +70,7 @@ export function ResetPasswordPage() {
     setBusy(true)
     try {
       await authApi.resetPassword(params.get('token') ?? '', password)
-      navigate('/', { replace: true })
+      navigate('/scenarios', { replace: true })
     } catch (err) {
       setError(err as Error)
     } finally {
