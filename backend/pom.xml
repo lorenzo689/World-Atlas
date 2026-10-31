@@ -19,7 +19,7 @@
 
     <properties>
         <java.version>25</java.version>
-        <springdoc.version>3.1.1</springdoc.version>
+        <springdoc.version>3.2.0</springdoc.version>
         <!-- Frontend data that the backend seeds from (single source of truth) -->
         <frontend.data.dir>${project.basedir}/../frontend/public/data</frontend.data.dir>
     </properties>
