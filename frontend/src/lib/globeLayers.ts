@@ -12,16 +12,15 @@ import {
   Points,
   PointsMaterial,
 } from 'three'
-import ConicPolygonGeometry from 'three-conic-polygon-geometry'
 import { geoContains } from 'd3-geo'
 import type { CountryFeature } from '@/lib/geo'
 import type { TerritoryArea } from './territories'
 
 // The globe sphere has radius 100 and (lat, lng) map to xyz with this convention (same as three-globe).
 export const GLOBE_RADIUS = 100
-const CAP_RADIUS = GLOBE_RADIUS * 1.003
+export const CAP_RADIUS = GLOBE_RADIUS * 1.003
 const BORDER_RADIUS = GLOBE_RADIUS * 1.0035
-const CURVATURE_RESOLUTION = 6
+export const CURVATURE_RESOLUTION = 6
 
 type Ring = number[][]
 type PolygonCoords = Ring[]
@@ -52,7 +51,7 @@ export function xyzToPolar(x: number, y: number, z: number) {
   }
 }
 
-function polygonsOf(f: CountryFeature): PolygonCoords[] {
+export function polygonsOf(f: CountryFeature): PolygonCoords[] {
   const g = f.geometry
   if (g.type === 'Polygon') return [g.coordinates as PolygonCoords]
   if (g.type === 'MultiPolygon') return g.coordinates as PolygonCoords[]
@@ -182,7 +181,7 @@ export class BaseLayers {
   private outlines = new Map<string, BufferGeometry>()
   private lastPick: Piece | null = null
 
-  constructor(features: CountryFeature[], borders?: number[][][], pre?: PrecomputedGeometry | null) {
+  constructor(features: CountryFeature[], borders: number[][][] | undefined, pre: PrecomputedGeometry) {
     // pieces (for picking + outlines)
     for (const f of features) {
       for (const coords of polygonsOf(f)) {
@@ -204,41 +203,16 @@ export class BaseLayers {
       }
     }
 
-    let pos: Float32Array
-    let idx: Uint32Array
+    // Caps always arrive pre-triangulated: from public/data/geometry.bin, from the historical
+    // geometry, or – if the file is missing – from the lazily loaded fallback in tessellate.ts.
     const indexRanges = new Map<string, [number, number]>()
-
-    if (pre) {
-      const n = pre.lnglat.length / 2
-      pos = new Float32Array(n * 3)
-      for (let i = 0; i < n; i++) polarToXYZ(pre.lnglat[i * 2 + 1], pre.lnglat[i * 2], CAP_RADIUS, pos, i * 3)
-      idx = pre.indices
-      for (const [code, vStart, vCount, iStart, iCount] of pre.ranges) {
-        this.ranges.set(code, [vStart, vCount])
-        indexRanges.set(code, [iStart, iCount])
-      }
-    } else {
-      // Fallback (no precomputed file): tessellate here. Slow: several seconds.
-      const p: number[] = []
-      const ix: number[] = []
-      for (const f of features) {
-        const vStart = p.length / 3
-        const iStart = ix.length
-        for (const coords of polygonsOf(f)) {
-          const geo = new ConicPolygonGeometry(coords, CAP_RADIUS, CAP_RADIUS, false, true, false, CURVATURE_RESOLUTION)
-          const arr = geo.attributes.position.array
-          const base = p.length / 3
-          for (let i = 0; i < arr.length; i++) p.push(arr[i])
-          const index = geo.index?.array
-          if (index) for (let i = 0; i < index.length; i++) ix.push(base + index[i])
-          else for (let i = 0; i < arr.length / 3; i++) ix.push(base + i)
-          geo.dispose()
-        }
-        this.ranges.set(f.properties.code, [vStart, p.length / 3 - vStart])
-        indexRanges.set(f.properties.code, [iStart, ix.length - iStart])
-      }
-      pos = new Float32Array(p)
-      idx = Uint32Array.from(ix)
+    const n = pre.lnglat.length / 2
+    const pos = new Float32Array(n * 3)
+    for (let i = 0; i < n; i++) polarToXYZ(pre.lnglat[i * 2 + 1], pre.lnglat[i * 2], CAP_RADIUS, pos, i * 3)
+    const idx = pre.indices
+    for (const [code, vStart, vCount, iStart, iCount] of pre.ranges) {
+      this.ranges.set(code, [vStart, vCount])
+      indexRanges.set(code, [iStart, iCount])
     }
 
     const capGeo = new BufferGeometry()

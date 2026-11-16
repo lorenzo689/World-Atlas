@@ -50,7 +50,7 @@ export interface SceneOptions {
   textures: SceneTextures
   features: CountryFeature[]
   borders?: number[][][]
-  precomputed?: PrecomputedGeometry | null
+  precomputed: PrecomputedGeometry
   satellite: boolean
   detailEnabled?: boolean
   detailLowEnd?: boolean
@@ -287,7 +287,7 @@ export class GlobeScene {
   }
 
   /** Swap the map without recreating WebGL, textures, controls or the current camera pose. */
-  replaceMap(features: CountryFeature[], borders?: number[][][], precomputed?: PrecomputedGeometry | null) {
+  replaceMap(features: CountryFeature[], borders: number[][][] | undefined, precomputed: PrecomputedGeometry) {
     this.scene.remove(this.layers.group)
     this.layers.dispose()
     this.layers = new BaseLayers(features, borders, precomputed)

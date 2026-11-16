@@ -11,7 +11,8 @@ export type Boundaries = FeatureCollection<Geometry, CountryProps> & {
   /** Every border / coastline segment exactly once (shared borders are not duplicated). */
   borders?: number[][][]
   /** Build-time cap triangulation (see PrecomputedGeometry). */
-  geometry?: PrecomputedGeometry | null
+  /** Always present: precomputed caps, or the lazily tessellated fallback (see useBoundaries). */
+  geometry: PrecomputedGeometry
 }
 
 export interface Pose {

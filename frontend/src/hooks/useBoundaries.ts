@@ -25,8 +25,14 @@ async function fetchGeometry(base: string): Promise<PrecomputedGeometry | null> 
       ranges,
     }
   } catch {
-    return null // falls back to in-browser tessellation
+    return null // caller falls back to in-browser tessellation
   }
+}
+
+async function tessellateFallback(features: Boundaries['features']): Promise<PrecomputedGeometry> {
+  // Loaded only when geometry.bin is unavailable; keeps the tessellator out of the globe bundle.
+  const { tessellateCountries } = await import('@/lib/tessellate')
+  return tessellateCountries(features)
 }
 
 function load(): Promise<Boundaries> {
@@ -38,7 +44,9 @@ function load(): Promise<Boundaries> {
       const topology = (await r.json()) as Topology
       const countries = topology.objects.countries as GeometryCollection<CountryProps>
       const fc = feature(topology, countries) as FeatureCollection<Geometry, CountryProps>
-      return { ...fc, borders: mesh(topology, countries).coordinates, geometry: await geometry } as Boundaries
+      const features = fc.features as Boundaries['features']
+      const precomputed = (await geometry) ?? (await tessellateFallback(features))
+      return { ...fc, borders: mesh(topology, countries).coordinates, geometry: precomputed } as Boundaries
     })
     cache.catch(() => {
       cache = null

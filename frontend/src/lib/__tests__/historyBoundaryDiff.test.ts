@@ -5,7 +5,12 @@ import type { HistoricalSnapshot } from '../history'
 const snapshot = (borders: number[][][]): HistoricalSnapshot => ({
   year: 1990,
   entities: new Map(),
-  boundaries: { type: 'FeatureCollection', features: [], borders },
+  boundaries: {
+    type: 'FeatureCollection',
+    features: [],
+    borders,
+    geometry: { lnglat: new Float32Array(), indices: new Uint32Array(), ranges: [] },
+  },
 })
 
 describe('differenceBetweenBorders', () => {
