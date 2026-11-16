@@ -62,6 +62,48 @@ const topo = simplify(pre, quantile(pre, KEEP))
 // distorts them (Malta collapses to a polygon of a few points), so keep them as they are.
 const PROTECT_BELOW = 40
 topo.arcs = topo.arcs.map((arc, i) => (pre.arcs[i].length <= PROTECT_BELOW ? pre.arcs[i] : arc))
+
+// Error-bounded simplification. One global threshold is fine for most borders (p95 error < 1.3 km)
+// but cuts off single fjords and peninsulas (up to 14 km in Indonesia). Arcs whose worst source
+// vertex lies more than MAX_ERROR_KM from the shipped line get their own, lower threshold, halved
+// until they fit. Measured trade-off (see docs/MAP-AUDIT.md): 3 km costs +3.6 % points; 2 km would
+// cost +9.2 %, and rounding to 0.01° already adds up to ~0.8 km.
+const MAX_ERROR_KM = 3
+const threshold = quantile(pre, KEEP)
+const round2 = (v) => Math.round(v * 100) / 100
+function segmentKm(p, a, b) {
+  const rad = Math.PI / 180
+  const k = Math.cos(p[1] * rad)
+  const ax = (a[0] - p[0]) * k, ay = a[1] - p[1], bx = (b[0] - p[0]) * k, by = b[1] - p[1]
+  const dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy
+  const t = len2 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len2)) : 0
+  return Math.hypot(ax + t * dx, ay + t * dy) * rad * 6371
+}
+// Keeps the source points whose importance (presimplify weight z) is >= t, rounds them like the
+// output below, and returns the arc plus its worst error against the source points it replaced.
+function simplifyArc(src, t) {
+  const keep = []
+  src.forEach((p, i) => { if (i === 0 || i === src.length - 1 || p[2] >= t) keep.push(i) })
+  let maxKm = 0
+  for (let m = 0; m + 1 < keep.length; m++) {
+    const a = [round2(src[keep[m]][0]), round2(src[keep[m]][1])]
+    const b = [round2(src[keep[m + 1]][0]), round2(src[keep[m + 1]][1])]
+    for (let s = keep[m]; s <= keep[m + 1]; s++) maxKm = Math.max(maxKm, segmentKm(src[s], a, b))
+  }
+  return { arc: keep.map((i) => src[i]), maxKm }
+}
+let refined = 0
+topo.arcs = topo.arcs.map((arc, i) => {
+  const src = pre.arcs[i]
+  if (src.length <= PROTECT_BELOW) return arc
+  let t = threshold
+  let r = simplifyArc(src, t)
+  if (r.maxKm <= MAX_ERROR_KM) return arc
+  while (r.maxKm > MAX_ERROR_KM && t > 0) { t = t / 2 < 1e-12 ? 0 : t / 2; r = simplifyArc(src, t) }
+  refined++
+  return r.arc
+})
+console.log(`error bound ${MAX_ERROR_KM} km: ${refined} arcs refined`)
 const countPoints = (t) => t.arcs.reduce((n, a) => n + a.length, 0)
 
 const byNumeric = new Map(countries.filter((c) => c.numeric).map((c) => [String(c.numeric).padStart(3, '0'), c]))

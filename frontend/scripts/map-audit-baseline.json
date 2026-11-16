@@ -1,8 +1,8 @@
 {
   "countriesWithPolygon": 245,
   "countriesWithoutPolygon": 5,
-  "maxDisplacementKm": 13.51,
-  "p95CountryMaxDisplacementKm": 3.73,
+  "maxDisplacementKm": 2.99,
+  "p95CountryMaxDisplacementKm": 2.71,
   "maxAbsSimplifyDriftPctOver1000Km2": 2.12,
   "degenerateRings": 1,
   "introducedSelfIntersections": 0,
