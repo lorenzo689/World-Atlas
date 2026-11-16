@@ -24,12 +24,12 @@
     ],
     "files": {
       "ww2-annexations.geojson.gz": {
-        "bytes": 5361551,
-        "sha256": "b20918e6e200bfefa972b1ae30bf0fe5295cff55526d894efd8875badb02f350"
+        "bytes": 10700736,
+        "sha256": "8a1c9fe9e23b22027467153c120cd15a52ff0357e0f2c3978fee246ff416de17"
       },
       "ww2-free-city-danzig.geojson": {
         "bytes": 17342,
-        "sha256": "2c6f94fa27b49d4de0081128f9141ffe6be1d21836d6d6b5b6e317157289d5d3"
+        "sha256": "c997060d4db5e940c95c9548520e82d24b59610feebfab7595e34550ae0d66ce"
       }
     }
   },
@@ -41,24 +41,24 @@
     1886,
     2019
   ],
-  "periods": 805,
+  "periods": 890,
   "geometry": {
-    "vertices": 2783689,
-    "indices": 12468069,
+    "vertices": 3208347,
+    "indices": 14372910,
     "indexEncoding": "local-u16"
   },
   "files": {
     "historical-topology.json": {
-      "bytes": 7185377,
-      "sha256": "8e8f61d2450075c8a58ac8ac17303c0bd8565c7c52d518ff951af8abdcf0ef56"
+      "bytes": 7414340,
+      "sha256": "75257ab4c74c6a107482ef8fb866614dd525f6a0e20c8b11bf415e0c493be454"
     },
     "historical-geometry.json": {
-      "bytes": 25245,
-      "sha256": "644efc63a33e053bf1b961418f872da8a0c0a96928e6b54534d9145bdc2188a0"
+      "bytes": 27895,
+      "sha256": "8fe10bfe3dff7c48c8b55f9a1951fae87e28fd76b4fc6e11e417858f52d81215"
     },
     "historical-geometry.bin": {
-      "bytes": 47205650,
-      "sha256": "6de915c6fdde1c29d1f5697b42ab87aa2c719bb51822aa613f92769689f468b1"
+      "bytes": 54412596,
+      "sha256": "6b3b22a8a9262e6dad619d49123cdf4959452a23cdada8841fae861008e38cf4"
     },
     "historical-flags.json": {
       "bytes": 43699,

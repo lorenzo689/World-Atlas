@@ -9,11 +9,26 @@ export interface Territory {
   actor: Localized
   title: Localized
   color: string
-  kind: 'occupation' | 'control' | 'contested'
-  precision: 'schematic' | 'settlement-estimate'
-  source: { title: string; url: string; date: string; license: string; licenseUrl?: string }
+  /** occupation, annexation by a foreign state, Axis client state, military control, or fighting. */
+  kind: TerritoryKind
+  /**
+   * schematic: original generalisation; settlement-estimate: tessellated settlement reports (today);
+   * administrative: dated boundary of an administrative regime (OpenHistoricalMap);
+   * digitized: clipped to a georeferenced historical situation map.
+   */
+  precision: TerritoryPrecision
+  /** Extra caveat for this feature (how a boundary was derived). */
+  note?: Localized
+  source: TerritorySource
+  /** Second source that limits the area (e.g. the atlas sheet that clipped an OHM regime). */
+  evidence?: TerritorySource
   geometry: Polygon | MultiPolygon
 }
+export type TerritoryKind = 'occupation' | 'annexation' | 'client' | 'control' | 'contested'
+export type TerritoryPrecision = 'schematic' | 'settlement-estimate' | 'administrative' | 'digitized'
+export interface TerritorySource { title: string; url: string; date: string; license: string; licenseUrl?: string }
+export const TERRITORY_KINDS: readonly TerritoryKind[] = ['occupation', 'annexation', 'client', 'control', 'contested']
+export const TERRITORY_PRECISIONS: readonly TerritoryPrecision[] = ['schematic', 'settlement-estimate', 'administrative', 'digitized']
 export interface TerritorySnapshot {
   id: string
   scenario: 'today' | 'ww1' | 'ww2'
@@ -57,7 +72,8 @@ export function validateTerritories(data: TerritoryDataset): void {
     ids.add(snapshot.id)
     const featureIds = new Set<string>()
     for (const feature of snapshot.features) {
-      if (featureIds.has(feature.id) || !feature.actorId || !localized(feature.actor) || !localized(feature.title) || !/^#[0-9a-f]{6}$/i.test(feature.color) || !['occupation', 'control', 'contested'].includes(feature.kind) || !['schematic', 'settlement-estimate'].includes(feature.precision) || !validDate(feature.source.date) || feature.source.date !== snapshot.date || new URL(feature.source.url).protocol !== 'https:' || !feature.source.license) throw new Error('Invalid territory attribution')
+      const validSource = (s: TerritorySource) => validDate(s.date) && s.date === snapshot.date && new URL(s.url).protocol === 'https:' && !!s.license
+      if (featureIds.has(feature.id) || !feature.actorId || !localized(feature.actor) || !localized(feature.title) || !/^#[0-9a-f]{6}$/i.test(feature.color) || !TERRITORY_KINDS.includes(feature.kind) || !TERRITORY_PRECISIONS.includes(feature.precision) || (feature.note && !localized(feature.note)) || !validSource(feature.source) || (feature.evidence && !validSource(feature.evidence))) throw new Error('Invalid territory attribution')
       featureIds.add(feature.id)
       if (!['Polygon', 'MultiPolygon'].includes(feature.geometry.type)) throw new Error('Invalid territory geometry')
       const polygons = feature.geometry.type === 'Polygon' ? [feature.geometry.coordinates] : feature.geometry.coordinates

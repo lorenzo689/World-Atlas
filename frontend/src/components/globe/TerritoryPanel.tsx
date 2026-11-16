@@ -1,5 +1,19 @@
 import { useEffect, useRef } from 'react'
-import type { TerritorySnapshot } from '@/lib/territories'
+import type { Localized, TerritoryKind, TerritoryPrecision, TerritorySnapshot } from '@/lib/territories'
+
+const KIND_LABEL: Record<TerritoryKind, Localized> = {
+  occupation: { de: 'Besatzung', en: 'Occupation' },
+  annexation: { de: 'Annexion durch einen anderen Staat', en: 'Annexation by another state' },
+  client: { de: 'Satellitenstaat', en: 'Client state' },
+  control: { de: 'Kontrolle', en: 'Control' },
+  contested: { de: 'Umstrittene Kontrolle', en: 'Contested control' },
+}
+const PRECISION_LABEL: Record<TerritoryPrecision, Localized> = {
+  schematic: { de: 'Schematische regionale Rekonstruktion; keine präzise Grenze.', en: 'Schematic regional reconstruction; not a precise boundary.' },
+  'settlement-estimate': { de: 'Aus Siedlungsmeldungen geschätzte Flächen; keine Live-Front.', en: 'Areas estimated from settlement reports; not a live front.' },
+  administrative: { de: 'Datierte Verwaltungsgrenze (OpenHistoricalMap); die Linienführung ist dort als ungefähr markiert.', en: 'Dated administrative boundary (OpenHistoricalMap); its line work is marked approximate there.' },
+  digitized: { de: 'Auf das gehaltene Gebiet einer georeferenzierten Lagekarte zugeschnitten; Lagefehler etwa ±10 km.', en: 'Clipped to the held area of a georeferenced situation map; positional error about ±10 km.' },
+}
 
 interface Props {
   lang: 'de' | 'en'
@@ -39,7 +53,7 @@ export function TerritoryPanel({ lang, enabled, onEnabledChange, status, snapsho
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">{actors.map((feature) => <label key={feature.actorId} className="flex cursor-pointer items-center gap-1.5"><input type="checkbox" checked={!hiddenActors.has(feature.actorId)} onChange={() => onActorToggle(feature.actorId)} style={{ accentColor: feature.color }} /><span className="inline-block size-2 rounded-full" style={{ background: feature.color }} />{feature.actor[lang]}</label>)}</div>
         <details ref={details} className="mt-2" data-testid="territory-sources"><summary className="cursor-pointer text-primary">{de ? 'Abdeckung, Genauigkeit & Quellen' : 'Coverage, precision & sources'}</summary><div className="scrollbar-thin mt-2 max-h-[22vh] space-y-3 overflow-y-auto pr-1">
           <p className="text-muted-foreground">{snapshot.coverage[lang]}</p>
-          <p className="text-muted-foreground">{de ? 'Farben zeigen datierte Besatzung oder geschätzte Kontrolle, keine anerkannten Staatsgrenzen. Unmarkierte Räume sind nicht automatisch unbesetzt. Staatsgrenzen historisch: 1. Januar; Ereignisse und Flächen haben eigene Stichtage.' : 'Colors show dated occupation or estimated control, not recognized sovereign borders. Unshaded areas are not necessarily unoccupied. Historical state borders: 1 January; events and areas have independent dates.'}</p>
+          <p className="text-muted-foreground">{de ? 'Farben zeigen datierte Besatzung oder geschätzte Kontrolle, keine anerkannten Staatsgrenzen. Unmarkierte Räume sind nicht automatisch unbesetzt. ' + (snapshot.scenario === 'ww2' ? 'Staatsgrenzen und Flächen zeigen denselben Stichtag.' : 'Staatsgrenzen historisch: 1. Januar; Ereignisse und Flächen haben eigene Stichtage.') : 'Colors show dated occupation or estimated control, not recognized sovereign borders. Unshaded areas are not necessarily unoccupied. ' + (snapshot.scenario === 'ww2' ? 'State borders and areas show the same date.' : 'Historical state borders: 1 January; events and areas have independent dates.')}</p>
           {snapshot.features.map((feature) => <article key={feature.id} className={`rounded-lg border p-2 ${selectedTerritoryId === feature.id ? 'border-primary bg-primary/10' : 'border-input'}`} data-territory-id={feature.id}>
             <button className="text-left font-medium hover:text-primary" onClick={() => {
               onTerritorySelect?.(feature.id)
@@ -49,9 +63,11 @@ export function TerritoryPanel({ lang, enabled, onEnabledChange, status, snapsho
               const bounds = ring.reduce((b, [lng, lat]) => [Math.min(b[0], lng), Math.min(b[1], lat), Math.max(b[2], lng), Math.max(b[3], lat)], [180, 90, -180, -90])
               onFocus((bounds[1] + bounds[3]) / 2, (bounds[0] + bounds[2]) / 2)
             }}>{feature.title[lang]} ↗</button>
-            <p className="mt-1" style={{ color: feature.color }}>{feature.actor[lang]} · {feature.kind === 'occupation' ? (de ? 'Besatzung' : 'Occupation') : feature.kind === 'control' ? (de ? 'Kontrolle' : 'Control') : (de ? 'Umstrittene Kontrolle' : 'Contested control')}</p>
-            <p className="mt-1 text-muted-foreground">{feature.precision === 'schematic' ? (de ? 'Schematische regionale Rekonstruktion; keine präzise Front.' : 'Schematic regional reconstruction; not a precise front.') : (de ? 'Aus Siedlungsmeldungen geschätzte Flächen; keine Live-Front.' : 'Areas estimated from settlement reports; not a live front.')} · {feature.source.license}</p>
+            <p className="mt-1" style={{ color: feature.color }}>{feature.actor[lang]} · {KIND_LABEL[feature.kind][lang]}</p>
+            <p className="mt-1 text-muted-foreground">{PRECISION_LABEL[feature.precision][lang]} · {feature.source.license}</p>
+            {feature.note && <p className="mt-1 text-muted-foreground">{feature.note[lang]}</p>}
             <a className="mt-1 block text-primary underline" href={feature.source.url} target="_blank" rel="noreferrer">{feature.source.title} ↗</a>
+            {feature.evidence && <a className="mt-1 block text-primary underline" href={feature.evidence.url} target="_blank" rel="noreferrer">{de ? 'Zuschnitt: ' : 'Clipped to: '}{feature.evidence.title} ↗</a>}
           </article>)}
         </div></details>
       </>}

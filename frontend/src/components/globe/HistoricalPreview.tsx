@@ -50,8 +50,8 @@ export function HistoricalPreview({ entity, year, onClose }: Props) {
         <aside className="mt-5 rounded-xl border border-primary/40 bg-primary/10 p-3 text-xs leading-relaxed" role="note">
           <strong>{lang === 'de' ? 'Grenztyp: Annexion, nicht Besatzung.' : 'Boundary type: annexation, not occupation.'}</strong>{' '}
           {lang === 'de'
-            ? 'Die Reichsfläche für den 1. Januar dieses Jahres wurde mit datierten OpenHistoricalMap-Grenzen korrigiert. Generalgouvernement und Protektorat Böhmen und Mähren sind ausdrücklich ausgenommen. Die übrigen Länder folgen weiterhin CShapes; Grenzverläufe sind näherungsweise rekonstruiert.'
-            : 'The Reich footprint for 1 January of this year was corrected using dated OpenHistoricalMap boundaries. The General Government and Protectorate of Bohemia and Moravia are explicitly excluded. Other countries still follow CShapes; boundary geometry remains approximate.'}
+            ? 'Die Reichsfläche zum Kartenstichtag (1. Januar, in der Weltkriegsansicht der Tag des Moments) wurde mit datierten OpenHistoricalMap-Grenzen korrigiert. Generalgouvernement und Protektorat Böhmen und Mähren sind ausdrücklich ausgenommen. Die übrigen Länder folgen weiterhin CShapes; Grenzverläufe sind näherungsweise rekonstruiert.'
+            : 'The Reich footprint on the map date (1 January; in the World War II view the date of the moment) was corrected using dated OpenHistoricalMap boundaries. The General Government and Protectorate of Bohemia and Moravia are explicitly excluded. Other countries still follow CShapes; boundary geometry remains approximate.'}
           <a href="https://www.openhistoricalmap.org/copyright" target="_blank" rel="noreferrer" className="mt-2 block text-primary underline">OpenHistoricalMap ↗</a>
         </aside>
       )}

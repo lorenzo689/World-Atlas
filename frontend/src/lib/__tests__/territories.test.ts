@@ -26,7 +26,10 @@ describe('dated territorial control', () => {
   it('keeps estimated current control separate from schematic historical occupation', () => {
     expect(new Set(current.snapshots[0].features.map((f) => f.actorId))).toEqual(new Set(['RU', 'UA', 'CONTESTED']))
     expect(current.snapshots[0].features.every((f) => f.precision === 'settlement-estimate')).toBe(true)
-    expect(historic.snapshots.every((s) => s.features.every((f) => f.precision === 'schematic'))).toBe(true)
+    // Historical areas are reconstructions (schematic, OHM administrative or atlas-digitised),
+    // never the settlement-based estimate used for the present day. WWI remains schematic.
+    expect(historic.snapshots.every((s) => s.features.every((f) => ['schematic', 'administrative', 'digitized'].includes(f.precision)))).toBe(true)
+    expect(historic.snapshots.filter((s) => s.scenario === 'ww1').every((s) => s.features.every((f) => f.precision === 'schematic'))).toBe(true)
     expect(territorySnapshot(historic, 'ww2', 1939)?.features.some((f) => f.actorId === 'sovietUnion')).toBe(false)
   })
   it('rejects unclosed rings, unsafe source links, missing attribution and invalid coordinates', () => {

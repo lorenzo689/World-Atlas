@@ -98,10 +98,18 @@ if (!existsSync(annexationPath)) throw new Error('Build WWII annexations first: 
 const annexationSource = readFileSync(annexationPath)
 const annexations = JSON.parse(gunzipSync(annexationSource).toString('utf8')).features
 const danzigFeature = JSON.parse(readFileSync('scripts/data/ww2-free-city-danzig.geojson', 'utf8'))
-if (annexations.length !== 7 || annexations.some((f, i) => f.properties.year !== 1939 + i)) {
-  throw new Error('WWII annexation file must contain annual 1939–1945 footprints')
+// One Reich footprint per sample day: 1 January of 1939–1945 plus every WWII moment date. Each
+// sample is valid until the day before the next one, so the timeline (1 January) and the WWII
+// moments (their exact dates) both get the borders of their own day.
+const sampleDays = annexations.map((f) => f.properties.day)
+if (!sampleDays.length || sampleDays.some((d, i) => !Number.isInteger(d) || (i && d <= sampleDays[i - 1])) || [1939, 1940, 1941, 1942, 1943, 1944, 1945].some((y) => !sampleDays.includes(y * 10000 + 101))) {
+  throw new Error('WWII annexation file must contain ascending sample days including 1 January 1939–1945; rebuild with npm run data:ww2')
 }
-const annexationByYear = new Map(annexations.map((f) => [f.properties.year, f.geometry.coordinates]))
+const toDate = (day) => new Date(Date.UTC(Math.floor(day / 10000), Math.floor(day / 100) % 100 - 1, day % 100))
+const fromDate = (d) => d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate()
+const dayBefore = (day) => fromDate(new Date(toDate(day).getTime() - 86400000))
+const periodEnd = (i) => (i + 1 < sampleDays.length ? dayBefore(sampleDays[i + 1]) : 19451231)
+const annexationByYear = new Map(annexations.map((f) => [f.properties.day, f.geometry.coordinates]))
 const multipolygon = (geometry) => geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.coordinates
 const bounds = (coordinates) => {
   let west = Infinity, east = -Infinity, south = Infinity, north = -Infinity
@@ -115,45 +123,42 @@ const bounds = (coordinates) => {
   return [west, south, east, north]
 }
 const overlaps = (a, b) => a[0] <= b[2] && b[0] <= a[2] && a[1] <= b[3] && b[1] <= a[3]
-const annexationBounds = new Map([...annexationByYear].map(([year, coordinates]) => [year, bounds(coordinates)]))
+const annexationBounds = new Map([...annexationByYear].map(([day, coordinates]) => [day, bounds(coordinates)]))
 const wartime = []
 for (const sourceFeature of sourceFeatures) {
   const props = sourceFeature.properties
-  if (props.end < 19390101 || props.start > 19450101) { wartime.push(sourceFeature); continue }
+  // Periods that start after the last sample day (e.g. post-war borders from 8 May 1945) are
+  // never sampled during the war and stay as they are.
+  if (props.end < 19390101 || props.start > sampleDays.at(-1)) { wartime.push(sourceFeature); continue }
   const sourcePolygon = multipolygon(sourceFeature.geometry)
   const sourceBounds = bounds(sourcePolygon)
-  const relevantYears = [...annexationByYear.keys()].filter((year) => {
-    const day = year * 10000 + 101
-    return props.start <= day && day <= props.end && overlaps(sourceBounds, annexationBounds.get(year))
-  })
-  const affected = props.code === 'H255' || relevantYears.some((year) => polygonClipping.intersection(sourcePolygon, annexationByYear.get(year)).length > 0)
+  const relevantDays = sampleDays.filter((day) => props.start <= day && day <= props.end && overlaps(sourceBounds, annexationBounds.get(day)))
+  const affected = props.code === 'H255' || relevantDays.some((day) => polygonClipping.intersection(sourcePolygon, annexationByYear.get(day)).length > 0)
   if (!affected) { wartime.push(sourceFeature); continue }
   const append = (geometry, start, end, reconstructed = false) => {
     if (start > end || !geometry?.coordinates?.length) return
     wartime.push({ type: 'Feature', properties: { ...props, start, end }, geometry, reconstructed })
   }
   if (props.start < 19390101) append(sourceFeature.geometry, props.start, Math.min(props.end, 19381231))
-  for (let year = 1939; year <= 1945; year++) {
-    const day = year * 10000 + 101
+  for (const [i, day] of sampleDays.entries()) {
     if (props.start > day || props.end < day || props.code === 'H255') continue
-    const annexed = annexationByYear.get(year)
-    const coordinates = relevantYears.includes(year)
-      ? polygonClipping.difference(sourcePolygon, annexed)
+    const coordinates = relevantDays.includes(day)
+      ? polygonClipping.difference(sourcePolygon, annexationByYear.get(day))
       : sourcePolygon
     // Distinct source boundary traces leave microscopic slivers after clipping.
     // Do not invent an "Austria" made up of these numerical leftovers.
     const clean = coordinates.filter((polygon) => Math.abs(signedRingArea(polygon[0])) >= 0.00005)
     if (polygonArea(clean) < polygonArea(sourcePolygon) * 0.03) continue
-    append({ type: 'MultiPolygon', coordinates: clean }, day, Math.min(props.end, year * 10000 + 1231), true)
+    append({ type: 'MultiPolygon', coordinates: clean }, day, Math.min(props.end, periodEnd(i)), true)
   }
   if (props.end >= 19460101) append(sourceFeature.geometry, Math.max(props.start, 19460101), props.end)
 }
 wartime.push({ ...danzigFeature, reconstructed: true })
-for (const annexation of annexations) {
-  const year = annexation.properties.year
-  const germany = sourceFeatures.find((f) => f.properties.code === 'H255' && f.properties.start <= year * 10000 + 101 && f.properties.end >= year * 10000 + 101)
-  if (!germany) throw new Error(`No CShapes Germany metadata for ${year}`)
-  wartime.push({ type: 'Feature', properties: { ...germany.properties, start: year * 10000 + 101, end: Math.min(germany.properties.end, year * 10000 + 1231), source: 'OHM-WWII-annexations' }, geometry: annexation.geometry, reconstructed: true })
+for (const [i, annexation] of annexations.entries()) {
+  const day = annexation.properties.day
+  const germany = sourceFeatures.find((f) => f.properties.code === 'H255' && f.properties.start <= day && f.properties.end >= day)
+  if (!germany) throw new Error(`No CShapes Germany metadata for ${day}`)
+  wartime.push({ type: 'Feature', properties: { ...germany.properties, start: day, end: Math.min(germany.properties.end, periodEnd(i)), source: 'OHM-WWII-annexations' }, geometry: annexation.geometry, reconstructed: true })
 }
 const features = wartime.map((f, period) => ({
   type: 'Feature', properties: { ...f.properties, period }, geometry: globeWinding(f.geometry, f.reconstructed),

@@ -23,7 +23,7 @@ import { Ww2Panel } from '@/components/globe/Ww2Panel'
 import { Ww1Panel } from '@/components/globe/Ww1Panel'
 import { BottomSheet, type SheetSnap } from '@/components/globe/BottomSheet'
 import { ErrorState } from '@/components/ui/feedback'
-import { loadHistory, snapshotForYear, type HistoryData } from '@/lib/history'
+import { loadHistory, snapshotForDate, snapshotForYear, type HistoryData } from '@/lib/history'
 import { changedEntities, HISTORY_EVENTS } from '@/lib/historyCompare'
 import { storyForEvent, storyEvent } from '@/lib/historyStories'
 import { differenceBetweenBorders } from '@/lib/historyBoundaryDiff'
@@ -161,9 +161,12 @@ export default function ExplorerPage() {
     return () => { active = false }
   }, [historyYear, historyData, historyAttempt])
 
+  // The WWII view shows the borders of the moment's exact date, so state borders, occupation areas
+  // and fronts share one day; every other view uses 1 January of the selected year.
+  const momentDate = ww2Open ? ww2Moment(historyYear)?.date : undefined
   const history = useMemo(
-    () => historyYear != null && historyData ? snapshotForYear(historyData, historyYear) : null,
-    [historyYear, historyData],
+    () => historyYear != null && historyData ? (momentDate ? snapshotForDate(historyData, momentDate) : snapshotForYear(historyData, historyYear)) : null,
+    [historyYear, historyData, momentDate],
   )
   const comparison = useMemo(
     () => compareYear != null && historyData ? snapshotForYear(historyData, compareYear) : null,

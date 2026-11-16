@@ -15,10 +15,18 @@ describe('World War II learning atlas', () => {
     expect(ww2Moment(1946)).toBeNull()
   })
 
-  it('requires dates, sources, coarse precision and valid coordinates for each front', () => {
+  it('requires dates, sources, a declared precision and valid coordinates for each front', () => {
+    const atlasDates = ['1943-12-15', '1944-12-15', '1945-04-15']
     for (const moment of WW2_MOMENTS) for (const front of moment.fronts) {
       expect(front.date).toBe(moment.date)
-      expect(front.precision).toBe('schematic')
+      // Digitised lines exist only where a georeferenced atlas sheet exists, and carry its error.
+      if (atlasDates.includes(moment.date)) {
+        expect(front.precision).toBe('digitized')
+        expect(front.uncertaintyKm).toBeGreaterThan(0)
+        expect(front.uncertaintyKm).toBeLessThan(20)
+      } else {
+        expect(front.precision).toBe('schematic')
+      }
       expect(front.source.url).toMatch(/^https:\/\//)
       expect(front.line.length).toBeGreaterThanOrEqual(2)
       for (const [lng, lat] of front.line) {

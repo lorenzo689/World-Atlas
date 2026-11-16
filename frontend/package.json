@@ -26,7 +26,9 @@
     "smoke:scenarios": "node scripts/scenario-smoke.mjs",
     "smoke:detail": "node scripts/detail-smoke.mjs",
     "e2e": "node scripts/e2e.mjs",
-    "icons": "node scripts/build-icons.mjs"
+    "icons": "node scripts/build-icons.mjs",
+    "data:ww2:atlas": "node scripts/build-ww2-atlas.mjs",
+    "data:ww2:occupation": "node scripts/build-ww2-occupation.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",
@@ -69,6 +71,7 @@
     "@types/topojson-client": "^3.1.5",
     "@types/topojson-server": "^3.0.4",
     "@vitejs/plugin-react": "^6.1.2",
+    "d3-contour": "^4.0.3",
     "earcut": "^3.2.4",
     "fflate": "^0.8.3",
     "flag-icons": "^7.5.0",

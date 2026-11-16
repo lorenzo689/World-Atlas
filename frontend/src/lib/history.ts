@@ -90,7 +90,10 @@ function decodeIndices(bin: ArrayBuffer, meta: { vertices: number; indices: numb
 
 /** CShapes observations are selected at 1 January of each year. */
 export function flagAtYear(periods: FlagPeriod[] | undefined, year: number): string | null {
-  const day = `${year}-01-01`
+  return flagAtDate(periods, `${year}-01-01`)
+}
+
+export function flagAtDate(periods: FlagPeriod[] | undefined, day: string): string | null {
   const valid = periods?.filter((p) => p.start && p.start <= day && (!p.end || day < p.end)) ?? []
   // Prefer the most recent start when source intervals overlap. Undated flags are intentionally
   // omitted: a current flag must not be shown for an earlier colonial or historical state.
@@ -102,11 +105,21 @@ export function commonsFlagUrl(file: string): string {
   return `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(file.replace(/ /g, '_'))}?width=160`
 }
 
+/** Borders on 1 January of `year` (the "Changing borders" timeline). */
 export function snapshotForYear(data: HistoryData, year: number): HistoricalSnapshot {
-  if (!Number.isInteger(year) || year < FIRST_HISTORICAL_YEAR || year > LAST_HISTORICAL_YEAR) {
-    throw new RangeError(`Historical year ${year} is outside ${FIRST_HISTORICAL_YEAR}–${LAST_HISTORICAL_YEAR}`)
+  return snapshotForDate(data, `${year}-01-01`)
+}
+
+/**
+ * Borders on an exact day (YYYY-MM-DD). The data holds every 1 January plus the dates of the WWII
+ * learning moments; other days return whatever period was last sampled before them.
+ */
+export function snapshotForDate(data: HistoryData, date: string): HistoricalSnapshot {
+  const year = Number(date.slice(0, 4))
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || year < FIRST_HISTORICAL_YEAR || year > LAST_HISTORICAL_YEAR) {
+    throw new RangeError(`Historical date ${date} is outside ${FIRST_HISTORICAL_YEAR}–${LAST_HISTORICAL_YEAR}`)
   }
-  const day = year * 10000 + 101
+  const day = Number(date.replaceAll('-', ''))
   const periods = ((data.topology.objects.periods as GeometryCollection<PeriodProps>).geometries as PeriodGeometry[])
     .filter((g) => g.properties.start <= day && day <= g.properties.end)
   const collection: GeometryCollection<PeriodProps> = { type: 'GeometryCollection', geometries: periods }
@@ -139,7 +152,7 @@ export function snapshotForYear(data: HistoryData, year: number): HistoricalSnap
       name: historicalName(props.code, props.name, year),
       capital: props.capital,
       iso: props.iso,
-      flagFile: flagAtYear(data.flags[props.code.slice(1)], year),
+      flagFile: flagAtDate(data.flags[props.code.slice(1)], date),
     })
   }
   return {
