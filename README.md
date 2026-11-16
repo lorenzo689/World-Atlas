@@ -163,6 +163,6 @@ The [security audit](docs/SECURITY-AUDIT.md) records the current security contro
 - SEO metadata is set client-side (SPA); crawlers that don't run JS will see the generic shell. Pre-rendering would be the next step.
 - `sitemap.xml` uses a placeholder origin (`world-explorer.example`); edit `frontend/scripts/build-data.mjs` before deploying.
 - The service worker caches static assets only; API data, quiz sessions and WebSockets always need the network.
-- 14 small territories have no polygon in the 1:50m dataset (e.g. Gibraltar, Réunion). They are searchable and the camera flies to their coordinates, but no shape is highlighted.
+- 5 small territories have no polygon in the 1:50m dataset (Bouvet Island, Gibraltar, Tokelau, Tuvalu, US Minor Outlying Islands). They are searchable and the camera flies to their coordinates, but no shape is highlighted. Overseas territories that Natural Earth draws as part of their state (e.g. French Guiana, Réunion, Svalbard) are split into their own polygons at build time. The disputed Siachen Glacier is intentionally not assigned. `npm run audit:map` measures the remaining geometry loss; see [docs/MAP-AUDIT.md](docs/MAP-AUDIT.md).
 - Country borders follow the Natural Earth dataset and carry no political endorsement.
 - The WebGL chunk is large (~1.9 MB, three.js); it is lazy-loaded so country pages stay light.

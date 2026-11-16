@@ -18,6 +18,7 @@
     "data:detail": "node scripts/build-map-detail.mjs",
     "data:detail:verify": "node scripts/verify-map-detail.mjs",
     "data:history:verify": "node scripts/verify-history.mjs",
+    "audit:map": "node scripts/audit-map.mjs --check",
     "perf": "node scripts/perf.mjs",
     "smoke": "node scripts/smoke.mjs",
     "smoke:history": "node scripts/history-smoke.mjs",

@@ -7,6 +7,7 @@ import { readFileSync, writeFileSync, mkdirSync, copyFileSync, existsSync } from
 import { createRequire } from 'node:module'
 import { presimplify, simplify, quantile } from 'topojson-simplify'
 import { feature } from 'topojson-client'
+import { geoCentroid, geoDistance } from 'd3-geo'
 
 const require = createRequire(import.meta.url)
 const src = JSON.parse(readFileSync('scripts/source/countries.json', 'utf8'))
@@ -65,7 +66,30 @@ const countPoints = (t) => t.arcs.reduce((n, a) => n + a.length, 0)
 
 const byNumeric = new Map(countries.filter((c) => c.numeric).map((c) => [String(c.numeric).padStart(3, '0'), c]))
 const byName = new Map(countries.map((c) => [c.name.toLowerCase(), c]))
-const nameAliases = { kosovo: 'XKX', 'n. cyprus': 'CYP', somaliland: null }
+// Natural Earth parts without an ISO code of their own. Each is merged into the internationally
+// recognised state (as for Northern Cyprus); dropping them left visible holes in the globe
+// (Somaliland alone is 168,000 km² of Somalia). "Indian Ocean Ter." holds Christmas Island and the
+// Cocos (Keeling) Islands; it goes to CXR first and SPLIT_TERRITORIES below moves the Cocos part.
+// Siachen Glacier stays unassigned on purpose: it is disputed between India and Pakistan and the
+// metadata does not decide it (see docs/MAP-AUDIT.md).
+const nameAliases = { kosovo: 'XKX', 'n. cyprus': 'CYP', somaliland: 'SOM', 'indian ocean ter.': 'CXR' }
+
+// Natural Earth draws some overseas territories as parts of their sovereign state, so French
+// Guiana was selectable as "France" and France appeared to border Brazil. Each listed territory
+// takes every polygon of its parent whose centroid lies within `radiusKm` of the territory's
+// metadata position. Radii are wide enough for the archipelago and far below the distance to the
+// parent's next part.
+const SPLIT_TERRITORIES = [
+  { code: 'GUF', parent: 'FRA', radiusKm: 400 },
+  { code: 'GLP', parent: 'FRA', radiusKm: 120 },
+  { code: 'MTQ', parent: 'FRA', radiusKm: 80 },
+  { code: 'MYT', parent: 'FRA', radiusKm: 80 },
+  { code: 'REU', parent: 'FRA', radiusKm: 80 },
+  { code: 'SJM', parent: 'NOR', radiusKm: 700 },
+  { code: 'BVT', parent: 'NOR', radiusKm: 80 },
+  { code: 'BES', parent: 'NLD', radiusKm: 200 },
+  { code: 'CCK', parent: 'CXR', radiusKm: 80 },
+]
 
 const unmatched = []
 const merged = new Map() // alpha-3 -> geometry (Polygon/MultiPolygon on shared arcs)
@@ -87,6 +111,28 @@ for (const g of topo.objects.countries.geometries) {
   if (prev) prev.arcs.push(...polys)
   else merged.set(c.code, { type: 'MultiPolygon', arcs: [...polys], properties: { code: c.code, name: c.name } })
 }
+
+// Split overseas territories out of their parent (see SPLIT_TERRITORIES). Only arc references
+// move between geometries; the arcs themselves are untouched, so shared borders stay aligned.
+for (const { code, parent, radiusKm } of SPLIT_TERRITORIES) {
+  const t = countries.find((x) => x.code === code)
+  const p = merged.get(parent)
+  if (!t?.latlng || !p || merged.has(code)) continue
+  const target = [t.latlng[1], t.latlng[0]] // metadata is [lat, lng], d3 wants [lng, lat]
+  const taken = []
+  const kept = []
+  for (const poly of p.arcs) {
+    const centroid = geoCentroid(feature(topo, { type: 'Polygon', arcs: poly }))
+    const km = geoDistance(centroid, target) * 6371
+    ;(km <= radiusKm ? taken : kept).push(poly)
+  }
+  // Never empty the parent: a territory rule must not swallow the sovereign state itself.
+  if (!taken.length || !kept.length) continue
+  p.arcs = kept
+  merged.set(code, { type: 'MultiPolygon', arcs: taken, properties: { code, name: t.name } })
+  console.log(`split ${code} from ${parent}: ${taken.length} part(s)`)
+}
+
 const out = {
   type: 'Topology',
   arcs: topo.arcs.map((arc) => {

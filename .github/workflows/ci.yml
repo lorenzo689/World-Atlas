@@ -21,6 +21,16 @@ jobs:
       - run: npm ci
       - run: npm run data:history:verify
       - run: npm run data:detail:verify
+      - name: Country geometry is reproducible from its sources
+        # Rebuilds countries/boundaries/geometry and fails if the committed files differ, so the
+        # shipped map can only change through scripts/build-data.mjs.
+        run: |
+          npm run data
+          git diff --exit-code --stat -- public/data/countries.json public/data/boundaries.json public/data/geometry.json public/data/geometry.bin
+      - name: Map audit (no regression against scripts/map-audit-baseline.json)
+        run: |
+          npm run audit:map
+          git diff --exit-code -- ../docs/MAP-AUDIT.md || (echo "docs/MAP-AUDIT.md is stale: run npm run audit:map and commit it" && exit 1)
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run typecheck
       - run: npm test
