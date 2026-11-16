@@ -51,6 +51,10 @@ export function Ww2Panel({ moment, lang, theater, onTheaterChange, showFronts, o
     </div>
     <p className="mt-2 text-xs text-muted-foreground">{lang === 'de' ? 'Keine Kriegssimulation: datierte Quellen, ausgewählte Schauplätze und die Folgen für Menschen.' : 'Not a war simulation: dated sources, selected theaters and human consequences.'}</p>
     <aside className="mt-3 rounded-xl border border-primary/40 bg-primary/10 p-3 text-xs leading-relaxed" role="note">
+      <strong>{lang === 'de' ? 'Achse rot, Alliierte blau' : 'Axis red, Allies blue'}</strong>{' '}
+      {lang === 'de'
+        ? 'Dunkel: Staatsgebiet und Annexionen. Hell: Besatzung und Militärpräsenz. Ungefärbt: neutral oder keine Aussage. '
+        : 'Dark: state territory and annexations. Light: occupation and military presence. Unshaded: neutral or no claim. '}
       <strong>{lang === 'de' ? 'Drei Ebenen, ein Stichtag' : 'Three layers, one date'}</strong>{' '}
       {lang === 'de'
         ? 'Staatsgrenzen (CShapes, Reichsgrenze aus datierten OpenHistoricalMap-Grenzen), Besatzungsflächen und Fronten zeigen denselben Tag. Annexionen erscheinen erst ab ihrem Datum; Generalgouvernement und Protektorat sind Besatzung, nicht Reichsgebiet. 1943–1945 stammen Fronten und Flächenzuschnitt aus dem georeferenzierten Lageatlas der US-Armee (±8–10 km), 1939–1942 aus schematischen Linien.'

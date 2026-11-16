@@ -12,8 +12,24 @@ to 1945. Each moment has **one date**, and all three map layers show that day:
    annexation by another state, client state, Allied control, contested) and a precision.
 3. **Fronts**: lines with a source and a precision.
 
-Occupation is never sovereignty. An unshaded place means *no claim*: Asia, the Pacific and North
-Africa have event points but no areas, and Axis states' own territory carries no area.
+Occupation is never sovereignty, and the colours show **sides**, not individual powers:
+
+| Colour | Meaning |
+| --- | --- |
+| dark red `#b91c1c` | Axis powers: state territory, annexations, client states (incl. Manchukuo) |
+| red `#f87171` | Axis powers: occupation and military presence |
+| dark blue `#1d4ed8` | Allies: state territory |
+| blue `#60a5fa` | Allies: occupation, military control and presence |
+| grey `#a1a1aa` | Soviet Union before 22 June 1941 (eastern Poland 1940), not Allied |
+| amber `#f59e0b` | Contested (northern Norway 1940, Tunisia 1942, the Philippines and Burma 1944–45) |
+
+Unshaded means neutral or *no claim* (Spain, Sweden, Switzerland, Vichy France 1940–42, Finland
+after its armistice). Which side every state and colony was on, and from when, is a dated table
+in `scripts/lib/ww2-sides.mjs` (entry into the war, change of sides, conquest); each area shows the
+reason in the app. On atlas dates every state is additionally split by the atlas: e.g. Hungary on
+15 April 1945 is Soviet-held (blue), not Axis state territory. The individual power (e.g. Fascist
+Italy) is kept as `power`. **Gap:** Japanese-occupied China is not drawn, so China appears as Allied
+state territory in full.
 
 ## Sources and precision
 

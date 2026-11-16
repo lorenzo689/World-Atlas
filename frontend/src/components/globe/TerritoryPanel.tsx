@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import type { Localized, TerritoryKind, TerritoryPrecision, TerritorySnapshot } from '@/lib/territories'
 
 const KIND_LABEL: Record<TerritoryKind, Localized> = {
+  state: { de: 'Staatsgebiet', en: 'State territory' },
   occupation: { de: 'Besatzung', en: 'Occupation' },
   annexation: { de: 'Annexion durch einen anderen Staat', en: 'Annexation by another state' },
   client: { de: 'Satellitenstaat', en: 'Client state' },
@@ -11,7 +12,7 @@ const KIND_LABEL: Record<TerritoryKind, Localized> = {
 const PRECISION_LABEL: Record<TerritoryPrecision, Localized> = {
   schematic: { de: 'Schematische regionale Rekonstruktion; keine präzise Grenze.', en: 'Schematic regional reconstruction; not a precise boundary.' },
   'settlement-estimate': { de: 'Aus Siedlungsmeldungen geschätzte Flächen; keine Live-Front.', en: 'Areas estimated from settlement reports; not a live front.' },
-  administrative: { de: 'Datierte Verwaltungsgrenze (OpenHistoricalMap); die Linienführung ist dort als ungefähr markiert.', en: 'Dated administrative boundary (OpenHistoricalMap); its line work is marked approximate there.' },
+  administrative: { de: 'Datierte Staats- oder Verwaltungsgrenze (CShapes bzw. OpenHistoricalMap); die Linienführung ist näherungsweise.', en: 'Dated state or administrative boundary (CShapes or OpenHistoricalMap); the line work is approximate.' },
   digitized: { de: 'Auf das gehaltene Gebiet einer georeferenzierten Lagekarte zugeschnitten; Lagefehler etwa ±10 km.', en: 'Clipped to the held area of a georeferenced situation map; positional error about ±10 km.' },
 }
 
@@ -63,7 +64,7 @@ export function TerritoryPanel({ lang, enabled, onEnabledChange, status, snapsho
               const bounds = ring.reduce((b, [lng, lat]) => [Math.min(b[0], lng), Math.min(b[1], lat), Math.max(b[2], lng), Math.max(b[3], lat)], [180, 90, -180, -90])
               onFocus((bounds[1] + bounds[3]) / 2, (bounds[0] + bounds[2]) / 2)
             }}>{feature.title[lang]} ↗</button>
-            <p className="mt-1" style={{ color: feature.color }}>{feature.actor[lang]} · {KIND_LABEL[feature.kind][lang]}</p>
+            <p className="mt-1" style={{ color: feature.color }}>{feature.actor[lang]} · {KIND_LABEL[feature.kind][lang]}{feature.power ? ` · ${feature.power[lang]}` : ''}</p>
             <p className="mt-1 text-muted-foreground">{PRECISION_LABEL[feature.precision][lang]} · {feature.source.license}</p>
             {feature.note && <p className="mt-1 text-muted-foreground">{feature.note[lang]}</p>}
             <a className="mt-1 block text-primary underline" href={feature.source.url} target="_blank" rel="noreferrer">{feature.source.title} ↗</a>

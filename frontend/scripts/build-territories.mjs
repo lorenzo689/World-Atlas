@@ -5,7 +5,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import polygonClipping from 'polygon-clipping'
 import { topology } from 'topojson-server'
-import { feature } from 'topojson-client'
+import { feature, quantize } from 'topojson-client'
 import { presimplify, simplify } from 'topojson-simplify'
 const { intersection, union } = polygonClipping
 
@@ -78,23 +78,41 @@ if (!existsSync('scripts/data/ww2-occupation.json')) throw new Error('Missing sc
 const ww2 = JSON.parse(readFileSync('scripts/data/ww2-occupation.json', 'utf8'))
 if (ww2.cshapesSha256 !== hash) throw new Error('ww2-occupation.json was built from another CShapes revision; rebuild it')
 const ww2Coverage = {
-  de: 'Besatzungs-, Annexions- und Satellitengebiete in Europa zum Stichtag. Grenzen aus datierten OpenHistoricalMap-Verwaltungsgrenzen; 1943–1945 auf das im US-Armee-Atlas gehaltene Gebiet zugeschnitten. Asien und Nordafrika sind nicht abgedeckt; ungefärbt heißt „keine Aussage“.',
-  en: 'Occupation, annexation and client-state areas in Europe on the selected date. Boundaries from dated OpenHistoricalMap administrative borders; 1943–1945 clipped to the area held according to the U.S. Army atlas. Asia and North Africa are not covered; unshaded means "no claim".',
+  de: 'Achsenmächte rot, Alliierte blau: Staatsgebiet und Annexionen dunkel, Besatzung und Militärpräsenz hell. Grenzen aus CShapes und datierten OpenHistoricalMap-Grenzen; 1943–1945 auf das im US-Armee-Atlas gehaltene Gebiet zugeschnitten. Japanisch besetzte Gebiete Chinas sind nicht eingezeichnet; ungefärbt heißt neutral oder „keine Aussage“.',
+  en: 'Axis red, Allies blue: state territory and annexations dark, occupation and military presence light. Boundaries from CShapes and dated OpenHistoricalMap borders; 1943–1945 clipped to the area held according to the U.S. Army atlas. Japanese-occupied China is not drawn; unshaded means neutral or "no claim".',
 }
-// One topology per date: neighbouring areas share their border arcs, so simplification moves both
-// sides together and cannot open gaps or overlaps between them. The threshold (square degrees of
-// the smallest kept triangle) removes detail far below the sources' accuracy (OHM line work is
-// marked approximate; atlas ±8–10 km). Coordinates are rounded to 0.001° (~100 m).
-const WW2_SIMPLIFY = 0.0004
-const round3 = (c) => (typeof c[0] === 'number' ? [Math.round(c[0] * 1000) / 1000, Math.round(c[1] * 1000) / 1000] : c.map(round3))
+// One topology per date, shipped as TopoJSON: neighbouring areas share their border arcs (stored
+// once, simplified together, so no gaps or overlaps), and coordinates are quantised and
+// delta-encoded. The app decodes it in loadTerritories(). The threshold (square degrees of the
+// smallest kept triangle) removes detail far below the sources' accuracy (OHM line work is marked
+// approximate; atlas ±8–10 km); 1e5 quantisation steps are ~400 m at the equator.
+const WW2_SIMPLIFY = 0.002
+// Snap every area of a date to one 1e-4° grid (~10 m) first. Borders that come from different
+// clipping steps can differ by a few micro-degrees; topology only shares exactly equal lines, and
+// near-equal ones would split into thousands of tiny arcs that cannot be simplified.
+const GRID = 1e3
+const snapRing = (ring) => {
+  const out = []
+  for (const [x, y] of ring) {
+    const p = [Math.round(x * GRID) / GRID, Math.round(y * GRID) / GRID]
+    if (!out.length || out.at(-1)[0] !== p[0] || out.at(-1)[1] !== p[1]) out.push(p)
+  }
+  return out
+}
+const snapGeometry = (g) => ({
+  type: 'MultiPolygon',
+  coordinates: g.coordinates.map((polygon) => polygon.map(snapRing).filter((ring) => ring.length >= 4)).filter((polygon) => polygon.length),
+})
 for (const { date, features } of ww2.snapshots) {
   const s = snapshot('ww2', Number(date.slice(0, 4)), date, ww2Coverage)
-  const topo = simplify(presimplify(topology(Object.fromEntries(features.map((f, i) => [`f${i}`, f.geometry])), 1e6)), WW2_SIMPLIFY)
+  const simplified = simplify(presimplify(topology(Object.fromEntries(features.map((f, i) => [`f${i}`, snapGeometry(f.geometry)])))), WW2_SIMPLIFY)
+  simplified.arcs = simplified.arcs.map((arc) => arc.map(([x, y]) => [x, y])) // drop simplification weights
+  s.topology = quantize(simplified, 1e5)
   for (const [i, f] of features.entries()) {
-    const simplified = feature(topo, topo.objects[`f${i}`]).geometry
-    const geometry = { type: simplified.type, coordinates: round3(simplified.coordinates) }
+    const geometry = { object: `f${i}` }
     s.features.push({
       id: `${s.id}-${f.id}`, actorId: f.actorId, ...ww2.actors[f.actorId], title: f.title, kind: f.kind, precision: f.precision,
+      ...(f.power ? { power: f.power } : {}),
       ...(f.note ? { note: f.note } : {}),
       source: { ...f.source, date },
       ...(f.evidence ? { evidence: { ...f.evidence, date } } : {}),

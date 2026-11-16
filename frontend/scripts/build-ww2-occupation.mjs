@@ -10,11 +10,25 @@
 // Occupation is not sovereignty: the base map keeps its separate state borders.
 import { readFileSync, writeFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
+import { gunzipSync } from 'node:zlib'
 import polygonClipping from 'polygon-clipping'
 import { ohmRelation, forSphere } from './lib/ohm.mjs'
+import { roleOf, reasonOf, unitTitle } from './lib/ww2-sides.mjs'
 import { WW2_MOMENTS } from '../src/lib/ww2.ts'
 
-const { intersection, union, difference } = polygonClipping
+// polygon-clipping can fail ("Unable to find segment … in SweepLine tree") on nearly coincident
+// segments from independently traced sources (OHM, CShapes, atlas). Snapping all inputs to a
+// grid is the usual remedy: first 1e-6° (~0.1 m), then coarser up to 1e-4° (~10 m), far below
+// the sources' accuracy.
+const snap = (coords, step) => coords.map((polygon) => polygon.map((ring) => ring.map(([x, y]) => [Math.round(x / step) * step, Math.round(y / step) * step])))
+const robust = (op) => (...args) => {
+  for (const step of [0, 1e-6, 1e-5, 1e-4]) {
+    try { return op(...(step ? args.map((a) => snap(a, step)) : args)) } catch (error) { if (step === 1e-4) throw error }
+  }
+}
+const intersection = robust(polygonClipping.intersection)
+const union = robust(polygonClipping.union)
+const difference = robust(polygonClipping.difference)
 
 // ---- inputs ----------------------------------------------------------------------------------
 const cshapesInput = readFileSync('scripts/source/historical/CShapes-2.0.geojson')
@@ -130,6 +144,9 @@ async function moments() {
     { id: 'protectorate', actorId: 'naziGermany', kind: 'occupation', precision: 'administrative', title: { de: 'Protektorat Böhmen und Mähren', en: 'Protectorate of Bohemia and Moravia' }, geometry: protectorate.coordinates, source: fromOhm(protectorate) },
     { id: 'slovakia', actorId: 'client', kind: 'client', precision: 'administrative', title: { de: 'Slowakischer Staat', en: 'Slovak Republic' }, geometry: slovakia.coordinates, source: fromOhm(slovakia) },
     { id: 'albania', actorId: 'italy', kind: 'occupation', precision: 'administrative', title: { de: 'Italienisch besetztes Albanien', en: 'Italian-occupied Albania' }, geometry: onLand(albania1939.coordinates, prewar('Albania')), source: fromOhm(albania1939) },
+    // The Vilnius area of pre-war Poland was transferred to neutral Lithuania in October 1939. It is
+    // neither Polish (Allied) territory nor occupied: exclude it from Poland, ship no area for it.
+    { id: 'vilnius-to-lithuania', hidden: true, geometry: intersection(prewar('Poland'), lithuania1940.coordinates) },
     { id: 'denmark', actorId: 'naziGermany', kind: 'occupation', precision: 'administrative', title: { de: 'Besetztes Dänemark (seit 9. April 1940)', en: 'Occupied Denmark (since 9 April 1940)' }, geometry: prewar('Denmark'), source: fromMap('USHMM · German occupation maps', USHMM_MAPS) },
     { id: 'low-countries', actorId: 'naziGermany', kind: 'occupation', precision: 'administrative', title: { de: 'Besetzte Niederlande, Belgien und Luxemburg', en: 'Occupied Netherlands, Belgium and Luxembourg' }, geometry: union(prewar('Netherlands'), prewar('Belgium'), prewar('Luxembourg')), source: fromMap('USHMM · German occupation maps', USHMM_MAPS),
       note: { de: 'Kapitulation der Niederlande am 15. Mai, Belgiens am 28. Mai 1940.', en: 'The Netherlands capitulated on 15 May, Belgium on 28 May 1940.' } },
@@ -182,7 +199,9 @@ async function moments() {
     M[date] = [
       ...west(date), ...balkans(date),
       { id: 'eastern-front', actorId: 'axisEast', kind: 'occupation', precision: 'schematic', title: { de: 'Besetzte sowjetische Gebiete westlich der Front', en: 'Occupied Soviet territory west of the front' },
-        geometry: difference(intersection(ussr1941, westOf(eastern.line, 20)), gg1941.coordinates), source: fromMap(eastern.source.title, eastern.source.url),
+        // CShapes keeps pre-war Poland until 1945, so the Soviet polygon lacks the eastern Polish lands
+        // annexed in 1939 (Polesia, Volhynia): include Poland, minus the GG and Reich annexations.
+        geometry: difference(intersection(union(ussr1941, prewar('Poland')), westOf(eastern.line, 20)), gg1941.coordinates, reich1941.coordinates), source: fromMap(eastern.source.title, eastern.source.url),
         note: { de: 'Nur im Breitenbereich des belegten Frontabschnitts; östliche Grenze ist die schematische Frontlinie.', en: 'Only within the latitude range of the sourced front section; the eastern limit is the schematic front line.' } },
     ]
   }
@@ -247,6 +266,85 @@ async function moments() {
   return M
 }
 
+// ---- colour categories ------------------------------------------------------------------------
+// The map colours sides, not individual powers: Axis red, Allies blue; state territory and
+// annexations dark, occupation and military presence light. The individual power stays as `power`.
+const CATEGORIES = {
+  axisState: { actor: { de: 'Achsenmächte · Staatsgebiet & Annexionen', en: 'Axis powers · state territory & annexations' }, color: '#b91c1c' },
+  axisOccupied: { actor: { de: 'Achsenmächte · Besatzung & Militärpräsenz', en: 'Axis powers · occupation & military presence' }, color: '#f87171' },
+  alliedState: { actor: { de: 'Alliierte · Staatsgebiet', en: 'Allies · state territory' }, color: '#1d4ed8' },
+  alliedControl: { actor: { de: 'Alliierte · Besatzung & Militärpräsenz', en: 'Allies · occupation & military presence' }, color: '#60a5fa' },
+  sovietPact: { actor: { de: 'Sowjetunion (bis 22. Juni 1941 nicht alliiert)', en: 'Soviet Union (not Allied until 22 June 1941)' }, color: '#a1a1aa' },
+  contested: { actor: { de: 'Umkämpft', en: 'Contested' }, color: '#f59e0b' },
+}
+function categoryOf(entry, date) {
+  if (entry.kind === 'contested') return 'contested'
+  if (entry.actorId === 'sovietUnion' && date < '1941-06-22') return 'sovietPact'
+  if (entry.actorId === 'westernAllies' || entry.actorId === 'sovietUnion') return 'alliedControl'
+  return entry.kind === 'annexation' || entry.kind === 'client' ? 'axisState' : 'axisOccupied'
+}
+
+// ---- state territory of every belligerent (scripts/lib/ww2-sides.mjs) ------------------------
+const reichByDay = new Map(JSON.parse(gunzipSync(readFileSync('scripts/data/ww2-annexations.geojson.gz')).toString('utf8')).features
+  .map((f) => [f.properties.day, f.geometry.coordinates]))
+const planarArea = (coords) => coords.reduce((s, polygon) => s + polygon.reduce((t, ring, i) => {
+  let a = 0
+  for (let k = 0, j = ring.length - 1; k < ring.length; j = k++) a += (ring[j][0] - ring[k][0]) * (ring[j][1] + ring[k][1])
+  return t + (i === 0 ? Math.abs(a / 2) : -Math.abs(a / 2))
+}, 0), 0)
+/** Drops numerical slivers left by clipping two independently traced boundaries (< 0.02 deg²). */
+const solid = (coords) => coords.filter((polygon) => planarArea([polygon]) >= 0.02)
+const CSHAPES_SOURCE = { title: 'CShapes 2.0 · state borders on the map date', url: 'https://icr.ethz.ch/data/cshapes/', ...CSHAPES_LICENSE }
+const manchukuo = await ohmRelation(2885965, '1932', '1945-08-17').catch((error) => { console.log(`Manchukuo skipped: ${error.message}`); return null })
+
+function stateFeatures(date, taken) {
+  const day = asNumber(date)
+  const reich = reichByDay.get(day)
+  if (!reich) throw new Error(`No Reich footprint for ${date}; rebuild npm run data:ww2`)
+  const s = atlas.sheets.some((x) => x.date === date) ? sheet(date) : null
+  const out = []
+  const push = (id, category, kind, title, geometry, note, source = CSHAPES_SOURCE) => {
+    const g = solid(geometry)
+    if (g.length) out.push({ id, category, kind, precision: s ? 'digitized' : 'administrative', title, geometry: g, source, ...(note ? { note } : {}) })
+  }
+  if (manchukuo && date >= '1940-09-27') {
+    push('state-manchukuo', 'axisState', 'client', { de: 'Mandschukuo (japanischer Satellitenstaat)', en: 'Manchukuo (Japanese client state)' }, difference(manchukuo.coordinates, taken), null, fromOhm(manchukuo))
+    taken = union(taken, manchukuo.coordinates)
+  }
+  for (const f of cshapes.features) {
+    const p = f.properties
+    if (dayOf(p, 'gws') > day || dayOf(p, 'gwe') < day) continue
+    const role = roleOf(p.cntry_name, date)
+    if (!role) continue
+    const unit = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates
+    const own = p.cntry_name === 'Germany (Prussia)' ? reich : difference(unit, reich)
+    // A unit swallowed by the Reich (Austria) leaves only boundary slivers. Test this before removing
+    // occupied areas: a mostly occupied state (France 1943: liberated Corsica only) must stay.
+    if (planarArea(own) < planarArea(unit) * 0.03 && p.cntry_name !== 'Germany (Prussia)') continue
+    let base = difference(own, taken)
+    const id = `state-${p.cntry_name.toLowerCase().replace(/[^a-z]+/g, '-').replace(/^-|-$/g, '')}`
+    const title = unitTitle(p.cntry_name)
+    const reason = reasonOf(p.cntry_name, date)
+    const note = reason ? { de: `Seitenzuordnung: ${reason}.`, en: `Side: ${reason}.` } : null
+    if (role === 'axis' || role === 'allied') {
+      if (s) {
+        // Split by the atlas: the part held by the other side on this date gets that side's light colour.
+        const otherSide = role === 'axis' ? intersection(difference(base, s.axis), s.frame) : intersection(base, s.frame, s.axis)
+        const lost = solid(otherSide)
+        if (lost.length) {
+          push(`${id}-held-by-${role === 'axis' ? 'allies' : 'axis'}`, role === 'axis' ? 'alliedControl' : 'axisOccupied', role === 'axis' ? 'control' : 'occupation',
+            { de: `${title.de} · ${role === 'axis' ? 'von den Alliierten gehalten' : 'von der Achse gehalten'}`, en: `${title.en} · held by the ${role === 'axis' ? 'Allies' : 'Axis'}` }, lost, null, fromAtlas(s))
+          base = difference(base, lost)
+        }
+      }
+      push(id, role === 'axis' ? 'axisState' : 'alliedState', 'state', title, base, note)
+    } else {
+      push(id, role, role === 'contested' ? 'contested' : role === 'alliedControl' ? 'control' : 'occupation', title, base, note)
+    }
+  }
+  return out
+}
+
 // ---- assemble ---------------------------------------------------------------------------------
 const M = await moments()
 const dates = WW2_MOMENTS.map((m) => m.date)
@@ -255,12 +353,21 @@ for (const date of dates) {
   const entries = M[date]
   if (!entries) throw new Error(`No occupation entries for ${date}`)
   const features = []
+  let taken = []
   for (const e of entries) {
     if (!e.geometry?.length) { console.log(`  ${date} ${e.id}: empty after clipping (not shipped)`); continue }
-    features.push({ ...e, geometry: { type: 'MultiPolygon', coordinates: forSphere(e.geometry) } })
+    if (e.hidden) { taken = union(taken, e.geometry); continue } // excluded from state areas, not shown
+    const category = categoryOf(e, date)
+    features.push({ ...e, actorId: category, power: ACTORS[e.actorId].actor, geometry: { type: 'MultiPolygon', coordinates: forSphere(e.geometry) } })
+    taken = union(taken, e.geometry)
+  }
+  // Specific areas first: clicks pick the first match, and state areas exclude them anyway.
+  for (const f of stateFeatures(date, taken)) {
+    features.push({ id: f.id, actorId: f.category, kind: f.kind, precision: f.precision, title: f.title, ...(f.note ? { note: f.note } : {}), source: f.source, geometry: { type: 'MultiPolygon', coordinates: forSphere(f.geometry) } })
   }
   snapshots.push({ date, features })
-  console.log(`${date}: ${features.length} areas (${features.map((f) => f.id).join(', ')})`)
+  const counts = Object.keys(CATEGORIES).map((c) => `${c} ${features.filter((f) => f.actorId === c).length}`).join(', ')
+  console.log(`${date}: ${features.length} areas (${counts})`)
 }
-writeFileSync('scripts/data/ww2-occupation.json', JSON.stringify({ schemaVersion: 1, actors: ACTORS, cshapesSha256: cshapesHash, snapshots }))
+writeFileSync('scripts/data/ww2-occupation.json', JSON.stringify({ schemaVersion: 2, actors: CATEGORIES, cshapesSha256: cshapesHash, snapshots }))
 console.log('Wrote scripts/data/ww2-occupation.json')

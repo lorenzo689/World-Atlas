@@ -67,6 +67,12 @@ interface GlobeViewProps {
   onTerritorySelect?: (id: string) => void
   /** Historical entities have their own names and dated flags, separate from current country metadata. */
   historicalEntities?: Map<string, HistoricalEntity> | null
+  /**
+   * Political mode paints every country in neutral grey instead of region colours. Used where an
+   * overlay carries the meaning (WWII: Axis red / Allies blue), so a region colour such as the
+   * lavender of Europe cannot be mistaken for a side.
+   */
+  neutralPolitical?: boolean
   /** Follow a camera controlled by another globe (historical side-by-side view). */
   externalPose?: Pose | null
   focusPose?: Pose | null
@@ -101,6 +107,7 @@ function setTooltip(tip: HTMLElement, data: TooltipData | null) {
 export function GlobeView({
   boundaries,
   countries,
+  neutralPolitical = false,
   mode,
   values,
   metric,
@@ -152,14 +159,14 @@ export function GlobeView({
     (code: string) => {
       if (mode === 'political') {
         const c = countries.get(historicalEntities?.get(code)?.iso ?? code)
-        const region = REGION_COLORS[c?.region ?? ''] ?? '#6d7a8c'
+        const region = neutralPolitical ? '#5b6070' : REGION_COLORS[c?.region ?? ''] ?? '#6d7a8c'
         // Slight per-country variation so neighbours in the same region stay distinguishable.
         return mix(region, hash01(code) > 0.5 ? '#ffffff' : '#000000', 0.04 + hash01(code + 'x') * 0.14)
       }
       const v = values?.get(code)
       return v && choropleth ? choropleth.color(v.value) : NO_DATA_COLOR
     },
-    [mode, countries, values, choropleth, historicalEntities],
+    [mode, countries, values, choropleth, historicalEntities, neutralPolitical],
   )
 
   const highlightStyle = useCallback(

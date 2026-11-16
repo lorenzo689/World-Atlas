@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import today from '../../../public/data/territories-today.json'
 import history from '../../../public/data/territories-history.json'
-import { pickTerritory, territorySnapshot, validateTerritories, type TerritoryDataset } from '../territories'
+import { decodeTopologySnapshots, pickTerritory, territorySnapshot, validateTerritories, type TerritoryDataset } from '../territories'
 
 const current = today as TerritoryDataset
-const historic = history as TerritoryDataset
+// WWII snapshots ship as TopoJSON; decode a copy exactly as loadTerritories() does.
+const historic = decodeTopologySnapshots(structuredClone(history) as unknown as TerritoryDataset)
 
 describe('dated territorial control', () => {
   it('requires valid geometry, attribution, source dates and actor identity in shipped data', () => {
@@ -30,7 +31,7 @@ describe('dated territorial control', () => {
     // never the settlement-based estimate used for the present day. WWI remains schematic.
     expect(historic.snapshots.every((s) => s.features.every((f) => ['schematic', 'administrative', 'digitized'].includes(f.precision)))).toBe(true)
     expect(historic.snapshots.filter((s) => s.scenario === 'ww1').every((s) => s.features.every((f) => f.precision === 'schematic'))).toBe(true)
-    expect(territorySnapshot(historic, 'ww2', 1939)?.features.some((f) => f.actorId === 'sovietUnion')).toBe(false)
+    expect(territorySnapshot(historic, 'ww2', 1939)?.features.some((f) => f.actorId === 'sovietPact')).toBe(false)
   })
   it('rejects unclosed rings, unsafe source links, missing attribution and invalid coordinates', () => {
     for (const change of [
@@ -40,7 +41,8 @@ describe('dated territorial control', () => {
       (d: TerritoryDataset) => { d.snapshots[0].features[0].geometry = { type: 'Polygon', coordinates: [[[0,0], [1,0], [999,1], [0,0]]] } },
       (d: TerritoryDataset) => { d.snapshots[0].features[0].geometry = { type: 'Polygon', coordinates: [[[0,0], [1,0], [1,1], [0,1]]] } },
     ]) {
-      const copy = structuredClone(historic)
+      // One snapshot is enough to exercise the validator; cloning all ~900 areas per case is slow.
+      const copy = structuredClone({ ...historic, snapshots: historic.snapshots.slice(0, 1) })
       change(copy)
       expect(() => validateTerritories(copy)).toThrow()
     }
@@ -48,9 +50,11 @@ describe('dated territorial control', () => {
   it('picks actors within sourced regions while preserving holes and actor visibility', () => {
     const snapshot = territorySnapshot(historic, 'ww2', 1942)!
     const visible = new Set(snapshot.features.map((feature) => feature.id))
-    expect(pickTerritory(snapshot.features, visible, 4.35, 50.85)?.actorId).toBe('naziGermany')
-    expect(pickTerritory(snapshot.features, visible, 27.56, 53.9)?.actorId).toBe('axisEast')
-    expect(pickTerritory(snapshot.features, visible, 13.4, 52.5)).toBeNull()
+    // WWII areas are coloured by side: occupation light, state territory dark; neutrals stay empty.
+    expect(pickTerritory(snapshot.features, visible, 4.35, 50.85)?.actorId).toBe('axisOccupied')
+    expect(pickTerritory(snapshot.features, visible, 27.56, 53.9)?.actorId).toBe('axisOccupied')
+    expect(pickTerritory(snapshot.features, visible, 13.4, 52.5)?.actorId).toBe('axisState')
+    expect(pickTerritory(snapshot.features, visible, -3.7, 40.42)).toBeNull()
     expect(pickTerritory(snapshot.features, new Set(), 4.35, 50.85)).toBeNull()
     const area = structuredClone(snapshot.features[0])
     area.geometry = { type: 'Polygon', coordinates: [[[0,0],[5,0],[5,5],[0,5],[0,0]], [[1,1],[3,1],[3,3],[1,3],[1,1]]] }

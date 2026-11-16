@@ -308,6 +308,7 @@ export default function ExplorerPage() {
                 selected={historyYear != null ? historicalSelected : selected}
                 onSelect={onGlobeSelect}
                 historicalEntities={historyYear != null ? history?.entities : null}
+                neutralPolitical={ww2Open}
                 onReady={() => setReady(true)}
                 onPoseChange={(pose) => { setView(pose); if (comparison) setComparePose(pose) }}
                 initialPose={initialPose}

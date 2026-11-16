@@ -1,4 +1,6 @@
-import type { MultiPolygon, Polygon } from 'geojson'
+import type { Feature, MultiPolygon, Polygon } from 'geojson'
+import { feature as topojsonFeature } from 'topojson-client'
+import type { Topology } from 'topojson-specification'
 import type { ScenarioId } from './scenarios'
 import type { AreaMesh } from './historyAreaDiff'
 
@@ -19,15 +21,17 @@ export interface Territory {
   precision: TerritoryPrecision
   /** Extra caveat for this feature (how a boundary was derived). */
   note?: Localized
+  /** The individual power when `actor` is a colour category (WWII: e.g. "Fascist Italy"). */
+  power?: Localized
   source: TerritorySource
   /** Second source that limits the area (e.g. the atlas sheet that clipped an OHM regime). */
   evidence?: TerritorySource
   geometry: Polygon | MultiPolygon
 }
-export type TerritoryKind = 'occupation' | 'annexation' | 'client' | 'control' | 'contested'
+export type TerritoryKind = 'state' | 'occupation' | 'annexation' | 'client' | 'control' | 'contested'
 export type TerritoryPrecision = 'schematic' | 'settlement-estimate' | 'administrative' | 'digitized'
 export interface TerritorySource { title: string; url: string; date: string; license: string; licenseUrl?: string }
-export const TERRITORY_KINDS: readonly TerritoryKind[] = ['occupation', 'annexation', 'client', 'control', 'contested']
+export const TERRITORY_KINDS: readonly TerritoryKind[] = ['state', 'occupation', 'annexation', 'client', 'control', 'contested']
 export const TERRITORY_PRECISIONS: readonly TerritoryPrecision[] = ['schematic', 'settlement-estimate', 'administrative', 'digitized']
 export interface TerritorySnapshot {
   id: string
@@ -73,7 +77,7 @@ export function validateTerritories(data: TerritoryDataset): void {
     const featureIds = new Set<string>()
     for (const feature of snapshot.features) {
       const validSource = (s: TerritorySource) => validDate(s.date) && s.date === snapshot.date && new URL(s.url).protocol === 'https:' && !!s.license
-      if (featureIds.has(feature.id) || !feature.actorId || !localized(feature.actor) || !localized(feature.title) || !/^#[0-9a-f]{6}$/i.test(feature.color) || !TERRITORY_KINDS.includes(feature.kind) || !TERRITORY_PRECISIONS.includes(feature.precision) || (feature.note && !localized(feature.note)) || !validSource(feature.source) || (feature.evidence && !validSource(feature.evidence))) throw new Error('Invalid territory attribution')
+      if (featureIds.has(feature.id) || !feature.actorId || !localized(feature.actor) || !localized(feature.title) || !/^#[0-9a-f]{6}$/i.test(feature.color) || !TERRITORY_KINDS.includes(feature.kind) || !TERRITORY_PRECISIONS.includes(feature.precision) || (feature.note && !localized(feature.note)) || (feature.power && !localized(feature.power)) || !validSource(feature.source) || (feature.evidence && !validSource(feature.evidence))) throw new Error('Invalid territory attribution')
       featureIds.add(feature.id)
       if (!['Polygon', 'MultiPolygon'].includes(feature.geometry.type)) throw new Error('Invalid territory geometry')
       const polygons = feature.geometry.type === 'Polygon' ? [feature.geometry.coordinates] : feature.geometry.coordinates
@@ -90,13 +94,34 @@ export function territorySnapshot(data: TerritoryDataset, scenario: ScenarioId, 
   return data.snapshots.find((snapshot) => scenario === 'today' ? snapshot.scenario === 'today' : (scenario === 'borders' || scenario === snapshot.scenario) && snapshot.year === year) ?? null
 }
 
+/**
+ * WWII snapshots ship as one TopoJSON topology per date (shared borders stored once, quantised);
+ * each feature then carries `geometry: { object }` naming its topology object. This turns them
+ * back into plain GeoJSON geometries, so everything after loading (validation, picking, workers)
+ * sees the same shape as before.
+ */
+export function decodeTopologySnapshots(data: TerritoryDataset): TerritoryDataset {
+  for (const snapshot of data.snapshots as (TerritorySnapshot & { topology?: Topology })[]) {
+    const topo = snapshot.topology
+    if (!topo) continue
+    for (const f of snapshot.features) {
+      const ref = f.geometry as unknown as { object?: string }
+      const object = ref.object ? topo.objects[ref.object] : undefined
+      if (!object) throw new Error('Invalid territory topology reference')
+      f.geometry = (topojsonFeature(topo, object) as Feature<Polygon | MultiPolygon>).geometry
+    }
+    delete snapshot.topology
+  }
+  return data
+}
+
 export function loadTerritories(scenario: ScenarioId): Promise<TerritoryDataset> {
   const path = scenario === 'today' ? 'territories-today.json' : 'territories-history.json'
   let promise = datasets.get(path)
   if (!promise) {
     promise = fetch(`${import.meta.env.BASE_URL}data/${path}`).then(async (response) => {
       if (!response.ok) throw new Error('Territory data unavailable')
-      const data = await response.json() as TerritoryDataset
+      const data = decodeTopologySnapshots(await response.json() as TerritoryDataset)
       validateTerritories(data)
       return data
     })
