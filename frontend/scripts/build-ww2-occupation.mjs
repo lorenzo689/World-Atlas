@@ -47,10 +47,12 @@ function state(name, date) {
 const atlas = JSON.parse(readFileSync('scripts/data/ww2-atlas.json', 'utf8'))
 /** Atlas outputs are sphere-wound (clockwise); polygon-clipping wants planar (counter-clockwise). */
 const planar = (coordinates) => coordinates.map((polygon) => polygon.map((ring) => [...ring].reverse()))
-const sheet = (date) => {
-  const s = atlas.sheets.find((x) => x.date === date)
-  if (!s) throw new Error(`No atlas sheet for ${date}`)
-  return { ...s, axis: planar(s.axisHeld.coordinates), frame: planar([s.extent.coordinates]) }
+const toSheet = (s) => ({ ...s, axis: planar(s.axisHeld.coordinates), frame: planar(s.extent.type === 'Polygon' ? [s.extent.coordinates] : s.extent.coordinates) })
+/** The European sheet of a date (the regime clipping below concerns Europe). */
+const sheet = (date, region = 'europe') => {
+  const s = atlas.sheets.find((x) => x.date === date && x.region === region)
+  if (!s) throw new Error(`No ${region} atlas sheet for ${date}`)
+  return toSheet(s)
 }
 const box = (w, s, e, n) => [[[[w, s], [e, s], [e, n], [w, n], [w, s]]]]
 /** Area west of a north–south front line, closed at `closureLng` (only within the line's latitude span). */
@@ -68,6 +70,7 @@ const ACTORS = {
   client: { actor: { de: 'Satellitenstaaten der Achse', en: 'Axis client states' }, color: '#e879f9' },
   sovietUnion: { actor: { de: 'Sowjetunion', en: 'Soviet Union' }, color: '#c084fc' },
   westernAllies: { actor: { de: 'Westalliierte Streitkräfte', en: 'Western Allied forces' }, color: '#38bdf8' },
+  japan: { actor: { de: 'Kaiserreich Japan', en: 'Empire of Japan' }, color: '#fb7185' },
 }
 
 // ---- sources ----------------------------------------------------------------------------------
@@ -90,6 +93,7 @@ const demarcationNorthWest = [[[[-1.24, 43.1], [-0.3, 43.9], [-0.25, 44.55], [0.
   [2.07, 47.22], [2.9, 46.9], [3.33, 46.57], [4.0, 46.48], [4.85, 46.78], [5.5, 46.95], [6.05, 46.4], [8.5, 46.4], [8.5, 51.6], [-6, 51.6], [-6, 43.1], [-1.24, 43.1]]]]
 
 async function moments() {
+  const chinaSheet = sheet('1943-07-01', 'asia')
   const reich1941 = await ohm(2692712, '1941-08-01', '1945-05-08')
   const gg1939 = await ohm(2693083, '1939-10-26', '1941-08-01')
   const gg1941 = await ohm(2693084, '1941-08-01', '1945-01-19')
@@ -198,6 +202,12 @@ async function moments() {
     const eastern = front(year, 'east-')
     M[date] = [
       ...west(date), ...balkans(date),
+      // No atlas sheet exists before July 1943. The front in China changed comparatively little between
+      // 1939 and the Ichi-Go offensive of 1944, so the earliest sheet (1 July 1943) stands in, marked
+      // schematic. Manchukuo is drawn separately as a client state.
+      { id: 'china-japanese-occupied', actorId: 'japan', kind: 'occupation', precision: 'schematic', title: { de: 'Japanisch besetztes China', en: 'Japanese-occupied China' },
+        geometry: difference(intersection(state('China', date), chinaSheet.axis), manchukuo?.coordinates ?? []), source: fromAtlas(chinaSheet),
+        note: { de: 'Ausdehnung nach dem frühesten Blatt des US-Lageatlas (1. Juli 1943); die Front in China war zwischen 1939 und 1944 weitgehend erstarrt, örtliche Abweichungen (etwa Zhejiang–Jiangxi 1942) sind möglich.', en: 'Extent from the earliest sheet of the U.S. Army atlas (1 July 1943); the China front was largely static between 1939 and 1944, local differences (e.g. Zhejiang–Jiangxi 1942) are possible.' } },
       { id: 'eastern-front', actorId: 'axisEast', kind: 'occupation', precision: 'schematic', title: { de: 'Besetzte sowjetische Gebiete westlich der Front', en: 'Occupied Soviet territory west of the front' },
         // CShapes keeps pre-war Poland until 1945, so the Soviet polygon lacks the eastern Polish lands
         // annexed in 1939 (Polesia, Volhynia): include Poland, minus the GG and Reich annexations.
@@ -301,11 +311,12 @@ function stateFeatures(date, taken) {
   const day = asNumber(date)
   const reich = reichByDay.get(day)
   if (!reich) throw new Error(`No Reich footprint for ${date}; rebuild npm run data:ww2`)
-  const s = atlas.sheets.some((x) => x.date === date) ? sheet(date) : null
+  // Every atlas sheet of this date (Europe and Asia/Pacific); the 1943-07-01 sheet is not a moment.
+  const sheets = atlas.sheets.filter((x) => x.date === date).map(toSheet)
   const out = []
-  const push = (id, category, kind, title, geometry, note, source = CSHAPES_SOURCE) => {
+  const push = (id, category, kind, title, geometry, note, source = CSHAPES_SOURCE, precision = 'administrative') => {
     const g = solid(geometry)
-    if (g.length) out.push({ id, category, kind, precision: s ? 'digitized' : 'administrative', title, geometry: g, source, ...(note ? { note } : {}) })
+    if (g.length) out.push({ id, category, kind, precision, title, geometry: g, source, ...(note ? { note } : {}) })
   }
   if (manchukuo && date >= '1940-09-27') {
     push('state-manchukuo', 'axisState', 'client', { de: 'Mandschukuo (japanischer Satellitenstaat)', en: 'Manchukuo (Japanese client state)' }, difference(manchukuo.coordinates, taken), null, fromOhm(manchukuo))
@@ -327,17 +338,19 @@ function stateFeatures(date, taken) {
     const reason = reasonOf(p.cntry_name, date)
     const note = reason ? { de: `Seitenzuordnung: ${reason}.`, en: `Side: ${reason}.` } : null
     if (role === 'axis' || role === 'allied') {
-      if (s) {
-        // Split by the atlas: the part held by the other side on this date gets that side's light colour.
+      // Split by the atlas sheets: the part held by the other side on this date gets that side's
+      // light colour (e.g. Japanese-occupied China, Soviet-held Hungary).
+      let clipped = false
+      for (const s of sheets) {
         const otherSide = role === 'axis' ? intersection(difference(base, s.axis), s.frame) : intersection(base, s.frame, s.axis)
         const lost = solid(otherSide)
-        if (lost.length) {
-          push(`${id}-held-by-${role === 'axis' ? 'allies' : 'axis'}`, role === 'axis' ? 'alliedControl' : 'axisOccupied', role === 'axis' ? 'control' : 'occupation',
-            { de: `${title.de} · ${role === 'axis' ? 'von den Alliierten gehalten' : 'von der Achse gehalten'}`, en: `${title.en} · held by the ${role === 'axis' ? 'Allies' : 'Axis'}` }, lost, null, fromAtlas(s))
-          base = difference(base, lost)
-        }
+        if (!lost.length) continue
+        push(`${id}-held-by-${role === 'axis' ? 'allies' : 'axis'}-${s.region}`, role === 'axis' ? 'alliedControl' : 'axisOccupied', role === 'axis' ? 'control' : 'occupation',
+          { de: `${title.de} · ${role === 'axis' ? 'von den Alliierten gehalten' : 'von der Achse gehalten'}`, en: `${title.en} · held by the ${role === 'axis' ? 'Allies' : 'Axis'}` }, lost, null, fromAtlas(s), 'digitized')
+        base = difference(base, lost)
+        clipped = true
       }
-      push(id, role === 'axis' ? 'axisState' : 'alliedState', 'state', title, base, note)
+      push(id, role === 'axis' ? 'axisState' : 'alliedState', 'state', title, base, note, CSHAPES_SOURCE, clipped ? 'digitized' : 'administrative')
     } else {
       push(id, role, role === 'contested' ? 'contested' : role === 'alliedControl' ? 'control' : 'occupation', title, base, note)
     }

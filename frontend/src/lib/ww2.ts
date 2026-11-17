@@ -34,19 +34,24 @@ const REGION_TITLE: Record<string, Localized> = {
   alps: { de: 'Alpenfront', en: 'Alpine Front' },
   balkans: { de: 'Balkan', en: 'Balkans' },
   finland: { de: 'Finnische Front', en: 'Finnish Front' },
+  china: { de: 'Chinafront', en: 'China front' },
+  burma: { de: 'Burma und Indochina', en: 'Burma and Indochina' },
+  pacific: { de: 'Pazifik (Neuguinea, Philippinen)', en: 'Pacific (New Guinea, Philippines)' },
 }
-/** All front sections traced from the atlas sheet of `date` (see docs/WW2.md for the method). */
-function digitizedFronts(date: '1943-12-15' | '1944-12-15' | '1945-04-15', source: Ww2Source): Ww2Front[] {
-  const sheet = atlasFronts[date]
-  return sheet.lines.map(({ region, line }, i) => ({
+type AtlasDate = '1943-12-15' | '1944-12-15' | '1945-04-15'
+type AtlasSheet = 'europe' | 'asia'
+/** All front sections traced from the atlas sheets of `date` (see docs/WW2.md for the method). */
+function digitizedFronts(date: AtlasDate): Ww2Front[] {
+  const data = atlasFronts[date]
+  return data.lines.map(({ sheet, region, line }, i) => ({
     id: `${region}-${date}-${i}`,
-    theater: 'europe',
+    theater: sheet === 'asia' ? 'asia-pacific' : 'europe',
     title: REGION_TITLE[region],
     date,
     line: line as [number, number][],
-    source,
+    source: battleAtlas(date, sheet as AtlasSheet),
     precision: 'digitized',
-    uncertaintyKm: sheet.uncertaintyKm,
+    uncertaintyKm: data.sheets[sheet as AtlasSheet].uncertaintyKm,
   }))
 }
 
@@ -99,14 +104,17 @@ const army1942: Ww2Source = {
   url: 'https://history.army.mil/portals/143/Images/Publications/catalog/104-21.pdf',
   note: { de: 'Lagekarte vom 18. November 1942; hier nur stark vereinfacht.', en: 'Situation map of 18 November 1942; strongly generalized here.' },
 }
-const battleAtlas = (day: '1943-12-15' | '1944-12-15' | '1945-04-15'): Ww2Source => ({
-  title: `U.S. Army · Atlas of the World Battle Fronts · ${day}`,
-  url: `https://commons.wikimedia.org/wiki/File:${day}GerWW2BattlefrontAtlas.jpg`,
-  note: {
-    de: `Gemeinfreie US-Armee-Lagekarte, georeferenziert über Städte; Linien aus der Farbgrenze zwischen gehaltenen Gebieten digitalisiert. Lagefehler etwa ±${atlasFronts[day].uncertaintyKm} km.`,
-    en: `Public-domain U.S. Army situation map, georeferenced on cities; lines traced from the colour boundary between held areas. Positional error about ±${atlasFronts[day].uncertaintyKm} km.`,
-  },
-})
+function battleAtlas(day: AtlasDate, sheet: AtlasSheet = 'europe'): Ww2Source {
+  const km = atlasFronts[day].sheets[sheet].uncertaintyKm
+  return {
+    title: `U.S. Army · Atlas of the World Battle Fronts · ${day}${sheet === 'asia' ? ' · Asia/Pacific' : ''}`,
+    url: `https://commons.wikimedia.org/wiki/File:${day}${sheet === 'asia' ? 'Jap' : 'Ger'}WW2BattlefrontAtlas.jpg`,
+    note: {
+      de: `Gemeinfreie US-Armee-Lagekarte, georeferenziert über Städte; Linien aus der Farbgrenze zwischen gehaltenen Gebieten digitalisiert. Lagefehler etwa ±${km} km.`,
+      en: `Public-domain U.S. Army situation map, georeferenced on cities; lines traced from the colour boundary between held areas. Positional error about ±${km} km.`,
+    },
+  }
+}
 
 export const WW2_MOMENTS: Ww2Moment[] = [
   {
@@ -175,7 +183,7 @@ export const WW2_MOMENTS: Ww2Moment[] = [
     question: { de: 'Warum ist „die Ostfront“ auf einer Weltkarte nur eine Übersicht?', en: 'Why is “the Eastern Front” on a globe only an overview?' },
     answer: { de: 'Eine über tausend Kilometer lange Front enthielt zahlreiche lokale Unterschiede und wechselte ständig.', en: 'A front stretching over a thousand kilometers had many local differences and changed constantly.' },
     focus: { lat: 51, lng: 29, altitude: 1.25 },
-    fronts: digitizedFronts('1943-12-15', battleAtlas('1943-12-15')),
+    fronts: digitizedFronts('1943-12-15'),
     events: [{ id: 'italy-1943', date: '1943-09-09', theater: 'europe', title: { de: 'Alliierte Landung bei Salerno', en: 'Allied landing at Salerno' }, explanation: { de: 'Der Krieg in Italien folgt einem anderen Verlauf als an der Ostfront.', en: 'The campaign in Italy follows a different course from the Eastern Front.' }, location: { lat: 40.68, lng: 14.76 }, source: armyTimeline }],
   },
   {
@@ -187,7 +195,7 @@ export const WW2_MOMENTS: Ww2Moment[] = [
     question: { de: 'Warum ist das Datum 15. Dezember für die Westfront wichtig?', en: 'Why does 15 December matter for the Western Front?' },
     answer: { de: 'Schon am nächsten Tag begann die Ardennenoffensive; eine Jahreskarte ohne Stichtag würde das verbergen.', en: 'The Ardennes offensive began the next day; an undated annual map would conceal that.' },
     focus: { lat: 51.5, lng: 15.5, altitude: 1.05 },
-    fronts: digitizedFronts('1944-12-15', battleAtlas('1944-12-15')),
+    fronts: digitizedFronts('1944-12-15'),
     events: [{ id: 'normandy', date: '1944-06-06', theater: 'europe', title: { de: 'Landung in der Normandie', en: 'Normandy landings' }, explanation: { de: 'Sie eröffnet die alliierte Offensive in Nordwesteuropa; die Dezemberkarte zeigt einen deutlich späteren Stand.', en: 'It opens the Allied offensive in northwestern Europe; the December map shows a much later situation.' }, location: { lat: 49.35, lng: -0.65 }, source: { title: 'Library of Congress · WWII Military Situation Maps', url: 'https://www.loc.gov/collections/world-war-ii-maps-military-situation-maps-from-1944-to-1945/about-this-collection/', note: { de: 'Täglich datierte Lagekarten ab 6. Juni 1944.', en: 'Daily dated situation maps starting 6 June 1944.' } } }],
   },
   {
@@ -199,7 +207,7 @@ export const WW2_MOMENTS: Ww2Moment[] = [
     question: { de: 'Warum endet die Weltkriegskarte nicht am Ende des Krieges in Europa?', en: 'Why does the World War II map not end with the war in Europe?' },
     answer: { de: 'Der Krieg in Asien und im Pazifik dauerte bis September 1945.', en: 'The war in Asia and the Pacific continued until September 1945.' },
     focus: { lat: 51.6, lng: 12.8, altitude: 0.9 },
-    fronts: digitizedFronts('1945-04-15', battleAtlas('1945-04-15')),
+    fronts: digitizedFronts('1945-04-15'),
     events: [{ id: 'berlin-1945', date: '1945-04-16', theater: 'europe', title: { de: 'Beginn der Berliner Operation', en: 'Start of the Battle of Berlin' }, explanation: { de: 'Die Lage änderte sich unmittelbar nach dem Kartenstichtag.', en: 'The situation changed immediately after the map date.' }, location: { lat: 52.52, lng: 13.41 }, source: { title: 'U.S. Army CMH · Chronology 1941–1945', url: 'https://history.army.mil/portals/143/Images/Publications/catalog/11-1.pdf', note: { de: 'Chronologie: Offensive an Oder und Neiße am 16. April.', en: 'Chronology: offensive along the Oder and Neisse on 16 April.' } } }, { id: 'okinawa-1945', date: '1945-04-15', theater: 'asia-pacific', title: { de: 'Kämpfe auf Okinawa', en: 'Fighting on Okinawa' }, explanation: { de: 'Der Pazifikkrieg dauerte an. Wir zeichnen für die Insel keine erfundene globale Frontlinie.', en: 'The Pacific War continued. We do not draw a fictitious global front around the island.' }, location: { lat: 26.21, lng: 127.68 }, source: { title: 'U.S. Army · World Battle Fronts · Okinawa', url: 'https://commons.wikimedia.org/wiki/File:1945-04-15JapOKWW2BattlefrontAtlas.jpg', note: { de: 'Datiertes Lagebild für Okinawa.', en: 'Dated situation map for Okinawa.' } } }],
   },
 ]

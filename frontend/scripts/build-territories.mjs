@@ -78,15 +78,15 @@ if (!existsSync('scripts/data/ww2-occupation.json')) throw new Error('Missing sc
 const ww2 = JSON.parse(readFileSync('scripts/data/ww2-occupation.json', 'utf8'))
 if (ww2.cshapesSha256 !== hash) throw new Error('ww2-occupation.json was built from another CShapes revision; rebuild it')
 const ww2Coverage = {
-  de: 'Achsenmächte rot, Alliierte blau: Staatsgebiet und Annexionen dunkel, Besatzung und Militärpräsenz hell. Grenzen aus CShapes und datierten OpenHistoricalMap-Grenzen; 1943–1945 auf das im US-Armee-Atlas gehaltene Gebiet zugeschnitten. Japanisch besetzte Gebiete Chinas sind nicht eingezeichnet; ungefärbt heißt neutral oder „keine Aussage“.',
-  en: 'Axis red, Allies blue: state territory and annexations dark, occupation and military presence light. Boundaries from CShapes and dated OpenHistoricalMap borders; 1943–1945 clipped to the area held according to the U.S. Army atlas. Japanese-occupied China is not drawn; unshaded means neutral or "no claim".',
+  de: 'Achsenmächte rot, Alliierte blau: Staatsgebiet und Annexionen dunkel, Besatzung und Militärpräsenz hell. Grenzen aus CShapes und datierten OpenHistoricalMap-Grenzen; 1943–1945 auf das im US-Armee-Atlas (Europa und Asien/Pazifik) gehaltene Gebiet zugeschnitten; das japanisch besetzte China 1941–1942 schematisch nach dem Blatt vom 1. Juli 1943. Ungefärbt heißt neutral oder „keine Aussage“.',
+  en: 'Axis red, Allies blue: state territory and annexations dark, occupation and military presence light. Boundaries from CShapes and dated OpenHistoricalMap borders; 1943–1945 clipped to the area held according to the U.S. Army atlas (Europe and Asia/Pacific); Japanese-occupied China in 1941–1942 schematic from the sheet of 1 July 1943. Unshaded means neutral or "no claim".',
 }
 // One topology per date, shipped as TopoJSON: neighbouring areas share their border arcs (stored
 // once, simplified together, so no gaps or overlaps), and coordinates are quantised and
 // delta-encoded. The app decodes it in loadTerritories(). The threshold (square degrees of the
 // smallest kept triangle) removes detail far below the sources' accuracy (OHM line work is marked
 // approximate; atlas ±8–10 km); 1e5 quantisation steps are ~400 m at the equator.
-const WW2_SIMPLIFY = 0.002
+const WW2_SIMPLIFY = 0.0005
 // Snap every area of a date to one 1e-4° grid (~10 m) first. Borders that come from different
 // clipping steps can differ by a few micro-degrees; topology only shares exactly equal lines, and
 // near-equal ones would split into thousands of tiny arcs that cannot be simplified.

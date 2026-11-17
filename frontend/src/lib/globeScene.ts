@@ -5,6 +5,7 @@ import {
   Color,
   DirectionalLight,
   EquirectangularReflectionMapping,
+  Group,
   Mesh,
   MeshPhongMaterial,
   PerspectiveCamera,
@@ -26,6 +27,7 @@ import { BaseLayers, GLOBE_RADIUS, polarToXYZ, xyzToPolar, type PrecomputedGeome
 import { perfFrame } from '@/lib/perf'
 import { MapDetail } from '@/lib/mapDetail'
 import { ImageDetail } from '@/lib/imageDetail'
+import { createStarfield } from '@/lib/starfield'
 
 const OCEAN = '#0b1626'
 const MIN_DPR = 1
@@ -35,6 +37,8 @@ export interface SceneTextures {
   bump: string
   water: string
   sky: string
+  /** Optional Yale Bright Star Catalogue (public/data/stars.bin); replaces the sky texture once loaded. */
+  stars?: string
 }
 
 export interface SceneCallbacks {
@@ -141,6 +145,7 @@ export class GlobeScene {
 
   // camera tween
   private tween: { from: Pose; to: Pose; start: number; dur: number } | null = null
+  private starfield: Group | null = null
   // view offset (keeps the focused country centred beside the info panel)
   private inset = { x: 0, y: 0, tx: 0, ty: 0 }
   private reduced: boolean
@@ -278,6 +283,7 @@ export class GlobeScene {
       if (this.disposed) return
       this.needsRender = true
       this.wake(1000)
+      if (opts.textures.stars) this.loadStars(opts.textures.stars)
       if (!this.readySent) {
         this.readySent = true
         setTimeout(() => !this.disposed && this.cb.onReady(), 0)
@@ -318,6 +324,24 @@ export class GlobeScene {
       this.textures.set(url, p)
     }
     return p
+  }
+
+  /**
+   * Real stars and Milky Way (see starfield.ts). Loaded after "ready" so it never delays the globe;
+   * on failure the low-resolution sky texture simply stays.
+   */
+  private async loadStars(url: string) {
+    try {
+      const response = await fetch(url)
+      if (!response.ok || this.disposed) return
+      const data = new Float32Array(await response.arrayBuffer())
+      if (this.disposed) return
+      this.starfield = createStarfield(data, this.dpr)
+      this.scene.add(this.starfield)
+      this.scene.background = new Color('#01030a')
+      this.needsRender = true
+      this.wake(300)
+    } catch { /* keep the sky texture */ }
   }
 
   private setSky(t: Texture) {
@@ -462,8 +486,9 @@ export class GlobeScene {
       ...this.imageDetail.getDiagnostics(),
       conflictLineSegments: this.layers.conflictLines.visible ? this.layers.conflictLines.geometry.getAttribute('position').count / 2 : 0,
       ww2FrontSegments: this.layers.ww2Fronts.visible ? this.layers.ww2Fronts.geometry.getAttribute('position').count / 2 : 0,
-      territoryAreas: this.layers.territories.children.filter((child) => child.visible).length,
-      territoryTriangles: this.layers.territories.children.reduce((sum, child) => sum + (child.visible ? ((child as Mesh).geometry.index?.count ?? 0) / 3 : 0), 0),
+      // Areas only (each area also has an outline LineSegments child).
+      territoryAreas: this.layers.territories.children.filter((child) => child.visible && (child as Mesh).isMesh).length,
+      territoryTriangles: this.layers.territories.children.reduce((sum, child) => sum + (child.visible && (child as Mesh).isMesh ? ((child as Mesh).geometry.index?.count ?? 0) / 3 : 0), 0),
       baseBordersVisible: this.layers.borders.visible,
       autoRotate: this.controls.autoRotate,
     }
@@ -697,6 +722,11 @@ export class GlobeScene {
     this.satMaterial.dispose()
     this.flatMaterial.dispose()
     for (const t of this.loaded) t.dispose()
+    this.starfield?.traverse((o) => {
+      const m = o as Mesh
+      m.geometry?.dispose()
+      ;(m.material as ShaderMaterial | undefined)?.dispose()
+    })
     this.scene.background = null
     this.renderer.dispose()
     this.renderer.forceContextLoss()

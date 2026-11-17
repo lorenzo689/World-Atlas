@@ -25,6 +25,7 @@ const TEX = {
   bump: `${BASE}textures/earth-topology.webp`,
   water: `${BASE}textures/earth-water.webp`,
   sky: `${BASE}textures/night-sky.webp`,
+  stars: `${BASE}data/stars.bin`,
 }
 const DEFAULT_POSE: Pose = { lat: 22, lng: 12, altitude: 2.3 }
 

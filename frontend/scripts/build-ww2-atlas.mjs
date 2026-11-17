@@ -21,14 +21,27 @@ import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import sharp from 'sharp'
 import { contours } from 'd3-contour'
-import { geoConicEqualArea, geoContains, geoDistance } from 'd3-geo'
+import { geoConicEqualArea, geoContains, geoDistance, geoMercator } from 'd3-geo'
+import polygonClipping from 'polygon-clipping'
 import { feature } from 'topojson-client'
 
+// Europe sheets use a conic projection, Asia/Pacific sheets Mercator (chosen by the smallest
+// leave-one-out error among candidate projections). `insets` are pixel rectangles of enlarged
+// detail maps at another scale (Leyte, Okinawa, New Georgia); they carry no data for the main map.
+// The Asia sheet of 1943-07-01 is the earliest of the series; it stands in, as a documented
+// schematic source, for Japanese-occupied China on the 1941 and 1942 dates (no app fronts).
+const CONIC = { name: 'conic equal-area, central meridian 20°E, parallels 40°/60°', projection: geoConicEqualArea().rotate([-20, 0]).parallels([40, 60]).scale(1).translate([0, 0]) }
+const MERCATOR = { name: 'Mercator', projection: geoMercator().scale(1).translate([0, 0]) }
 const SHEETS = [
-  { date: '1943-12-15', file: '1943-12-15GerWW2BattlefrontAtlas.jpg', sha256: '59fee08dbcad186b724543abdfb139ac04cccfdce7ed5e2c24abcb9050ffaafe' },
-  { date: '1944-12-15', file: '1944-12-15GerWW2BattlefrontAtlas.jpg', sha256: '2bbab9f29fb4b562bb9fdddedab0f4b246eed9baf4ddab398cc862554360d7d4' },
-  { date: '1945-04-15', file: '1945-04-15GerWW2BattlefrontAtlas.jpg', sha256: '8a55aad2df81f82ad7e00ad86a3b439470882b6a5e44323c0711fd579f1cfdfe' },
+  { date: '1943-12-15', region: 'europe', file: '1943-12-15GerWW2BattlefrontAtlas.jpg', sha256: '59fee08dbcad186b724543abdfb139ac04cccfdce7ed5e2c24abcb9050ffaafe', ...CONIC },
+  { date: '1944-12-15', region: 'europe', file: '1944-12-15GerWW2BattlefrontAtlas.jpg', sha256: '2bbab9f29fb4b562bb9fdddedab0f4b246eed9baf4ddab398cc862554360d7d4', ...CONIC },
+  { date: '1945-04-15', region: 'europe', file: '1945-04-15GerWW2BattlefrontAtlas.jpg', sha256: '8a55aad2df81f82ad7e00ad86a3b439470882b6a5e44323c0711fd579f1cfdfe', ...CONIC },
+  { date: '1943-07-01', region: 'asia', file: '1943-07-01JapWW2BattlefrontAtlas.jpg', sha256: '112020516739e510bcd8f14aa0cf4436cc4776320a3025fb14844e9cfd78e1c5', insets: [[0, 885, 225, 1180]], ...MERCATOR },
+  { date: '1943-12-15', region: 'asia', file: '1943-12-15JapWW2BattlefrontAtlas.jpg', sha256: 'ca75eb34c11755f63d478363f6b53be46fe8fb72251445e8ab56e5882544ee35', ...MERCATOR },
+  { date: '1944-12-15', region: 'asia', file: '1944-12-15JapWW2BattlefrontAtlas.jpg', sha256: '3ee43833d5e8cd111034a561d9288b9f9f5e35c5dd4e82741256d7c732b60059', insets: [[0, 878, 282, 1192]], ...MERCATOR },
+  { date: '1945-04-15', region: 'asia', file: '1945-04-15JapWW2BattlefrontAtlas.jpg', sha256: '4927e99f52ad431caf3921e63c5db72ad0d737a9b1c60e3a71c8c1366059c3f3', insets: [[0, 890, 268, 1190]], ...MERCATOR },
 ]
+const gcpKey = (sheet) => (sheet.region === 'asia' ? `asia-${sheet.date}` : sheet.date)
 const CACHE = 'scripts/source/historical/atlas'
 const commonsUrl = (file) => {
   const md5 = createHash('md5').update(file).digest('hex')
@@ -38,7 +51,6 @@ const pageUrl = (file) => `https://commons.wikimedia.org/wiki/File:${file}`
 const EARTH_KM = 6371
 
 // ---- 1. georeference ---------------------------------------------------------------------------
-const projection = geoConicEqualArea().rotate([-20, 0]).parallels([40, 60]).scale(1).translate([0, 0])
 function solve(A, b) {
   const n = A[0].length
   const M = Array.from({ length: n }, (_, i) => [...Array.from({ length: n }, (_, j) => A.reduce((s, r) => s + r[i] * r[j], 0)), A.reduce((s, r, k) => s + r[i] * b[k], 0)])
@@ -52,7 +64,7 @@ function solve(A, b) {
 }
 const km = (a, b) => geoDistance(a, b) * EARTH_KM
 /** Affine pixel -> projected plane; returns pixel -> [lon, lat] and lon/lat -> pixel. */
-function affine(points) {
+function affine(points, projection) {
   const A = points.map(([, x, y]) => [1, x, y])
   const P = points.map(([, , , lat, lon]) => projection([lon, lat]))
   const ax = solve(A, P.map((p) => p[0])), ay = solve(A, P.map((p) => p[1]))
@@ -63,25 +75,28 @@ function affine(points) {
     const du = u - ax[0], dv = v - ay[0]
     return [(du * ay[2] - dv * ax[2]) / det, (dv * ax[1] - du * ay[1]) / det]
   }
-  return { toLonLat, toPixel }
+  // Projected x without longitude wrapping: lets callers find pixels east of 180° (Asia sheets reach
+  // Midway at 177°W), where the inverse projection would jump to -180° and tear polygons apart.
+  const beyondAntimeridian = (x, y) => ax[0] + ax[1] * x + ax[2] * y > projection([179.9, 0])[0]
+  return { toLonLat, toPixel, beyondAntimeridian }
 }
-function georeference(gcps) {
+function georeference(gcps, projection) {
   let points = [...gcps]
   const dropped = []
   for (;;) {
-    const model = affine(points)
+    const model = affine(points, projection)
     const res = points.map(([, x, y, lat, lon]) => km(model.toLonLat(x, y), [lon, lat]))
     const median = [...res].sort((a, b) => a - b)[Math.floor(res.length / 2)]
     const worst = res.indexOf(Math.max(...res))
     if (res[worst] > Math.max(15, 3 * median) && points.length > 12) { dropped.push(points[worst][0]); points.splice(worst, 1); continue }
-    const loo = points.map((p, i) => km(affine(points.filter((_, j) => j !== i)).toLonLat(p[1], p[2]), [p[4], p[3]]))
+    const loo = points.map((p, i) => km(affine(points.filter((_, j) => j !== i), projection).toLonLat(p[1], p[2]), [p[4], p[3]]))
     const rms = (r) => Math.round(Math.sqrt(r.reduce((s, v) => s + v * v, 0) / r.length) * 10) / 10
     return { model, used: points.length, dropped, rmsKm: rms(res), looRmsKm: rms(loo) }
   }
 }
 
 // ---- 2./3. classify ------------------------------------------------------------------------------
-const AXIS = 1, ALLIED = 2, NEUTRAL = 3, SEA = 4, UNKNOWN = 0
+const AXIS = 1, ALLIED = 2, NEUTRAL = 3, SEA = 4, NODATA = 5, UNKNOWN = 0
 function classify(r, g, b) {
   const max = Math.max(r, g, b), min = Math.min(r, g, b)
   if (r > 120 && g < 90 && b < 90 && r - g > 70) return ALLIED // dark red: gained in the last period
@@ -91,18 +106,21 @@ function classify(r, g, b) {
   if (max - min <= 16 && max <= 215 && min >= 115) return NEUTRAL // grey
   return UNKNOWN // text, rivers, borders, arrows' outlines
 }
-async function classified(path) {
+async function classified(path, insets = [], noData = () => false) {
   const { data, info } = await sharp(path).removeAlpha().raw().toBuffer({ resolveWithObject: true })
   const W = info.width, H = info.height
   const raw = new Uint8Array(W * H)
   for (let i = 0; i < W * H; i++) raw[i] = classify(data[i * 3], data[i * 3 + 1], data[i * 3 + 2])
+  // Inset maps show another place at another scale: no data for the main map.
+  for (const [x0, y0, x1, y1] of insets) for (let y = y0; y < Math.min(y1, H); y++) for (let x = x0; x < Math.min(x1, W); x++) raw[y * W + x] = NODATA
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (noData(x, y)) raw[y * W + x] = NODATA
   // Multi-source BFS: unknown and sea pixels take the class of the nearest land pixel.
   const filled = new Uint8Array(raw)
   const queue = new Int32Array(W * H)
   let head = 0, tail = 0
   for (let i = 0; i < W * H; i++) {
     if (raw[i] === SEA) filled[i] = UNKNOWN
-    if (filled[i] !== UNKNOWN) queue[tail++] = i
+    if (filled[i] !== UNKNOWN && filled[i] !== NODATA) queue[tail++] = i
   }
   while (head < tail) {
     const i = queue[head++], x = i % W, y = (i - x) / W
@@ -223,9 +241,28 @@ const NO_FRONT = [
   { box: [-20, 20, 40, 37.5], from: '1943-12-15', reason: 'North Africa: Axis forces in Tunisia surrendered on 13 May 1943' },
   { box: [6.1, 46.2, 6.95, 46.55], from: '1943-12-15', reason: 'Lake Geneva: lake surface between France and neutral Switzerland' },
   { box: [-2, 42, 6.9, 44.2], from: '1944-12-15', reason: 'French Mediterranean coast west of the Alps: liberated in August 1944 (Operation Dragoon)' },
+  { box: [87, 42.3, 126, 54], from: '1943-07-01', reason: "Mongolian border: the Mongolian People's Republic was not at war with Japan until 9 August 1945" },
 ]
-const excluded = (date, line) => NO_FRONT.find(({ box: [w, s, e, n], from }) =>
-  date >= from && line.every(([lon, lat]) => lon >= w && lon <= e && lat >= s && lat <= n))
+/** Splits a line into the parts outside every applicable NO_FRONT box; returns kept parts and the removed rules. */
+function applyNoFront(date, line) {
+  let parts = [line]
+  const hits = []
+  for (const rule of NO_FRONT) {
+    if (date < rule.from) continue
+    const [w, s, e, n] = rule.box
+    const inside = ([lon, lat]) => lon >= w && lon <= e && lat >= s && lat <= n
+    const next = []
+    for (const part of parts) {
+      let run = []
+      for (const p of part) {
+        if (inside(p)) { if (run.length >= 2) next.push(run); if (run.length || !hits.includes(rule)) hits.push(rule); run = [] } else run.push(p)
+      }
+      if (run.length >= 2) next.push(run)
+    }
+    parts = next
+  }
+  return { parts, hits: [...new Set(hits)] }
+}
 const lengthKm = (line) => line.slice(1).reduce((s, p, i) => s + km(line[i], p), 0)
 
 // ---- main ----------------------------------------------------------------------------------------
@@ -242,8 +279,9 @@ for (const sheet of SHEETS) {
   const sha = createHash('sha256').update(readFileSync(path)).digest('hex')
   if (sha !== sheet.sha256) throw new Error(`${sheet.file} changed (sha256 ${sha}); review before rebuilding`)
 
-  const geo = georeference(gcpData[sheet.date].gcps)
-  const { W, H, raw, filled, removed, specks, areaSize } = await classified(path)
+  const geo = georeference(gcpData[gcpKey(sheet)].gcps, sheet.projection)
+  const { W, H, raw, filled, removed, specks, areaSize } = await classified(path, sheet.insets, sheet.region === 'asia' ? geo.model.beyondAntimeridian : undefined)
+  const inInset = (x, y, margin) => (sheet.insets ?? []).some(([x0, y0, x1, y1]) => x >= x0 - margin && x <= x1 + margin && y >= y0 - margin && y <= y1 + margin)
   const toLonLat = ([x, y]) => geo.model.toLonLat(x, y).map(round)
 
   // 4. vectorise the Axis-held mask. d3-contour treats values >= threshold as inside.
@@ -279,29 +317,35 @@ for (const sheet of SHEETS) {
           const s = (pa + pb + ab) / 2, area = Math.sqrt(Math.max(0, s * (s - pa) * (s - pb) * (s - ab)))
           return (2 * area) / ab / EARTH_KM
         })
-        const rule = excluded(sheet.date, line)
-        if (rule) excludedLines.push({ reason: rule.reason, km: Math.round(lengthKm(line)) })
-        else if (lengthKm(line) >= 25) fronts.push(line)
+        const { parts, hits } = applyNoFront(sheet.date, line)
+        const keptKm = parts.reduce((t, part) => t + lengthKm(part), 0)
+        if (hits.length && lengthKm(line) - keptKm >= 25) excludedLines.push({ reason: hits.map((h) => h.reason).join('; '), km: Math.round(lengthKm(line) - keptKm) })
+        // A line shorter than twice the sheet's positional error cannot be told apart from noise.
+        for (const part of parts) if (lengthKm(part) >= Math.max(25, 2 * geo.looRmsKm)) fronts.push(part)
       }
       run = []
     }
     for (const [x, y] of ring) {
-      const edge = x < 15 || y < 15 || x > W - 15 || y > H - 15
+      const edge = x < 15 || y < 15 || x > W - 15 || y > H - 15 || inInset(x, y, 15)
       const front = !edge && near(x, y, ALLIED, 2) && !near(x, y, NEUTRAL, 2) && inland(toLonLat([x, y]))
       if (front) run.push([x, y])
       else flush()
     }
     flush()
   }
-  const inset = 4
-  const extent = [[[inset, inset], [W - inset, inset], [W - inset, H - inset], [inset, H - inset], [inset, inset]]]
-    .map((ring) => {
-      // densify the frame so its curved lon/lat outline is represented faithfully
-      const dense = []
-      for (let i = 0; i < ring.length - 1; i++) for (let t = 0; t < 20; t++) dense.push([ring[i][0] + ((ring[i + 1][0] - ring[i][0]) * t) / 20, ring[i][1] + ((ring[i + 1][1] - ring[i][1]) * t) / 20])
-      dense.push(ring[0])
-      return dense.map(toLonLat).reverse()
-    })
+  // The sheet frame in lon/lat (densified, so its curved outline is represented faithfully),
+  // minus the inset maps, which carry no data for the main map.
+  const box = ([x0, y0, x1, y1]) => [[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]]
+  const toFrame = (ring) => {
+    const dense = []
+    for (let i = 0; i < ring.length - 1; i++) for (let t = 0; t < 20; t++) dense.push([ring[i][0] + ((ring[i + 1][0] - ring[i][0]) * t) / 20, ring[i][1] + ((ring[i + 1][1] - ring[i][1]) * t) / 20])
+    dense.push(ring[0])
+    return dense.map(toLonLat)
+  }
+  let east = W - 4
+  while (sheet.region === 'asia' && east > 4 && [4, H / 2, H - 4].some((y) => geo.model.beyondAntimeridian(east, y))) east--
+  const frame = polygonClipping.difference([[toFrame(box([4, 4, east, H - 4]))]], ...(sheet.insets ?? []).map((r) => [[toFrame(box(r))]]))
+  const extent = frame.map((polygon) => polygon.map((ring) => [...ring].reverse()))
   if (process.argv.includes('--debug')) {
     // Review overlay: Axis-held outline (blue) and detected fronts (green) on the original sheet.
     const px = (p) => geo.model.toPixel(p[0], p[1]).map((v) => v.toFixed(1)).join(',')
@@ -309,32 +353,37 @@ for (const sheet of SHEETS) {
       axisHeld.map((poly) => poly.map((ring) => `<polyline points="${ring.map(px).join(' ')}" fill="none" stroke="#0050ff" stroke-width="1"/>`).join('')).join('') +
       fronts.map((line) => `<polyline points="${line.map(px).join(' ')}" fill="none" stroke="#00b000" stroke-width="3"/>`).join('') + '</svg>'
     mkdirSync('perf-results', { recursive: true })
-    await sharp(path).composite([{ input: Buffer.from(svg) }]).png().toFile(`perf-results/ww2-atlas-${sheet.date}.png`)
+    await sharp(path).composite([{ input: Buffer.from(svg) }]).png().toFile(`perf-results/ww2-atlas-${sheet.region}-${sheet.date}.png`)
   }
   const counts = [AXIS, ALLIED, NEUTRAL, SEA, UNKNOWN].map((c) => raw.filter((v) => v === c).length)
-  console.log(`${sheet.date}: ${geo.used} GCPs (dropped ${geo.dropped.join(', ') || 'none'}), RMS ${geo.rmsKm} km, leave-one-out ${geo.looRmsKm} km; ` +
+  console.log(`${sheet.region} ${sheet.date}: ${geo.used} GCPs (dropped ${geo.dropped.join(', ') || 'none'}), RMS ${geo.rmsKm} km, leave-one-out ${geo.looRmsKm} km; ` +
     `pixels axis/allied/neutral/sea/other ${counts.join('/')}; ${removed} arrow islands, ${specks} colour specks removed; ${axisHeld.length} Axis polygons; ${fronts.length} front lines, ${Math.round(fronts.reduce((s, l) => s + lengthKm(l), 0))} km; ` +
     `excluded ${excludedLines.map((l) => `${l.km} km (${l.reason.split(':')[0]})`).join(', ') || 'none'}`)
   output.push({
     date: sheet.date,
+    region: sheet.region,
     source: { title: 'U.S. Army · Atlas of the World Battle Fronts in Semimonthly Phases', page: pageUrl(sheet.file), sha256: sheet.sha256, license: 'Public domain (U.S. federal government work)' },
-    georeference: { projection: 'conic equal-area, central meridian 20°E, parallels 40°/60°, affine fit', gcps: geo.used, dropped: geo.dropped, rmsKm: geo.rmsKm, looRmsKm: geo.looRmsKm },
+    georeference: { projection: `${sheet.name}, affine fit`, gcps: geo.used, dropped: geo.dropped, rmsKm: geo.rmsKm, looRmsKm: geo.looRmsKm },
     excludedFrontDetections: excludedLines,
-    extent: { type: 'Polygon', coordinates: extent },
+    extent: { type: 'MultiPolygon', coordinates: extent },
     axisHeld: { type: 'MultiPolygon', coordinates: axisHeld },
     fronts,
   })
 }
-// Front lines for the app (src/lib/ww2.ts imports them), named by region of their midpoint.
-const region = ([lon, lat]) =>
-  lat > 60 ? 'finland' : lon >= 20 && lat >= 46.5 ? 'east' : lat >= 46.5 ? 'west' : lon < 7.6 ? 'alps' : lon < 13.9 && lat < 46.5 ? 'italy' : 'balkans'
-const appFronts = Object.fromEntries(output.map((s) => [s.date, {
-  uncertaintyKm: s.georeference.looRmsKm,
-  page: s.source.page,
-  lines: s.fronts
-    .map((line) => ({ region: region(line[Math.floor(line.length / 2)]), line: line.map(([lon, lat]) => [Math.round(lon * 100) / 100, Math.round(lat * 100) / 100]) }))
-    .sort((a, b) => a.region.localeCompare(b.region) || b.line.length - a.line.length),
-}]))
+// Front lines for the app (src/lib/ww2.ts imports them), named by region of their midpoint. Only
+// the WWII moment dates; the 1943-07-01 sheet is used for areas only.
+const MOMENT_DATES = ['1943-12-15', '1944-12-15', '1945-04-15']
+const region = (sheetRegion, [lon, lat]) => sheetRegion === 'asia'
+  ? (lon < 100 ? 'burma' : lat > 15 && lon < 123 ? 'china' : 'pacific')
+  : lat > 60 ? 'finland' : lon >= 20 && lat >= 46.5 ? 'east' : lat >= 46.5 ? 'west' : lon < 7.6 ? 'alps' : lon < 13.9 && lat < 46.5 ? 'italy' : 'balkans'
+const appFronts = Object.fromEntries(MOMENT_DATES.map((date) => {
+  const sheets = output.filter((s) => s.date === date)
+  return [date, {
+    sheets: Object.fromEntries(sheets.map((s) => [s.region, { uncertaintyKm: s.georeference.looRmsKm, page: s.source.page }])),
+    lines: sheets.flatMap((s) => s.fronts.map((line) => ({ sheet: s.region, region: region(s.region, line[Math.floor(line.length / 2)]), line: line.map(([lon, lat]) => [Math.round(lon * 100) / 100, Math.round(lat * 100) / 100]) })))
+      .sort((a, b) => a.region.localeCompare(b.region) || b.line.length - a.line.length),
+  }]
+}))
 writeFileSync('src/lib/ww2-atlas-fronts.json', JSON.stringify(appFronts))
 mkdirSync('scripts/data', { recursive: true })
 writeFileSync('scripts/data/ww2-atlas.json', JSON.stringify({ schemaVersion: 1, method: 'Georeferenced colour classification of the U.S. Army battle-front atlas; see scripts/build-ww2-atlas.mjs', sheets: output }))

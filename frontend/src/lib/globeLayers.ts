@@ -166,7 +166,7 @@ export class BaseLayers {
   readonly ww2Fronts: LineSegments
   readonly changeAreas: Mesh
   readonly territories = new Group()
-  private territoryMeshes = new Map<string, { area: TerritoryArea; mesh: Mesh }>()
+  private territoryState: { areas: TerritoryArea[] | null; key: string } = { areas: null, key: '' }
   readonly hover: HighlightSlot
   readonly selected: HighlightSlot
   /** a second, persistent highlight (country comparison) */
@@ -359,30 +359,58 @@ export class BaseLayers {
     this.setGeographicLines(this.ww2Fronts, lines)
   }
 
-  /** Actor toggles reuse GPU buffers; changing the dated snapshot releases old resources. */
+  /**
+   * Visible areas are merged per colour: one fill mesh and one outline per colour, so a WWII date
+   * with ~160 areas costs about a dozen draw calls instead of hundreds. The merge is rebuilt only
+   * when the prepared areas or the visible set change (snapshot, actor toggle, theater filter).
+   */
   setTerritories(areas: TerritoryArea[], visibleIds: ReadonlySet<string>) {
-    const active = new Map(areas.map((area) => [area.id, area]))
-    for (const [id, entry] of this.territoryMeshes) {
-      if (active.get(id) === entry.area) continue
-      this.territories.remove(entry.mesh)
-      entry.mesh.geometry.dispose()
-      ;(entry.mesh.material as MeshBasicMaterial).dispose()
-      this.territoryMeshes.delete(id)
+    const key = areas.filter((area) => visibleIds.has(area.id)).map((area) => area.id).join('|')
+    if (this.territoryState.areas === areas && this.territoryState.key === key) return
+    this.territoryState = { areas, key }
+    for (const child of [...this.territories.children]) {
+      this.territories.remove(child)
+      ;(child as Mesh).geometry.dispose()
+      ;((child as Mesh).material as MeshBasicMaterial).dispose()
     }
+    const byColor = new Map<string, TerritoryArea[]>()
     for (const area of areas) {
-      let entry = this.territoryMeshes.get(area.id)
-      if (!entry) {
-        const geometry = new BufferGeometry()
-        geometry.setAttribute('position', new BufferAttribute(area.mesh.positions, 3))
-        geometry.setIndex(new BufferAttribute(area.mesh.indices, 1))
-        const mesh = new Mesh(geometry, new MeshBasicMaterial({ color: area.color, transparent: true, opacity: 0.58, depthWrite: false }))
-        mesh.renderOrder = 3
-        mesh.raycast = () => {}
-        entry = { area, mesh }
-        this.territoryMeshes.set(area.id, entry)
-        this.territories.add(mesh)
+      if (!visibleIds.has(area.id)) continue
+      const list = byColor.get(area.color)
+      if (list) list.push(area)
+      else byColor.set(area.color, [area])
+    }
+    for (const [color, group] of byColor) {
+      const vertexCount = group.reduce((n, a) => n + a.mesh.positions.length, 0)
+      const positions = new Float32Array(vertexCount)
+      const indices = new Uint32Array(group.reduce((n, a) => n + a.mesh.indices.length, 0))
+      let p = 0, i = 0
+      for (const a of group) {
+        positions.set(a.mesh.positions, p)
+        const base = p / 3
+        for (let k = 0; k < a.mesh.indices.length; k++) indices[i + k] = a.mesh.indices[k] + base
+        p += a.mesh.positions.length
+        i += a.mesh.indices.length
       }
-      entry.mesh.visible = visibleIds.has(area.id)
+      const geometry = new BufferGeometry()
+      geometry.setAttribute('position', new BufferAttribute(positions, 3))
+      geometry.setIndex(new BufferAttribute(indices, 1))
+      const mesh = new Mesh(geometry, new MeshBasicMaterial({ color, transparent: true, opacity: 0.66, depthWrite: false }))
+      mesh.renderOrder = 3
+      mesh.raycast = () => {}
+      this.territories.add(mesh)
+      // A lighter edge in the area's own hue keeps neighbouring areas of the same colour apart.
+      const outlines = group.filter((a) => a.outline?.length)
+      if (!outlines.length) continue
+      const linePositions = new Float32Array(outlines.reduce((n, a) => n + a.outline!.length, 0))
+      let o = 0
+      for (const a of outlines) { linePositions.set(a.outline!, o); o += a.outline!.length }
+      const lineGeometry = new BufferGeometry()
+      lineGeometry.setAttribute('position', new BufferAttribute(linePositions, 3))
+      const edge = new LineSegments(lineGeometry, new LineBasicMaterial({ color: new Color(color).lerp(new Color('#ffffff'), 0.45), transparent: true, opacity: 0.9, depthWrite: false }))
+      edge.renderOrder = 4
+      edge.raycast = () => {}
+      this.territories.add(edge)
     }
   }
 

@@ -27,6 +27,14 @@ export function Ww2Panel({ moment, lang, theater, onTheaterChange, showFronts, o
   const [answerOpen, setAnswerOpen] = useState(false)
   const [selected, setSelected] = useState<Ww2Front | Ww2Event | null>(null)
   const fronts = moment.fronts.filter((front) => theater === 'all' || front.theater === theater)
+  // Digitised fronts come in many sections; list one entry per front (its longest section).
+  const frontGroups = [...fronts.reduce((groups, front) => {
+    const key = front.title.en
+    const group = groups.get(key)
+    if (!group) groups.set(key, { front, count: 1 })
+    else { group.count++; if (front.line.length > group.front.line.length) group.front = front }
+    return groups
+  }, new Map<string, { front: Ww2Front; count: number }>()).values()]
   const events = moment.events.filter((event) => theater === 'all' || event.theater === theater)
   const filteredSelected = selected && (fronts.some((front) => front.id === selected.id) || events.some((event) => event.id === selected.id)) ? selected : null
 
@@ -71,13 +79,13 @@ export function Ww2Panel({ moment, lang, theater, onTheaterChange, showFronts, o
     <div className="mt-4 flex flex-wrap gap-1" role="group" aria-label={lang === 'de' ? 'Kriegsschauplatz' : 'Theater'}>{theaters.map((item) => <button key={item.id} type="button" aria-pressed={theater === item.id} onClick={() => onTheaterChange(item.id)} className="rounded-full border border-input px-2 py-1 text-[11px] aria-pressed:border-primary aria-pressed:text-primary">{item[lang]}</button>)}</div>
     <fieldset className="mt-3 rounded-xl border border-input p-3 text-xs"><legend className="px-1">{lang === 'de' ? 'Kartenebenen' : 'Map layers'}</legend>
       <label className="flex items-center gap-2"><input type="checkbox" checked readOnly disabled />{lang === 'de' ? 'Historische Grenzen (CShapes + OHM)' : 'Historical boundaries (CShapes + OHM)'}</label>
-      <label className="mt-2 flex items-center gap-2"><input type="checkbox" checked={showFronts} onChange={(e) => onShowFrontsChange(e.target.checked)} />{lang === 'de' ? (moment.year >= 1943 ? 'Frontabschnitte (digitalisiert, ±10 km)' : 'Frontabschnitte (schematisch)') : (moment.year >= 1943 ? 'Front sections (digitised, ±10 km)' : 'Front sections (schematic)')}</label>
+      <label className="mt-2 flex items-center gap-2"><input type="checkbox" checked={showFronts} onChange={(e) => onShowFrontsChange(e.target.checked)} />{lang === 'de' ? (moment.year >= 1943 ? 'Frontabschnitte (digitalisiert; Europa ±10 km, Asien ±35 km)' : 'Frontabschnitte (schematisch)') : (moment.year >= 1943 ? 'Front sections (digitised; Europe ±10 km, Asia ±35 km)' : 'Front sections (schematic)')}</label>
       <label className="mt-2 flex items-center gap-2"><input type="checkbox" checked={showEvents} onChange={(e) => onShowEventsChange(e.target.checked)} />{lang === 'de' ? 'Ereignisorte' : 'Event locations'}</label>
       <p className="mt-2 text-muted-foreground">{lang === 'de' ? 'Besatzung und Kontrolle: Die separate Gebietsflächen-Ebene zeigt ausgewählte schematische Rekonstruktionen mit Akteursfiltern, Stichtagen und Quellen.' : 'Occupation and control: the separate territory layer shows selected schematic reconstructions with actor filters, dates and sources.'}</p>
     </fieldset>
     <p className="mt-3 text-xs text-muted-foreground"><span className="text-amber-300">━━━━</span> {lang === 'de' ? 'Grobe Quelleninterpretation; keine vermessene Front. Lücken bedeuten: hier kein geprüfter Verlauf.' : 'Coarse source interpretation, not a surveyed line. Gaps mean no validated course is available here.'}</p>
     <h3 className="mt-4 font-semibold">{lang === 'de' ? 'Frontabschnitte' : 'Front sections'}</h3>
-    {fronts.length ? <div className="mt-2 grid gap-1">{fronts.map((front) => <button key={front.id} type="button" onClick={() => chooseFront(front)} className="rounded-lg border border-input p-2 text-left text-xs hover:border-amber-300">{front.title[lang]} · <time dateTime={front.date}>{front.date}</time></button>)}</div> : <p className="mt-2 text-xs text-muted-foreground">{lang === 'de' ? 'Für diesen Schauplatz liegt zu diesem Stichtag kein geprüfter Frontabschnitt vor.' : 'No validated front section is available for this theater and date.'}</p>}
+    {fronts.length ? <div className="mt-2 grid gap-1">{frontGroups.map(({ front, count }) => <button key={front.id} type="button" onClick={() => chooseFront(front)} className="rounded-lg border border-input p-2 text-left text-xs hover:border-amber-300">{front.title[lang]} · <time dateTime={front.date}>{front.date}</time>{count > 1 ? ` · ${count} ${lang === 'de' ? 'Abschnitte' : 'sections'}` : ''}</button>)}</div> : <p className="mt-2 text-xs text-muted-foreground">{lang === 'de' ? 'Für diesen Schauplatz liegt zu diesem Stichtag kein geprüfter Frontabschnitt vor.' : 'No validated front section is available for this theater and date.'}</p>}
     <h3 className="mt-4 font-semibold">{lang === 'de' ? 'Ereignisse' : 'Events'}</h3>
     {events.length ? <div className="mt-2 grid gap-1">{events.map((event) => <button key={event.id} type="button" onClick={() => chooseEvent(event)} className="rounded-lg border border-input p-2 text-left text-xs hover:border-primary">{event.title[lang]} · <time dateTime={event.date}>{event.date}</time></button>)}</div> : <p className="mt-2 text-xs text-muted-foreground">{lang === 'de' ? 'Für diesen Schauplatz ist noch kein Ereignis hinterlegt.' : 'No event is available for this theater.'}</p>}
     {filteredSelected && <article className="mt-3 rounded-xl border border-primary/40 p-3 text-xs" aria-live="polite"><h4 className="font-semibold">{filteredSelected.title[lang]}</h4><p className="mt-1 text-muted-foreground">{'explanation' in filteredSelected ? filteredSelected.explanation[lang] : filteredSelected.source.note[lang]}</p><a className="mt-2 block text-primary underline" href={filteredSelected.source.url} target="_blank" rel="noreferrer">{filteredSelected.source.title} ↗</a></article>}

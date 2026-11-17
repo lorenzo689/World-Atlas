@@ -16,3 +16,4 @@ frontend/vite.err.log
 frontend/scripts/source/historical/ohm-ww2-*.json
 frontend/scripts/source/historical/atlas/
 frontend/scripts/data/ww2-occupation.json
+frontend/scripts/source/stars/

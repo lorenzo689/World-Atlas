@@ -28,8 +28,10 @@ after its armistice). Which side every state and colony was on, and from when, i
 in `scripts/lib/ww2-sides.mjs` (entry into the war, change of sides, conquest); each area shows the
 reason in the app. On atlas dates every state is additionally split by the atlas: e.g. Hungary on
 15 April 1945 is Soviet-held (blue), not Axis state territory. The individual power (e.g. Fascist
-Italy) is kept as `power`. **Gap:** Japanese-occupied China is not drawn, so China appears as Allied
-state territory in full.
+Italy) is kept as `power`. Japanese-occupied China (light red) comes from the Asia/Pacific atlas
+sheets: on 1943–1945 dates from the sheet of that day; for 1941 and 1942 from the earliest sheet
+(1 July 1943), marked `schematic`, because the China front changed comparatively little between
+1939 and the Ichi-Go offensive of 1944. Manchukuo is a separate client state (dark red).
 
 ## Sources and precision
 
@@ -70,6 +72,16 @@ SHA-256 in `scripts/build-ww2-atlas.mjs`. The pipeline (`npm run data:ww2:atlas`
 | 1943-12-15 | 30 | 7.9 km |
 | 1944-12-15 | 82 | 9.6 km |
 | 1945-04-15 | 38 | 7.7 km |
+| Asia/Pacific 1943-07-01 | 18 | 34 km |
+| Asia/Pacific 1943-12-15 | 23 | 28.5 km |
+| Asia/Pacific 1944-12-15 | 23 | 33.1 km |
+| Asia/Pacific 1945-04-15 | 21 | 33.7 km |
+
+The Asia/Pacific sheets use a Mercator projection (smallest leave-one-out error among the tested
+projections) and a coarser scale (~7 km per pixel). Their inset maps (New Georgia, Leyte, Okinawa)
+show other places at other scales and are masked; pixels east of 180° are masked too. The border
+of the Mongolian People's Republic, not at war with Japan until 9 August 1945, is excluded from
+the fronts. Fronts shorter than twice a sheet's error are dropped as indistinguishable from noise.
 
 The leave-one-out error (each control point predicted by a fit without it) is the positional
 uncertainty shown in the app. It includes the drawing accuracy of the 1940s printed map. The sheets
@@ -88,8 +100,9 @@ end around 43°N (1944/45): all of Italy south of the sheet is Allied-held and t
 | 1945-04-15 | All European fronts incl. the Ruhr and Harz pockets (digitised) | Remaining occupation, Allied-held Reich territory split at 13.5°E |
 
 Known gaps: Finnish-occupied East Karelia (1941–1944), Romanian-administered Transnistria before
-1943 (inside the eastern area from 1943), Japanese-occupied China and the Dutch East Indies, North
-Africa, and partisan-held areas. The schematic 1939–1942 fronts are generalised through towns; they
+1943 (inside the eastern area from 1943), North Africa before 1943, partisan-held areas, and the
+exact Japanese perimeter in China in 1941–1942 (schematic, see above). Southeast Asian colonies are
+coloured as whole units by the dated side table, not split by the atlas. The schematic 1939–1942 fronts are generalised through towns; they
 are not traced from a map.
 
 ## Verification

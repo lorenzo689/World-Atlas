@@ -23,7 +23,12 @@ try {
       await panel.getByRole('button', { name: /Front|Raum Warschau|Somme|Ostfront|Westfront/i }).first().click()
     }
   }
+  // 1943–1945 Asia/Pacific fronts are digitised from the atlas: the China front must be listed.
   await panel.getByRole('group', { name: /Kriegsschauplatz|Theater/ }).getByRole('button', { name: /Asien\/Pazifik|Asia\/Pacific/ }).click()
+  await page.waitForFunction(() => window.__globeDetail?.().ww2FrontSegments > 0)
+  await panel.getByRole('button', { name: /Chinafront|China front/ }).first().waitFor()
+  // North Africa has no front in April 1945: the panel must say so instead of inventing a line.
+  await panel.getByRole('group', { name: /Kriegsschauplatz|Theater/ }).getByRole('button', { name: /Nordafrika|North Africa/ }).click()
   await page.waitForFunction(() => window.__globeDetail?.().ww2FrontSegments === 0)
   await panel.getByText(/kein geprüfter Frontabschnitt|No validated front section/).waitFor()
   await panel.getByRole('button', { name: /Antwort zeigen|Show answer/ }).click()

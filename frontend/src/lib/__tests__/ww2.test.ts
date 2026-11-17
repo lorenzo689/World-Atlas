@@ -23,7 +23,8 @@ describe('World War II learning atlas', () => {
       if (atlasDates.includes(moment.date)) {
         expect(front.precision).toBe('digitized')
         expect(front.uncertaintyKm).toBeGreaterThan(0)
-        expect(front.uncertaintyKm).toBeLessThan(20)
+        // Europe sheets ~8–10 km; the smaller-scale Asia/Pacific sheets ~28–34 km.
+        expect(front.uncertaintyKm).toBeLessThan(front.theater === 'asia-pacific' ? 40 : 20)
       } else {
         expect(front.precision).toBe('schematic')
       }

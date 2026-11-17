@@ -44,7 +44,7 @@ const POINTS: Record<string, [string, number, number, Side][]> = {
     ['Warsaw', 21.01, 52.23, 'axis'], ['Minsk (28 Jun)', 27.57, 53.9, 'axis'], ['Pinsk (pre-war Poland, 1939–41 Soviet)', 26.1, 52.11, 'axis'], ['Brest (22 Jun)', 23.7, 52.1, 'axis'], ['Rivne (Volhynia)', 26.25, 50.62, 'axis'], ['Kiev (19 Sep)', 30.52, 50.45, 'axis'], ['Smolensk (16 Jul)', 32.05, 54.78, 'axis'],
     ['Kalinin (14 Oct)', 35.9, 56.86, 'axis'], ['Mozhaisk (18 Oct)', 36.03, 55.5, 'axis'], ['Kharkov (24 Oct)', 36.23, 49.99, 'axis'], ['Kursk (2 Nov)', 36.19, 51.73, 'axis'],
     ['Moscow', 37.62, 55.76, 'allied'], ['Leningrad (besieged)', 30.32, 59.94, 'allied'], ['Tula (held)', 37.62, 54.19, 'allied'], ['Rostov (taken 21 Nov)', 39.71, 47.24, 'allied'],
-    ['Washington (neutral until 8 Dec)', -77.04, 38.9, 'none'], ['Tokyo area (Tripartite Pact)', 139.65, 35.86, 'axis'], ['Madrid (neutral)', -3.7, 40.42, 'none'],
+    ['Washington (neutral until 8 Dec)', -77.04, 38.9, 'none'], ['Nanjing (Japanese since 1937)', 118.8, 32.06, 'axis'], ['Wuhan (Japanese since 1938)', 114.3, 30.59, 'axis'], ['Chongqing (China not yet Allied)', 106.55, 29.56, 'none'], ['Tokyo area (Tripartite Pact)', 139.65, 35.86, 'axis'], ['Madrid (neutral)', -3.7, 40.42, 'none'],
   ],
   '1942-11-18': [
     ['Lyon (occupied since 11 Nov)', 4.84, 45.76, 'axis'], ['Marseille', 5.37, 43.3, 'axis'], ['Vichy', 3.43, 46.13, 'axis'], ['Corte, Corsica (Italian)', 9.15, 42.31, 'axis'],
@@ -54,7 +54,7 @@ const POINTS: Record<string, [string, number, number, Side][]> = {
     ['Moscow', 37.62, 55.76, 'allied'], ['Tula', 37.62, 54.19, 'allied'], ['Leningrad', 30.32, 59.94, 'allied'], ['Kalinin (liberated 16 Dec 1941)', 35.9, 56.86, 'allied'],
     ['Tikhvin (liberated 9 Dec 1941)', 33.6, 59.64, 'allied'], ['Tuapse (held)', 39.07, 44.1, 'allied'], ['Astrakhan', 48.03, 46.35, 'allied'],
     ['Washington (at war since 8 Dec 1941)', -77.04, 38.9, 'allied'], ['Algiers area (Allied since Operation Torch)', 3.0, 36.6, 'allied'],
-    ['Kuala Lumpur (Japanese-occupied Malaya)', 101.69, 3.14, 'axis'], ['Bandung (Japanese-occupied Java)', 107.61, -6.91, 'axis'], ['Madrid (neutral)', -3.7, 40.42, 'none'],
+    ['Kuala Lumpur (Japanese-occupied Malaya)', 101.69, 3.14, 'axis'], ['Bandung (Japanese-occupied Java)', 107.61, -6.91, 'axis'], ['Madrid (neutral)', -3.7, 40.42, 'none'], ['Beijing (Japanese since 1937)', 116.4, 39.9, 'axis'], ['Chongqing', 106.55, 29.56, 'allied'], ['Changsha (held until June 1944)', 112.94, 28.23, 'allied'], ['Changchun (Manchukuo)', 125.32, 43.88, 'axis'],
   ],
   '1943-12-15': [
     ['Rome', 12.5, 41.9, 'axis'], ['Florence', 11.26, 43.77, 'axis'], ['Naples (liberated 1 Oct)', 14.27, 40.85, 'allied'], ['Bari', 16.87, 41.12, 'allied'], ['Palermo', 13.36, 38.12, 'allied'],
@@ -64,6 +64,7 @@ const POINTS: Record<string, [string, number, number, Side][]> = {
     ['Novgorod (until Jan 1944)', 31.27, 58.52, 'axis'], ['Pskov', 28.33, 57.82, 'axis'], ['Paris', 2.35, 48.86, 'axis'], ['Lyon', 4.84, 45.76, 'axis'],
     ['Corte, Corsica (liberated Oct 1943)', 9.15, 42.31, 'allied'], ['Belgrade', 20.46, 44.79, 'axis'], ['Athens', 23.73, 37.98, 'axis'], ['Oslo', 10.75, 59.91, 'axis'],
     ['Budapest', 19.04, 47.5, 'axis'], ['Bucharest', 26.1, 44.43, 'axis'], ['Sofia', 23.32, 42.7, 'axis'],
+    ['Nanjing', 118.8, 32.06, 'axis'], ['Wuhan', 114.3, 30.59, 'axis'], ['Changsha (held until June 1944)', 112.94, 28.23, 'allied'], ['Guilin', 110.29, 25.27, 'allied'], ['Chongqing', 106.55, 29.56, 'allied'],
   ],
   '1944-12-15': [
     ['Amsterdam', 4.9, 52.37, 'axis'], ['Rotterdam', 4.48, 51.92, 'axis'], ['Eindhoven (liberated 18 Sep)', 5.48, 51.44, 'allied'], ['Brussels', 4.35, 50.85, 'allied'],
@@ -74,6 +75,7 @@ const POINTS: Record<string, [string, number, number, Side][]> = {
     ['Prague', 14.44, 50.08, 'axis'], ['Oslo', 10.75, 59.91, 'axis'], ['Zealand west of Copenhagen', 12.25, 55.6, 'axis'], ['Pasvik valley near Kirkenes (liberated Oct 1944)', 29.9, 69.5, 'allied'],
     ['Budapest (siege from 26 Dec)', 19.04, 47.5, 'axis'], ['Bucharest (changed sides 23 Aug)', 26.1, 44.43, 'allied'], ['Sofia (changed sides 9 Sep)', 23.32, 42.7, 'allied'],
     ['Tampere (armistice 19 Sep)', 23.76, 61.5, 'none'],
+    ['Changsha (taken 18 Jun 1944, Ichi-Go)', 112.94, 28.23, 'axis'], ['Guilin (taken 10 Nov 1944)', 110.29, 25.27, 'axis'], ['Liuzhou (taken 11 Nov 1944)', 109.41, 24.33, 'axis'], ['Chongqing', 106.55, 29.56, 'allied'], ['Kunming', 102.72, 25.04, 'allied'],
   ],
   '1945-04-15': [
     ['Amsterdam', 4.9, 52.37, 'axis'], ['Utrecht', 5.12, 52.09, 'axis'], ['Cologne (6 Mar)', 6.96, 50.94, 'allied'], ['Frankfurt (29 Mar)', 8.68, 50.11, 'allied'],
@@ -84,6 +86,7 @@ const POINTS: Record<string, [string, number, number, Side][]> = {
     ['Milan', 9.19, 45.46, 'axis'], ['Zagreb', 15.98, 45.81, 'axis'], ['Sarajevo (6 Apr)', 18.41, 43.86, 'allied'], ['Oslo', 10.75, 59.91, 'axis'], ['Kuldīga (Courland pocket)', 21.97, 56.97, 'axis'],
     ['Budapest (taken 13 Feb)', 19.04, 47.5, 'allied'], ['Ankara (declared war 23 Feb)', 32.86, 39.93, 'allied'], ['Buenos Aires area (declared war 27 Mar)', -58.6, -34.65, 'allied'],
     ['Madrid (neutral)', -3.7, 40.42, 'none'], ['Uppsala (Sweden, neutral)', 17.64, 59.86, 'none'],
+    ['Changsha', 112.94, 28.23, 'axis'], ['Chongqing', 106.55, 29.56, 'allied'], ['Kunming', 102.72, 25.04, 'allied'], ['Xi’an (never taken)', 108.94, 34.34, 'allied'], ['Changchun (Manchukuo)', 125.32, 43.88, 'axis'],
   ],
 }
 

@@ -42,7 +42,8 @@ export interface TerritorySnapshot {
   features: Territory[]
 }
 export interface TerritoryDataset { schemaVersion: 1; snapshots: TerritorySnapshot[] }
-export interface TerritoryArea { id: string; color: string; mesh: AreaMesh }
+/** A prepared area: triangulated fill plus its rings as line-segment pairs (xyz) for a crisp edge. */
+export interface TerritoryArea { id: string; color: string; mesh: AreaMesh; outline?: Float32Array }
 
 /** Point-in-polygon on click only; ignores holes and unknown/hidden actors correctly. */
 export function pickTerritory(features: Territory[], visibleIds: ReadonlySet<string>, lng: number, lat: number): Territory | null {
