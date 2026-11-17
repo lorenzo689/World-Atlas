@@ -11,8 +11,6 @@ import dev.worldexplorer.atlas.AtlasDtos.TravelRequest;
 import dev.worldexplorer.atlas.AtlasDtos.ViewDto;
 import dev.worldexplorer.atlas.AtlasDtos.ViewRequest;
 import dev.worldexplorer.common.security.AuthUser;
-import dev.worldexplorer.search.SearchDtos.NoteHit;
-import dev.worldexplorer.search.SearchService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -29,17 +27,19 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Personal atlas API – everything is scoped to the signed-in user (role USER, guests excluded). */
+/**
+ * Personal atlas API – everything is scoped to the signed-in user (role USER, guests excluded).
+ * Note full-text search ({@code /api/atlas/notes/search}) is served by the search module's
+ * {@code NoteSearchController}, so atlas does not depend on search.
+ */
 @Tag(name = "Personal atlas")
 @RestController
 public class AtlasController {
 
     private final AtlasService atlas;
-    private final SearchService search;
 
-    public AtlasController(AtlasService atlas, SearchService search) {
+    public AtlasController(AtlasService atlas) {
         this.atlas = atlas;
-        this.search = search;
     }
 
     // ---- favourites
@@ -81,12 +81,6 @@ public class AtlasController {
     @GetMapping("/api/atlas/notes")
     List<NoteDto> notes(AuthUser user, @RequestParam(required = false) String country) {
         return atlas.notes(user.id(), country);
-    }
-
-    @Operation(summary = "Full-text search in your notes (Elasticsearch)")
-    @GetMapping("/api/atlas/notes/search")
-    List<NoteHit> searchNotes(AuthUser user, @RequestParam String q, @RequestParam(defaultValue = "20") int limit) {
-        return search.searchNotes(user.id(), q, limit);
     }
 
     @PostMapping("/api/atlas/notes")

@@ -84,6 +84,22 @@ eigenen Entities, Services und Controllern. Module sprechen über Services oder 
 Typischer Aufbau eines Moduls: `XyzController` (HTTP) → `XyzService` (Logik, Transaktionen) →
 `XyzRepository` (Spring Data JPA oder JDBC) + `XyzDtos` (Records für Requests/Responses).
 
+**Regeln für Abhängigkeiten** (als Test erzwungen: `ArchitectureTest`, läuft mit `./mvnw test` ohne Docker):
+
+1. Module bilden **keine Zyklen**. Wenn A B kennt, darf B nicht A kennen – sonst lässt sich keines der
+   beiden allein verstehen, testen oder ändern.
+2. `common` ist die unterste Schicht und kennt **kein** Fachmodul.
+
+Wie man das einhält, ohne Funktionen zu verlieren – drei Muster, alle im Code zu sehen:
+
+| Muster | Problem vorher | Lösung | Code |
+| --- | --- | --- | --- |
+| **Dependency Inversion** | `SecurityConfig` (common) brauchte das `AppUserRepository` (auth) für die Admin-Prüfung | `common` definiert die Frage als Interface, `auth` beantwortet sie | `common/security/AdminDirectory` ← `auth/AppUserAdminDirectory` |
+| **Registrierung durch das besitzende Modul** | `CacheConfig` (common) kannte die DTOs von country/indicator; `IndexBootstrap` (search) kannte `ActivityDocument` | Jedes Modul meldet seine Caches/Indizes selbst als Bean an; Spring sammelt alle Beans eines Typs | `CountryCacheConfig`, `IndicatorCacheConfig`, `SearchIndex` + `ActivityIndexConfig` |
+| **Endpunkt dort, wo die Logik liegt** | `AtlasController` rief `SearchService`, während search für den Index atlas liest | Der Notiz-Suchendpunkt gehört zum search-Modul (URL unverändert) | `search/NoteSearchController` |
+
+Die Entscheidung steht in [ADR 0005](adr/0005-module-dependency-rules.md).
+
 ---
 
 ## 4. Die Technologien im Einsatz
@@ -297,7 +313,8 @@ PUT /api/atlas/notes/{id} (mit version)  → AtlasService.updateNote
    @Version-Prüfung → 409 bei veralteter Version
    Event AtlasChanged(NOTE_SAVED) – erst nach dem Commit nach Kafka
 → NoteIndexer (Kafka) lädt die Notiz aus PostgreSQL und schreibt sie nach Elasticsearch
-→ GET /api/atlas/notes/search?q=… sucht nur in den eigenen Notizen (Filter auf userId)
+→ GET /api/atlas/notes/search?q=… (NoteSearchController im search-Modul) sucht nur in den
+  eigenen Notizen (Filter auf userId)
 ```
 
 ---
@@ -333,6 +350,7 @@ PUT /api/atlas/notes/{id} (mit version)  → AtlasService.updateNote
 | Art | Dateien | Was sie zeigen |
 | --- | --- | --- |
 | Unit | `ScoringTest`, `GeoTest`, `QuestionGeneratorTest`, `WorldBankClientTest`, `LeaderboardKeyTest` | reine Logik, deterministisch durch festen Zufalls-Seed |
+| Architektur | `ArchitectureTest` (ArchUnit) | Modulgrenzen aus Abschnitt 3: keine Zyklen, `common` kennt keine Fachmodule. Liest die kompilierten Klassen, braucht weder Spring noch Docker |
 | Integration | `*IT` + `support/IntegrationTest`, `support/TestcontainersConfig` | ganze Anwendung gegen echte PostgreSQL-, Redis-, Kafka- und Elasticsearch-Container |
 
 Neu: `ChallengeAndAchievementIT` (Duell, Abzeichen über Kafka, Outbox-Relay), erweiterte `AuthAndAtlasIT`

@@ -1,6 +1,5 @@
 package dev.worldexplorer.search;
 
-import dev.worldexplorer.activity.ActivityDocument;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -30,14 +29,17 @@ import org.springframework.stereotype.Component;
 public class IndexBootstrap {
 
     private static final Logger log = LoggerFactory.getLogger(IndexBootstrap.class);
-    /** Countries are handled by {@link CountryIndexer} (alias + versioned indices). */
-    private static final List<Class<?>> DOCUMENTS = List.of(NoteDocument.class, ActivityDocument.class);
-
     private final ElasticsearchOperations es;
+    /**
+     * Every {@link SearchIndex} bean of the application (notes here, activity in its own module).
+     * Countries are handled by {@link CountryIndexer} (alias + versioned indices).
+     */
+    private final List<Class<?>> documents;
     private final Set<Class<?>> ready = ConcurrentHashMap.newKeySet();
 
-    public IndexBootstrap(ElasticsearchOperations es) {
+    public IndexBootstrap(ElasticsearchOperations es, List<SearchIndex> indices) {
         this.es = es;
+        this.documents = indices.stream().<Class<?>>map(SearchIndex::document).toList();
     }
 
     @Async
@@ -45,7 +47,7 @@ public class IndexBootstrap {
     public void createAll() {
         for (int attempt = 1; attempt <= 30; attempt++) {
             try {
-                DOCUMENTS.forEach(this::ensure);
+                documents.forEach(this::ensure);
                 return;
             } catch (Exception e) {
                 log.info("Elasticsearch not ready yet (attempt {}): {}", attempt, e.getMessage());

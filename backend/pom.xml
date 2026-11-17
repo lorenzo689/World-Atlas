@@ -20,6 +20,7 @@
     <properties>
         <java.version>25</java.version>
         <springdoc.version>3.1.1</springdoc.version>
+        <archunit.version>1.5.1</archunit.version>
         <!-- Frontend data that the backend seeds from (single source of truth) -->
         <frontend.data.dir>${project.basedir}/../frontend/public/data</frontend.data.dir>
     </properties>
@@ -132,6 +133,13 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Architecture rules as unit tests (module boundaries, no cycles): ArchitectureTest -->
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
+            <version>${archunit.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
