@@ -5,8 +5,8 @@
 //   axisOccupied / alliedControl – a unit held by the other side as a whole (e.g. Japanese conquests,
 //            British-occupied Iceland)                 -> red / blue
 //   contested – fighting over the unit on that date    -> amber
-// Units not listed on a date (neutrals, Vichy France 1940–42, the USSR before 22 June 1941, Finland
-// after its armistice) carry no colour: no claim. Each entry: [CShapes names], role, from, to
+// Units not listed on a date (neutrals, Vichy France 1940–42, the USSR before 22 June 1941) carry
+// no colour: no claim. Each entry: [CShapes names], role, from, to
 // (from <= date < to), reason. Dates are entry into the war / change of side / conquest.
 const ALL_TIME = '2100-01-01'
 
@@ -73,14 +73,18 @@ export const SIDES = [
   [['Liberia'], 'allied', '1944-01-27', ALL_TIME, 'Liberia'],
   [['Rumania'], 'allied', '1944-08-23', ALL_TIME, 'Romania after changing sides'],
   [['Bulgaria'], 'allied', '1944-09-09', ALL_TIME, 'Bulgaria after changing sides'],
+  [['Finland'], 'allied', '1944-09-15', ALL_TIME, 'Finland at war with Germany (Lapland War); the declaration of 3 Mar 1945 states a war since 15 Sep 1944'],
+  [['Albania'], 'allied', '1944-11-29', ALL_TIME, 'Albania after its liberation by the partisan movement, which fought the Axis'],
   [['Ecuador'], 'allied', '1945-02-02', ALL_TIME, 'Ecuador'],
   [['Paraguay'], 'allied', '1945-02-07', ALL_TIME, 'Paraguay'],
-  [['Peru', 'Chile'], 'allied', '1945-02-12', ALL_TIME, 'Peru and Chile'],
+  [['Peru'], 'allied', '1945-02-12', ALL_TIME, 'Peru'],
+  [['Chile'], 'allied', '1945-04-11', ALL_TIME, 'Chile declared war on Japan'],
   [['Venezuela'], 'allied', '1945-02-15', ALL_TIME, 'Venezuela'],
-  [['Uruguay'], 'allied', '1945-02-22', ALL_TIME, 'Uruguay'],
+  [['Uruguay'], 'allied', '1945-02-15', ALL_TIME, 'Uruguay'],
   [['Turkey (Ottoman Empire)'], 'allied', '1945-02-23', ALL_TIME, 'Turkey'],
   [['Egypt'], 'allied', '1945-02-24', ALL_TIME, 'Egypt'],
-  [['Syria', 'Lebanon'], 'allied', '1945-02-26', ALL_TIME, 'Syria and Lebanon'],
+  [['Syria'], 'allied', '1945-02-26', ALL_TIME, 'Syria'],
+  [['Lebanon'], 'allied', '1945-02-27', ALL_TIME, 'Lebanon'],
   [['Saudi Arabia'], 'allied', '1945-03-01', ALL_TIME, 'Saudi Arabia'],
   [['Argentina'], 'allied', '1945-03-27', ALL_TIME, 'Argentina'],
   // ---- whole units held by the other side ------------------------------------------------------
@@ -88,7 +92,8 @@ export const SIDES = [
   [['Libya'], 'alliedControl', '1943-05-13', ALL_TIME, 'British and French military administration of Libya'],
   [['Iceland'], 'alliedControl', '1940-05-10', ALL_TIME, 'Iceland occupied by British, from 1941 U.S. forces'],
   [['Egypt'], 'alliedControl', '1939-09-03', '1945-02-24', 'British forces in Egypt (Suez Canal) before Egypt declared war'],
-  [['Syria', 'Lebanon'], 'alliedControl', '1941-07-14', '1945-02-26', 'Allied control after the Syria–Lebanon campaign'],
+  [['Syria'], 'alliedControl', '1941-07-14', '1945-02-26', 'Allied control after the Syria–Lebanon campaign'],
+  [['Lebanon'], 'alliedControl', '1941-07-14', '1945-02-27', 'Allied control after the Syria–Lebanon campaign'],
   [['Iran (Persia)'], 'alliedControl', '1941-08-25', '1943-09-09', 'Anglo-Soviet occupation of Iran'],
   [['Madagascar (Malagasy)'], 'alliedControl', '1942-11-05', '1942-11-30', 'British occupation of Madagascar'],
   [INDOCHINA, 'axisOccupied', '1941-07-28', '1945-08-15', 'Japanese military presence in French Indochina'],

@@ -74,7 +74,14 @@ const POINTS: Record<string, [string, number, number, Side][]> = {
     ['Rome', 12.5, 41.9, 'allied'], ['Florence', 11.26, 43.77, 'allied'], ['Bologna', 11.34, 44.49, 'axis'], ['Milan', 9.19, 45.46, 'axis'], ['Zagreb', 15.98, 45.81, 'axis'],
     ['Prague', 14.44, 50.08, 'axis'], ['Oslo', 10.75, 59.91, 'axis'], ['Zealand west of Copenhagen', 12.25, 55.6, 'axis'], ['Pasvik valley near Kirkenes (liberated Oct 1944)', 29.9, 69.5, 'allied'],
     ['Budapest (siege from 26 Dec)', 19.04, 47.5, 'axis'], ['Bucharest (changed sides 23 Aug)', 26.1, 44.43, 'allied'], ['Sofia (changed sides 9 Sep)', 23.32, 42.7, 'allied'],
-    ['Tampere (armistice 19 Sep)', 23.76, 61.5, 'none'],
+    ['Tampere (at war with Germany since 15 Sep 1944)', 23.76, 61.5, 'allied'],
+    // Audit 2026-11: strongholds and recaptured annexations
+    ['Lorient pocket (until 10 May 1945)', -3.3, 47.8, 'axis'], ['Saint-Nazaire pocket, north of the Loire (until 11 May 1945)', -2.2, 47.33, 'axis'],
+    ['Dunkirk pocket (until 9 May 1945)', 2.4, 51.0, 'axis'], ['La Rochelle pocket', -1.1, 46.17, 'axis'], ['Royan pocket', -1.0, 45.63, 'axis'],
+    ['Jersey (occupied until 9 May 1945)', -2.1, 49.2, 'axis'], ['Chania, Fortress Crete (until 10 May 1945)', 23.95, 35.45, 'axis'],
+    ['Heraklion (liberated Oct 1944)', 25.13, 35.3, 'allied'], ['Luxembourg (liberated Sep 1944)', 6.13, 49.61, 'allied'], ['Eupen (liberated Sep 1944)', 6.03, 50.63, 'allied'],
+    ['Leyte (U.S. landing 20 Oct 1944)', 124.9, 11.0, 'allied'], ['Manila (Japanese until Mar 1945)', 121.05, 14.62, 'axis'], ['Hollandia (Allied since Apr 1944)', 140.5, -2.58, 'allied'],
+    ['Okinawa (Japanese until Apr 1945)', 127.75, 26.3, 'axis'],
     ['Changsha (taken 18 Jun 1944, Ichi-Go)', 112.94, 28.23, 'axis'], ['Guilin (taken 10 Nov 1944)', 110.29, 25.27, 'axis'], ['Liuzhou (taken 11 Nov 1944)', 109.41, 24.33, 'axis'], ['Chongqing', 106.55, 29.56, 'allied'], ['Kunming', 102.72, 25.04, 'allied'],
   ],
   '1945-04-15': [
@@ -87,6 +94,13 @@ const POINTS: Record<string, [string, number, number, Side][]> = {
     ['Budapest (taken 13 Feb)', 19.04, 47.5, 'allied'], ['Ankara (declared war 23 Feb)', 32.86, 39.93, 'allied'], ['Buenos Aires area (declared war 27 Mar)', -58.6, -34.65, 'allied'],
     ['Madrid (neutral)', -3.7, 40.42, 'none'], ['Uppsala (Sweden, neutral)', 17.64, 59.86, 'none'],
     ['Changsha', 112.94, 28.23, 'axis'], ['Chongqing', 106.55, 29.56, 'allied'], ['Kunming', 102.72, 25.04, 'allied'], ['Xi’an (never taken)', 108.94, 34.34, 'allied'], ['Changchun (Manchukuo)', 125.32, 43.88, 'axis'],
+    // Audit 2026-11: pockets, strongholds, recaptured annexations, Pacific
+    ['Fortress Breslau (until 6 May 1945)', 17.04, 51.11, 'axis'], ['Vistula delta (until May 1945)', 19.05, 54.27, 'axis'], ['Samland near Pillau (until 25 Apr)', 20.0, 54.73, 'axis'],
+    ['Lorient pocket', -3.3, 47.8, 'axis'], ['Saint-Nazaire pocket, north of the Loire', -2.2, 47.33, 'axis'], ['Dunkirk pocket', 2.4, 51.0, 'axis'], ['La Rochelle pocket', -1.1, 46.17, 'axis'],
+    ['Royan pocket (taken 17/20 Apr)', -1.0, 45.63, 'axis'], ['Jersey', -2.1, 49.2, 'axis'], ['Chania, Fortress Crete', 23.95, 35.45, 'axis'],
+    ['Strasbourg (French again)', 7.75, 48.57, 'allied'], ['Luxembourg', 6.13, 49.61, 'allied'], ['Tampere (Finland, declared war 3 Mar 1945)', 23.76, 61.5, 'allied'],
+    ['Tirana (liberated Nov 1944)', 19.82, 41.33, 'allied'], ['Manila (liberated 3 Mar 1945)', 121.05, 14.62, 'allied'], ['Mandalay (taken 20 Mar 1945)', 96.09, 21.96, 'allied'],
+    ['Rangoon (Japanese until 3 May 1945)', 96.17, 16.84, 'axis'], ['Bassein, Irrawaddy delta (Japanese until May 1945)', 94.73, 16.78, 'axis'], ['Baguio, northern Luzon (Japanese until 27 Apr 1945)', 120.6, 16.4, 'axis'], ['Naha, Okinawa (fighting since 1 Apr)', 127.68, 26.21, 'contested'],
   ],
 }
 

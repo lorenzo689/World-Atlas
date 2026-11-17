@@ -105,6 +105,37 @@ exact Japanese perimeter in China in 1941–1942 (schematic, see above). Southea
 coloured as whole units by the dated side table, not split by the atlas. The schematic 1939–1942 fronts are generalised through towns; they
 are not traced from a map.
 
+## Audit of 15 April 1945 (November 2026)
+
+Every finding was checked against a source before the data changed; each is now a control point
+in `ww2-history.test.ts`.
+
+| Finding | Correct state on 15 April 1945 | Source |
+| --- | --- | --- |
+| Atlantic pockets shown as liberated France | German-held: Dunkirk (until 9 May), Lorient (10 May), Saint-Nazaire (11 May), La Rochelle (7/8 May), Royan and Pointe de Grave (17/20 April), Île d'Oléron (30 April) | [Atlantic pockets](https://en.wikipedia.org/wiki/Atlantic_pockets) |
+| Channel Islands unshaded 1941–1945 | German-occupied from 30 June/1 July 1940 to 9 May 1945 | [Atlantic pockets](https://en.wikipedia.org/wiki/Atlantic_pockets) |
+| All of Crete shown as liberated Greece | The German garrison held the Chania area until 10 May 1945; Rethymno and Heraklion were liberated in October 1944 | [Fortress Crete](https://en.wikipedia.org/wiki/Fortress_Crete) |
+| Breslau, the Vistula delta/Hel and Samland shown as Soviet-held | German pockets: Breslau until 6 May, the Vistula delta and Hel until May, Pillau until 25 April | [Siege of Breslau](https://en.wikipedia.org/wiki/Siege_of_Breslau), [East Pomeranian offensive](https://en.wikipedia.org/wiki/East_Pomeranian_offensive), [Samland offensive](https://en.wikipedia.org/wiki/Samland_offensive) |
+| Liberated Alsace-Lorraine, Luxembourg, Eupen-Malmedy shown as "Reich territory taken by the Allies" | Back to France, Luxembourg, Belgium; on atlas dates an annexation counts only while the Axis still held it | — |
+| Hollandia (Allied since April 1944), Leyte, Manila (liberated 3 March 1945), Mandalay (20 March) inside whole-unit Japanese or contested areas | Indonesia, the Philippines and Burma are now split by the Asia/Pacific sheets | Atlas sheets |
+| Okinawa shown Allied in December 1944 (below the Asia sheet's resolution) | Japanese until the landing of 1 April 1945; contested on 15 April (Naha fell 24–27 May) | [Battle of Okinawa](https://en.wikipedia.org/wiki/Battle_of_Okinawa) |
+| Finland unshaded after its armistice | At war with Germany (Lapland War); its declaration of 3 March 1945 states a war since 15 September 1944; the north-western tip of Lapland was German-held until 27 April 1945 | [Lapland War](https://en.wikipedia.org/wiki/Lapland_War) |
+| Side dates | Chile entered on 11 April 1945 (not 12 February), Uruguay on 15 February, Lebanon on 27 February 1945 | [Declarations of war during WWII](https://en.wikipedia.org/wiki/Declarations_of_war_during_World_War_II) |
+| Manila shown Allied on 15 December 1944 (coastline offset of the Asia sheet at Manila Bay) | All of Luzon Japanese-occupied until the Lingayen landing of 9 January 1945; on 15 April 1945 the Cordillera with Baguio (until 27 April) still Japanese-held | [Battle of Luzon](https://en.wikipedia.org/wiki/Battle_of_Luzon) |
+| Rangoon and the Irrawaddy delta shown Allied on 15 April 1945 (the sheet prints a hatched air-operations zone over the delta) | Japanese-held until Rangoon was entered on 3 May 1945 | [Operation Dracula](https://en.wikipedia.org/wiki/Operation_Dracula) |
+| Missing event on the map date | Liberation of Bergen-Belsen, 15 April 1945 (~55,000 prisoners) | [USHMM](https://encyclopedia.ushmm.org/content/en/article/bergen-belsen) |
+
+Decisions (not facts): Albania is coloured Allied from 29 November 1944 (liberated by its partisan
+movement, which fought the Axis). Japanese client regimes in China (Wang Jingwei, Mengjiang) are
+shown as Japanese-occupied China, not as separate client states; Manchukuo is a client state.
+The strongholds are schematic circles around the fortress towns (boxes for Crete, Luzon, Lower Burma and Okinawa): the sources give towns and dates,
+not boundaries.
+
+Remaining limits: positions carry the atlas error (Europe ±8–10 km, Asia/Pacific ±28–34 km);
+Pacific atolls and bypassed island garrisons (e.g. Rabaul, Truk, Wake) are below the resolution;
+partisan-held areas in Yugoslavia, Italy and China are not drawn; the base map keeps the Reich's
+dated annexation borders as lines.
+
 ## Verification
 
 From `frontend/`:

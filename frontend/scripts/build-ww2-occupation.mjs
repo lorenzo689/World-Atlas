@@ -14,6 +14,8 @@ import { gunzipSync } from 'node:zlib'
 import polygonClipping from 'polygon-clipping'
 import { ohmRelation, forSphere } from './lib/ohm.mjs'
 import { roleOf, reasonOf, unitTitle } from './lib/ww2-sides.mjs'
+import { STRONGHOLDS, circle } from './lib/ww2-strongholds.mjs'
+import { feature as topoFeature } from 'topojson-client'
 import { WW2_MOMENTS } from '../src/lib/ww2.ts'
 
 // polygon-clipping can fail ("Unable to find segment … in SweepLine tree") on nearly coincident
@@ -47,7 +49,20 @@ function state(name, date) {
 const atlas = JSON.parse(readFileSync('scripts/data/ww2-atlas.json', 'utf8'))
 /** Atlas outputs are sphere-wound (clockwise); polygon-clipping wants planar (counter-clockwise). */
 const planar = (coordinates) => coordinates.map((polygon) => polygon.map((ring) => [...ring].reverse()))
-const toSheet = (s) => ({ ...s, axis: planar(s.axisHeld.coordinates), frame: planar(s.extent.type === 'Polygon' ? [s.extent.coordinates] : s.extent.coordinates) })
+// Strongholds and pockets the atlas does not show (scripts/lib/ww2-strongholds.mjs), clipped to
+// Natural Earth land. Active ones count as Axis-held when a sheet splits areas.
+const neTopo = JSON.parse(readFileSync('public/data/boundaries.json', 'utf8'))
+const neLand = new Map(topoFeature(neTopo, neTopo.objects.countries).features.map((f) => [f.properties.code, f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates]))
+const strongholdGeometry = (h) => {
+  const shapes = [...(h.circles ?? []).map(([lon, lat, km]) => [[circle(lon, lat, km)]]), ...(h.boxes ?? []).map(([w, so, e, n]) => [[[[w, so], [e, so], [e, n], [w, n], [w, so]]]])]
+  return intersection(union(...shapes), union(...h.codes.map((c) => neLand.get(c))))
+}
+const activeStrongholds = (date) => STRONGHOLDS.filter((h) => h.from <= date && date < h.to).map((h) => ({ ...h, geometry: strongholdGeometry(h) }))
+const toSheet = (s) => {
+  const axis = planar(s.axisHeld.coordinates)
+  const held = activeStrongholds(s.date).filter((h) => !h.contested).map((h) => h.geometry)
+  return { ...s, axis: held.length ? union(axis, ...held) : axis, frame: planar(s.extent.type === 'Polygon' ? [s.extent.coordinates] : s.extent.coordinates) }
+}
 /** The European sheet of a date (the regime clipping below concerns Europe). */
 const sheet = (date, region = 'europe') => {
   const s = atlas.sheets.find((x) => x.date === date && x.region === region)
@@ -92,6 +107,8 @@ const front = (year, prefix) => WW2_MOMENTS.find((m) => m.year === year).fronts.
 const demarcationNorthWest = [[[[-1.24, 43.1], [-0.3, 43.9], [-0.25, 44.55], [0.0, 44.9], [0.25, 45.6], [0.67, 46.0], [0.9, 46.5], [1.0, 47.05],
   [2.07, 47.22], [2.9, 46.9], [3.33, 46.57], [4.0, 46.48], [4.85, 46.78], [5.5, 46.95], [6.05, 46.4], [8.5, 46.4], [8.5, 51.6], [-6, 51.6], [-6, 43.1], [-1.24, 43.1]]]]
 
+const REICH_CORE = union(state('Germany (Prussia)', '1937-12-31'), state('Austria', '1937-12-31'),
+  JSON.parse(readFileSync('scripts/data/ww2-free-city-danzig.geojson', 'utf8')).geometry.coordinates)
 async function moments() {
   const chinaSheet = sheet('1943-07-01', 'asia')
   const reich1941 = await ohm(2692712, '1941-08-01', '1945-05-08')
@@ -254,7 +271,9 @@ async function moments() {
     { id: 'slovakia', actorId: 'client', kind: 'client', precision: 'administrative', title: { de: 'Slowakischer Staat', en: 'Slovak Republic' }, geometry: slovakia.coordinates, source: fromOhm(slovakia) },
   ])
   const alliedGermany = (s, src) => {
-    const held = alliedHeld(s, difference(reich1941.coordinates, protectorate.coordinates, gg1941.coordinates))
+    // Only Germany in its 1937 borders, Austria and Danzig: annexed areas the Allies recaptured
+    // (Alsace-Lorraine, Luxembourg, Eupen-Malmedy, western Poland, …) return to their own states.
+    const held = alliedHeld(s, intersection(difference(reich1941.coordinates, protectorate.coordinates, gg1941.coordinates), REICH_CORE))
     // The two Allied advances do not meet on these dates; 13.5°E separates them (Western Allies at
     // most ~12.9°E near Chemnitz, the Red Army at the Oder ~14.3°E and in Vienna).
     return [
@@ -313,6 +332,12 @@ function stateFeatures(date, taken) {
   if (!reich) throw new Error(`No Reich footprint for ${date}; rebuild npm run data:ww2`)
   // Every atlas sheet of this date (Europe and Asia/Pacific); the 1943-07-01 sheet is not a moment.
   const sheets = atlas.sheets.filter((x) => x.date === date).map(toSheet)
+  // On atlas dates an annexation counts only where the Axis still held it (or off the sheet).
+  const eu = sheets.find((x) => x.region === 'europe')
+  const reichAxis = eu ? union(intersection(reich, eu.axis), difference(reich, eu.frame)) : reich
+  // Asia/Pacific sheets (~30 km error) cannot resolve small islands such as Okinawa.
+  const minArea = (s) => (s.region === 'asia' ? 0.15 : 0.02)
+  const solidFor = (s, g) => g.filter((polygon) => planarArea([polygon]) >= minArea(s))
   const out = []
   const push = (id, category, kind, title, geometry, note, source = CSHAPES_SOURCE, precision = 'administrative') => {
     const g = solid(geometry)
@@ -328,7 +353,7 @@ function stateFeatures(date, taken) {
     const role = roleOf(p.cntry_name, date)
     if (!role) continue
     const unit = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates
-    const own = p.cntry_name === 'Germany (Prussia)' ? reich : difference(unit, reich)
+    const own = p.cntry_name === 'Germany (Prussia)' ? (eu ? union(intersection(reich, REICH_CORE), reichAxis) : reich) : difference(unit, reichAxis)
     // A unit swallowed by the Reich (Austria) leaves only boundary slivers. Test this before removing
     // occupied areas: a mostly occupied state (France 1943: liberated Corsica only) must stay.
     if (planarArea(own) < planarArea(unit) * 0.03 && p.cntry_name !== 'Germany (Prussia)') continue
@@ -343,7 +368,7 @@ function stateFeatures(date, taken) {
       let clipped = false
       for (const s of sheets) {
         const otherSide = role === 'axis' ? intersection(difference(base, s.axis), s.frame) : intersection(base, s.frame, s.axis)
-        const lost = solid(otherSide)
+        const lost = solidFor(s, otherSide)
         if (!lost.length) continue
         push(`${id}-held-by-${role === 'axis' ? 'allies' : 'axis'}-${s.region}`, role === 'axis' ? 'alliedControl' : 'axisOccupied', role === 'axis' ? 'control' : 'occupation',
           { de: `${title.de} · ${role === 'axis' ? 'von den Alliierten gehalten' : 'von der Achse gehalten'}`, en: `${title.en} · held by the ${role === 'axis' ? 'Allies' : 'Axis'}` }, lost, null, fromAtlas(s), 'digitized')
@@ -352,6 +377,16 @@ function stateFeatures(date, taken) {
       }
       push(id, role === 'axis' ? 'axisState' : 'alliedState', 'state', title, base, note, CSHAPES_SOURCE, clipped ? 'digitized' : 'administrative')
     } else {
+      // Whole units held by one side or contested (Indonesia, Philippines, Burma): split by the
+      // Asia/Pacific sheets where they reach, e.g. Allied-held Hollandia and Morotai since 1944.
+      for (const s of sheets.filter((x) => x.region === 'asia')) {
+        const axisPart = solidFor(s, intersection(base, s.frame, s.axis))
+        const alliedPart = solidFor(s, intersection(difference(base, s.axis), s.frame))
+        if (!axisPart.length && !alliedPart.length) continue
+        if (axisPart.length) push(`${id}-axis-held`, 'axisOccupied', 'occupation', { de: `${title.de} · von der Achse gehalten`, en: `${title.en} · held by the Axis` }, axisPart, note, fromAtlas(s), 'digitized')
+        if (alliedPart.length) push(`${id}-allied-held`, 'alliedControl', 'control', { de: `${title.de} · von den Alliierten gehalten`, en: `${title.en} · held by the Allies` }, alliedPart, note, fromAtlas(s), 'digitized')
+        base = difference(base, axisPart, alliedPart)
+      }
       push(id, role, role === 'contested' ? 'contested' : role === 'alliedControl' ? 'control' : 'occupation', title, base, note)
     }
   }
@@ -363,8 +398,11 @@ const M = await moments()
 const dates = WW2_MOMENTS.map((m) => m.date)
 const snapshots = []
 for (const date of dates) {
-  const entries = M[date]
-  if (!entries) throw new Error(`No occupation entries for ${date}`)
+  if (!M[date]) throw new Error(`No occupation entries for ${date}`)
+  const entries = [...M[date], ...activeStrongholds(date).filter((h) => !h.german).map((h) => ({
+    id: h.id, actorId: h.contested ? 'japan' : (h.actor ?? 'naziGermany'), kind: h.contested ? 'contested' : 'occupation', precision: 'schematic', title: h.title,
+    geometry: h.geometry, source: { ...h.source, license: 'Schematic area from the cited text; land outline Natural Earth (public domain)' }, ...(h.note ? { note: h.note } : {}),
+  }))]
   const features = []
   let taken = []
   for (const e of entries) {
