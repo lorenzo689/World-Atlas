@@ -41,24 +41,24 @@
     1886,
     2019
   ],
-  "periods": 890,
+  "periods": 757,
   "geometry": {
-    "vertices": 3208347,
-    "indices": 14372910,
+    "vertices": 1308508,
+    "indices": 4394232,
     "indexEncoding": "local-u16"
   },
   "files": {
     "historical-topology.json": {
-      "bytes": 7414340,
-      "sha256": "75257ab4c74c6a107482ef8fb866614dd525f6a0e20c8b11bf415e0c493be454"
+      "bytes": 7097207,
+      "sha256": "8abc066a251b823292afdcbfea989f6aa8426c2ad0e434960d0f64555d95ce91"
     },
     "historical-geometry.json": {
-      "bytes": 27895,
-      "sha256": "8fe10bfe3dff7c48c8b55f9a1951fae87e28fd76b4fc6e11e417858f52d81215"
+      "bytes": 22637,
+      "sha256": "4f769997e93a52dbeaa4fbb6a67e3476b586fb854691f919b7b71f6022f872e8"
     },
     "historical-geometry.bin": {
-      "bytes": 54412596,
-      "sha256": "6b3b22a8a9262e6dad619d49123cdf4959452a23cdada8841fae861008e38cf4"
+      "bytes": 19256528,
+      "sha256": "a983b623ed5c40ccc6db1aa436df6e5eca9b0a1e7a035dd17d276c423805622d"
     },
     "historical-flags.json": {
       "bytes": 43699,

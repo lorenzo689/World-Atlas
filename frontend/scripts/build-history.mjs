@@ -125,6 +125,20 @@ const bounds = (coordinates) => {
 const overlaps = (a, b) => a[0] <= b[2] && b[0] <= a[2] && a[1] <= b[3] && b[1] <= a[3]
 const annexationBounds = new Map([...annexationByYear].map(([day, coordinates]) => [day, bounds(coordinates)]))
 const wartime = []
+// Consecutive sample days often leave a state unchanged (e.g. Poland between two 1 January samples).
+// Those samples are one period, not several full copies of the same geometry: this kept the
+// pre-triangulated file at 54 MB, four times its pre-WWII size.
+const mergeSamples = () => {
+  let previous = null
+  return (feature, key) => {
+    if (previous && previous.key === key && dayBefore(feature.properties.start) === previous.feature.properties.end) {
+      previous.feature.properties.end = feature.properties.end
+      return
+    }
+    previous = { key, feature }
+    wartime.push(feature)
+  }
+}
 for (const sourceFeature of sourceFeatures) {
   const props = sourceFeature.properties
   // Periods that start after the last sample day (e.g. post-war borders from 8 May 1945) are
@@ -135,9 +149,10 @@ for (const sourceFeature of sourceFeatures) {
   const relevantDays = sampleDays.filter((day) => props.start <= day && day <= props.end && overlaps(sourceBounds, annexationBounds.get(day)))
   const affected = props.code === 'H255' || relevantDays.some((day) => polygonClipping.intersection(sourcePolygon, annexationByYear.get(day)).length > 0)
   if (!affected) { wartime.push(sourceFeature); continue }
+  const push = mergeSamples()
   const append = (geometry, start, end, reconstructed = false) => {
     if (start > end || !geometry?.coordinates?.length) return
-    wartime.push({ type: 'Feature', properties: { ...props, start, end }, geometry, reconstructed })
+    push({ type: 'Feature', properties: { ...props, start, end }, geometry, reconstructed }, JSON.stringify(geometry.coordinates))
   }
   if (props.start < 19390101) append(sourceFeature.geometry, props.start, Math.min(props.end, 19381231))
   for (const [i, day] of sampleDays.entries()) {
@@ -154,11 +169,12 @@ for (const sourceFeature of sourceFeatures) {
   if (props.end >= 19460101) append(sourceFeature.geometry, Math.max(props.start, 19460101), props.end)
 }
 wartime.push({ ...danzigFeature, reconstructed: true })
+const pushGermany = mergeSamples()
 for (const [i, annexation] of annexations.entries()) {
   const day = annexation.properties.day
   const germany = sourceFeatures.find((f) => f.properties.code === 'H255' && f.properties.start <= day && f.properties.end >= day)
   if (!germany) throw new Error(`No CShapes Germany metadata for ${day}`)
-  wartime.push({ type: 'Feature', properties: { ...germany.properties, start: day, end: Math.min(germany.properties.end, periodEnd(i)), source: 'OHM-WWII-annexations' }, geometry: annexation.geometry, reconstructed: true })
+  pushGermany({ type: 'Feature', properties: { ...germany.properties, start: day, end: Math.min(germany.properties.end, periodEnd(i)), source: 'OHM-WWII-annexations' }, geometry: annexation.geometry, reconstructed: true }, JSON.stringify(annexation.geometry.coordinates))
 }
 const features = wartime.map((f, period) => ({
   type: 'Feature', properties: { ...f.properties, period }, geometry: globeWinding(f.geometry, f.reconstructed),
@@ -191,12 +207,17 @@ const vertexIndex = (point) => {
   }
   return index
 }
+// Broad triangles are split until their flat chord stays above the globe. Caps sit 0.3 above the
+// sphere (CAP_RADIUS = 100.3), so a 6° edge (sag about 0.14) is safe; it is also the resolution the
+// live tessellator uses for the current map (CURVATURE_RESOLUTION). 2.5° produced 4.8 million
+// triangles and a 54 MB file.
+const SUBDIVIDE_DEGREES = 6
 const appendTriangle = (a, b, c, depth = 0) => {
   const span = Math.max(
     Math.abs(a[0] - b[0]), Math.abs(b[0] - c[0]), Math.abs(c[0] - a[0]),
     Math.abs(a[1] - b[1]), Math.abs(b[1] - c[1]), Math.abs(c[1] - a[1]),
   )
-  if (span > 2.5 && depth < 8) {
+  if (span > SUBDIVIDE_DEGREES && depth < 8) {
     const ab = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]
     const bc = [(b[0] + c[0]) / 2, (b[1] + c[1]) / 2]
     const ca = [(c[0] + a[0]) / 2, (c[1] + a[1]) / 2]
