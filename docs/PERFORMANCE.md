@@ -188,3 +188,31 @@ gzip), textures 0.9 MB, JS and CSS 1.0 MB raw. Added since the 2.9 MB measuremen
 time limit of 5 s. On a slow connection the download was cut off and the panel showed "Gebietsflächen
 nicht verfügbar". The limit now ends when the response headers arrive; two tests cover a slow
 download and a server that does not answer.
+
+## 7. Real-GPU measurement and the satellite-tile upload (November 2026)
+
+Intel UHD 620, Chrome headless with D3D11, 1280×800 @1x, . The machine had under 1 GB of free
+memory, so single runs vary by tens of milliseconds; the table gives one run before and one after the fix.
+
+**WWII view** (fresh page, 1945): territory areas on screen after 6–16 s (38 s with software GL), 17 draw calls,
+304k triangles, drag at 58–59 renders/s with frame p95 18.7 ms and max 21–22 ms. This view meets the frame
+budgets on this GPU.
+
+**Country selection with satellite imagery** was the one regression. The profile of the select phase showed
+910 ms of main-thread time in : the 12 satellite tiles (1350 px, 7 MB each as pixels) arrived
+within a second, and a plain image element is decoded lazily inside the upload.  now decodes with
+ (off the main thread), closes the bitmap when a tile is evicted and lets one tile join the
+scene per frame.
+
+| Select phase | Before | After |
+| --- | ---: | ---: |
+|  main-thread time | 910 ms | 146 ms |
+| Long tasks | 10 (902 ms) | 3 (181 ms), 1 (64–74 ms) in two other runs |
+| Tick p95 | 101.7 ms | 13.0 ms |
+| Frame p95 / max | 78 / 192 ms | 57 / 126 ms (36 / 53 ms in a second run) |
+
+The visual result was checked (Italy with its tiles in the right orientation) and  still reports
+12 image tiles. **Still open:** frame p95 in the select and hover phases misses the 20 ms budget on this GPU
+(it was 21 ms and borderline in October). The remaining cost is main-thread work around the selection (about 250
+flag requests while typing in the search box, panel mount) and the 12 uploads, not the globe itself. Time to
+interactive was 2.7–4.4 s against a 3 s budget. These budgets are therefore not enforced in CI (software GL only).

@@ -1,4 +1,4 @@
-import { Group, Mesh, MeshPhongMaterial, PerspectiveCamera, SphereGeometry, SRGBColorSpace, TextureLoader, type Texture } from 'three'
+import { Group, ImageBitmapLoader, Mesh, MeshPhongMaterial, PerspectiveCamera, SphereGeometry, SRGBColorSpace, Texture } from 'three'
 import type { Pose } from '@/lib/geo'
 import { GLOBE_RADIUS } from '@/lib/globeLayers'
 import { TileStore } from '@/lib/tileStore'
@@ -19,7 +19,9 @@ type Cached = { mesh: Mesh; texture: Texture }
 /** Camera-local imagery. The original 4k map remains visible until a high-res patch is ready. */
 export class ImageDetail {
   private group = new Group()
-  private loader = new TextureLoader()
+  // Decoding happens off the main thread. A plain image element is decoded lazily inside texSubImage2D, which cost
+  // about 900 ms of main-thread time while 12 tiles of 1350 px arrived after a fly-to (Intel UHD 620).
+  private loader = new ImageBitmapLoader().setOptions({ imageOrientation: 'flipY', premultiplyAlpha: 'none', colorSpaceConversion: 'none' })
   private tiles: TileStore<Cached>
   private lastPose: Pose = { lat: 0, lng: 0, altitude: 3 }
   private lastUpdate = 0
@@ -27,6 +29,11 @@ export class ImageDetail {
   private satellite = false
   private lite = false
   private disposed = false
+  // Loaded tiles join the scene one per frame: each first render uploads a 1350 px texture (about 12 ms on an
+  // integrated GPU), and four arriving together made a 50 ms frame.
+  private queue: { key: string; entry: Cached }[] = []
+  private released = new WeakSet<Cached>()
+  private draining = false
 
   constructor(globe: Mesh, private camera: PerspectiveCamera, private requestRender: () => void) {
     globe.add(this.group) // same prime-meridian rotation as the global texture
@@ -38,9 +45,11 @@ export class ImageDetail {
         entry.mesh.removeFromParent()
         entry.mesh.geometry.dispose()
         ;(entry.mesh.material as MeshPhongMaterial).dispose()
+        this.released.delete(entry)
         entry.texture.dispose()
+        ;(entry.texture.image as ImageBitmap).close() // release the decoded pixels now, not at the next GC
       },
-      onLoaded: (_key, entry) => { this.group.add(entry.mesh); this.requestRender() },
+      onLoaded: (key, entry) => { this.queue.push({ key, entry }); this.drain() },
     })
   }
 
@@ -73,17 +82,35 @@ export class ImageDetail {
     const wanted = new Set(nearest.slice(0, MAX_ACTIVE).map((v) => v.key))
     this.tiles.setWanted(wanted, now)
     for (const [key, entry] of this.tiles.entries()) {
-      if (wanted.has(key)) this.group.add(entry.mesh)
+      if (wanted.has(key) && this.released.has(entry)) this.group.add(entry.mesh)
       else this.group.remove(entry.mesh)
     }
   }
 
+  private drain() {
+    if (this.draining) return
+    this.draining = true
+    const step = () => {
+      const next = this.queue.shift()
+      if (next && !this.disposed) {
+        this.released.add(next.entry)
+        if (this.tiles.wantedKeys().has(next.key)) { this.group.add(next.entry.mesh); this.requestRender() }
+      }
+      if (this.queue.length && !this.disposed) requestAnimationFrame(step)
+      else this.draining = false
+    }
+    requestAnimationFrame(step)
+  }
+
   private async load(key: string, signal: AbortSignal): Promise<Cached> {
-    const texture = await this.loader.loadAsync(`${BASE}${key}.webp`)
+    const bitmap = await this.loader.loadAsync(`${BASE}${key}.webp`)
     if (signal.aborted || this.disposed) {
-      texture.dispose()
+      bitmap.close()
       throw new DOMException('Image tile cancelled', 'AbortError')
     }
+    const texture = new Texture(bitmap)
+    texture.flipY = false // the bitmap is already flipped by imageOrientation
+    texture.needsUpdate = true
     texture.colorSpace = SRGBColorSpace
     texture.anisotropy = 4
     const [x, y] = key.split('-').map(Number)

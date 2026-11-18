@@ -140,9 +140,9 @@ phases.select = await snap()
 await shot('3-selected')
 if (shotsDir) {
   await page.keyboard.press('Escape')
-  for (const [mode, file] of [['Political', '4-political'], ['Data', '5-data']]) {
-    await page.getByText(mode, { exact: true }).first().click()
-    await wait(mode === 'Data' ? 8000 : 4000)
+  for (const [mode, file] of [[/^(Political|Politisch)$/, '4-political'], [/^(Data|Daten)$/, '5-data']]) {
+    await page.getByText(mode).first().click() // the mode names exist in German and English
+    await wait(file === '5-data' ? 8000 : 4000)
     await shot(file)
   }
 }
