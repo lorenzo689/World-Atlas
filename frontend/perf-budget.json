@@ -2,7 +2,9 @@
   "_comment": "Checked by `npm run perf`. 'always' limits hold on any hardware (incl. software GL); 'gpu' limits are only enforced with --gpu on real hardware (software GL renders count as long tasks).",
   "always": {
     "drawCalls": 60,
-    "transferKB": 3072
+    "transferKB": 3072,
+    "ww2TransferKB": 73728,
+    "_ww2TransferKB": "Regression ceiling, not a target: the WWII view loads the 53 MB historical geometry (see docs/PERFORMANCE.md section 6). Lower it when that file shrinks."
   },
   "gpu": {
     "readyMs": 3000,

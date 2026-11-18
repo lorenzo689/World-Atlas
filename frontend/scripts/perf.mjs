@@ -61,7 +61,7 @@ const browser = await chromium.launch({
     : ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
 })
 const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: dpr })
-const page = await ctx.newPage()
+let page = await ctx.newPage()
 const errors = []
 page.on('pageerror', (e) => errors.push(e.message))
 if (cpu > 1) {
@@ -147,6 +147,46 @@ if (shotsDir) {
   }
 }
 
+// The World War II scenario is the heaviest view: dated territory areas (TopoJSON decoded in a worker),
+// fronts, event markers and the star sky. Load it fresh to measure its own transfer and render cost.
+// a fresh page: no selection, heap or textures left over from the phases above
+await page.close()
+page = await ctx.newPage()
+page.on('pageerror', (e) => errors.push(e.message))
+const ww2Start = Date.now()
+await page.goto(`${url}/explore?scenario=ww2&year=1945&debug=1`, { waitUntil: 'commit' })
+await page.waitForFunction(() => window.__perf?.ready, null, { timeout: 180000, polling: 250 })
+const areaToggle = page.getByTestId('territory-panel').first().getByRole('checkbox').first()
+await areaToggle.waitFor({ timeout: 120000 }) // the panel renders after the globe
+if (!(await areaToggle.isChecked())) await areaToggle.check()
+await page.waitForFunction(() => window.__globeDetail?.().territoryAreas > 0, null, { timeout: 180000, polling: 250 }).catch(async (e) => {
+  console.log('territory panel:', (await page.getByTestId('territory-panel').first().innerText().catch(() => '?')).replaceAll('\n', ' | '), '| page errors:', errors)
+  throw e
+})
+const areasMs = Date.now() - ww2Start
+await wait(4000)
+const ww2Load = await page.evaluate(() => {
+  const size = (r) => r.transferSize || r.encodedBodySize || 0
+  const res = performance.getEntriesByType('resource')
+  const data = res.filter((r) => /territories-history|stars\.bin/.test(r.name)).map((r) => ({ url: r.name.replace(location.origin, ''), kb: Math.round(size(r) / 1024) }))
+  const biggest = res.map((r) => ({ url: r.name.replace(location.origin, ''), kb: Math.round(size(r) / 1024) })).sort((x, y) => y.kb - x.kb).slice(0, 8)
+  return { transferKB: Math.round((res.reduce((a, r) => a + size(r), 0) + size(performance.getEntriesByType('navigation')[0] ?? {})) / 1024), biggest, data, areas: window.__globeDetail().territoryAreas, triangles: window.__globeDetail().territoryTriangles }
+})
+await shot('6-ww2-1945')
+await reset()
+await wait(3000)
+phases.ww2idle = await snap()
+await reset()
+await page.mouse.move(cx, cy)
+await page.mouse.down()
+for (let i = 0; i < 90; i++) {
+  const a = (i / 90) * Math.PI * 2
+  await page.mouse.move(cx + Math.cos(a) * width * 0.18, cy + Math.sin(a) * height * 0.18)
+  await wait(16)
+}
+await page.mouse.up()
+phases.ww2drag = await snap()
+
 await browser.close()
 server?.kill()
 
@@ -155,6 +195,8 @@ const f = (n, d = 1) => (typeof n === 'number' ? n.toFixed(d) : '-')
 console.log(`\nPerf run "${label}"  ${gpu ? 'GPU' : 'software GL'}  ${width}x${height} @${dpr}x  cpu x${cpu}`)
 console.log(`load: ready ${f(load.readyMs, 0)} ms (wall ${wallReady}), ${load.transferKB} KB in ${load.requests} requests`)
 for (const b of load.biggest) console.log(`      ${String(b.kb).padStart(6)} KB  ${b.url}`)
+for (const b of ww2Load.biggest) console.log(`      ${String(b.kb).padStart(6)} KB  ${b.url}  (ww2)`)
+console.log(`ww2 view: areas on screen after ${(areasMs / 1000).toFixed(0)} s, ${ww2Load.transferKB} KB in total, ${ww2Load.areas} merged areas, ${Math.round(ww2Load.triangles / 1000)}k area triangles; data: ${ww2Load.data.map((d) => `${d.url} ${d.kb} KB`).join(', ')}`)
 console.log(`GL renderer: ${gl}${/swiftshader|software|llvmpipe/i.test(gl) ? '  (SOFTWARE: frame times are not meaningful)' : ''}`)
 console.log('\nphase  renders/s  frame p50 p95 max (chained)  tick p95 max   longtasks(ms)  calls   tris  geoms  tex  heapMB')
 for (const [name, s] of Object.entries(phases)) {
@@ -165,7 +207,7 @@ for (const [name, s] of Object.entries(phases)) {
 }
 
 mkdirSync('perf-results', { recursive: true })
-const result = { gl, label, when: new Date().toISOString(), gpu, width, height, dpr, cpu, load, phases, errors }
+const result = { gl, label, when: new Date().toISOString(), gpu, width, height, dpr, cpu, load, ww2Load: { ...ww2Load, areasMs }, phases, errors }
 writeFileSync(`perf-results/${label}.json`, JSON.stringify(result, null, 2))
 
 // ---- budgets -----------------------------------------------------------------------------
@@ -173,6 +215,7 @@ const fails = []
 const check = (name, value, limit) => value > limit && fails.push(`${name}: ${f(value)} > ${limit}`)
 const worst = (k) => Math.max(...Object.values(phases).map((s) => s[k] ?? 0))
 check('transferKB', load.transferKB, budget.always.transferKB)
+check('ww2 transferKB', ww2Load.transferKB, budget.always.ww2TransferKB)
 check('drawCalls (worst phase)', worst('drawCalls'), budget.always.drawCalls)
 if (gpu) {
   check('readyMs', load.readyMs, budget.gpu.readyMs)

@@ -37,6 +37,13 @@ jobs:
       - run: npm run build
       - name: Production viewer browser smoke (including CSP)
         run: CHROME_PATH=$(which google-chrome) npm run smoke
+      - name: Scenario and World War II browser smokes (frontend only, production build)
+        # The smoke scripts need a server; vite preview serves the build just checked.
+        run: |
+          nohup npx vite preview --port 4173 --strictPort > ../preview.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf localhost:4173/ > /dev/null && break; sleep 1; done
+          CHROME_PATH=$(which google-chrome) SMOKE_URL=http://localhost:4173/ npm run smoke:ww2
+          CHROME_PATH=$(which google-chrome) SMOKE_URL=http://localhost:4173/explore npm run smoke:scenarios
 
   backend:
     runs-on: ubuntu-latest # has Docker, which Testcontainers needs for the *IT tests
@@ -94,6 +101,9 @@ jobs:
         working-directory: frontend
       - name: End-to-end test
         run: CHROME_PATH=$(which google-chrome) npm run e2e -- --screenshots e2e-screenshots
+        working-directory: frontend
+      - name: Historical data context (needs the backend for populations)
+        run: CHROME_PATH=$(which google-chrome) npm run smoke:history
         working-directory: frontend
       - name: Close-zoom map detail
         run: CHROME_PATH=$(which google-chrome) npm run smoke:detail

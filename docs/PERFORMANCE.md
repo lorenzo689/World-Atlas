@@ -56,6 +56,7 @@ restored), resize, and "no page errors". Exits non-zero on any failure.
 | --- | --- | --- |
 | Draw calls, worst phase | 60 | always |
 | Transfer size at load | 3 MB | always |
+| Transfer size of the WWII view | 72 MB (ceiling, see section 6) | always |
 | Ready (globe interactive) | 3 s | `--gpu` |
 | Long-task time per phase | 200 ms | `--gpu` |
 | Frame p95 (chained frames) | 20 ms | `--gpu` |
@@ -140,3 +141,31 @@ outside the globe itself and is the target of the panel / country-page work.
 - **Fonts** (Inter + Instrument Serif subsets) and route-level bundle analysis for the country pages are untouched.
 - `geometry.bin` could shrink (Uint16 indices per country, quantised lng/lat) if its size matters.
 - Info-panel mount cost on selection (see phone profile above).
+
+## 6. World War II view and the historical geometry (November 2026)
+
+`npm run perf` now also loads `/explore?scenario=ww2&year=1945` on a fresh page and reports the time
+until the territory areas are on screen, the transfer size and its largest files.
+
+| Measured (vite preview, software GL, 8 GB machine under memory pressure) | Value |
+| --- | --- |
+| WWII view, transfer in total | 70,760 KB |
+| `historical-geometry.bin` (pre-triangulated base borders) | 53,137 KB raw, 32,938 KB gzip |
+| `historical-topology.json` | 7,240 KB raw, 2,163 KB gzip |
+| `territories-history.json` (the seven WWII snapshots) | 5,654 KB raw, 1,598 KB gzip |
+| Territory areas on screen | about 40 s with software rendering; 17 draw calls, 490k triangles |
+| Home page, transfer in total | 4,017 KB (budget 3,072 KB, exceeded; not yet attributed) |
+
+**Open problem:** `historical-geometry.bin` was 12.4 MB before the WWII work and is 54 MB today
+(commits `08e1440`, `9dddd9b`). Every state whose outline touches the Reich footprint is clipped once
+per sample day (every 1 January from 1939 to 1945 plus each moment date) and stored as a full
+pre-triangulated copy. Both the WWII view and the historical timeline download it. Merging identical
+consecutive samples removes only about 15% of the periods (757 instead of 890), so it is not enough.
+A real fix stores the Reich footprint as a separate layer instead of re-clipping every neighbour, or
+loads the wartime periods only when the WWII scenario is open. GitHub Pages probably does not
+compress `.bin` files, so the wire size there is closer to the raw 53 MB.
+
+**Bug found while measuring:** the service worker gave the 5.6 MB `territories-history.json` an overall
+time limit of 5 s. On a slow connection the download was cut off and the panel showed "Gebietsflächen
+nicht verfügbar". The limit now ends when the response headers arrive; two new tests cover a slow
+download and a server that does not answer.
