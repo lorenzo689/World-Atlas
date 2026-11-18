@@ -55,8 +55,8 @@ restored), resize, and "no page errors". Exits non-zero on any failure.
 | Metric | Limit | Enforced |
 | --- | --- | --- |
 | Draw calls, worst phase | 60 | always |
-| Transfer size at load | 3 MB | always |
-| Transfer size of the WWII view | 72 MB (ceiling, see section 6) | always |
+| Transfer size at load | 4.4 MB (re-baselined, see section 6) | always |
+| Transfer size of the WWII view | 40 MB | always |
 | Ready (globe interactive) | 3 s | `--gpu` |
 | Long-task time per phase | 200 ms | `--gpu` |
 | Frame p95 (chained frames) | 20 ms | `--gpu` |
@@ -144,28 +144,47 @@ outside the globe itself and is the target of the panel / country-page work.
 
 ## 6. World War II view and the historical geometry (November 2026)
 
-`npm run perf` now also loads `/explore?scenario=ww2&year=1945` on a fresh page and reports the time
-until the territory areas are on screen, the transfer size and its largest files.
+`npm run perf` also loads `/explore?scenario=ww2&year=1945` on a fresh page and reports the time
+until the territory areas are on screen, the transfer size and its largest files. CI runs it
+against the production build, so a regression like the one below fails the build.
 
-| Measured (vite preview, software GL, 8 GB machine under memory pressure) | Value |
-| --- | --- |
-| WWII view, transfer in total | 70,760 KB |
-| `historical-geometry.bin` (pre-triangulated base borders) | 53,137 KB raw, 32,938 KB gzip |
-| `historical-topology.json` | 7,240 KB raw, 2,163 KB gzip |
-| `territories-history.json` (the seven WWII snapshots) | 5,654 KB raw, 1,598 KB gzip |
-| Territory areas on screen | about 40 s with software rendering; 17 draw calls, 490k triangles |
-| Home page, transfer in total | 4,017 KB (budget 3,072 KB, exceeded; not yet attributed) |
+**Regression found and fixed.** `historical-geometry.bin` (pre-triangulated base borders) was 12.4 MB
+before the WWII work and grew to 54 MB (commits `08e1440`, `9dddd9b`); the WWII view downloaded
+71 MB in total. Two causes, both in `scripts/build-history.mjs`:
 
-**Open problem:** `historical-geometry.bin` was 12.4 MB before the WWII work and is 54 MB today
-(commits `08e1440`, `9dddd9b`). Every state whose outline touches the Reich footprint is clipped once
-per sample day (every 1 January from 1939 to 1945 plus each moment date) and stored as a full
-pre-triangulated copy. Both the WWII view and the historical timeline download it. Merging identical
-consecutive samples removes only about 15% of the periods (757 instead of 890), so it is not enough.
-A real fix stores the Reich footprint as a separate layer instead of re-clipping every neighbour, or
-loads the wartime periods only when the WWII scenario is open. GitHub Pages probably does not
-compress `.bin` files, so the wire size there is closer to the raw 53 MB.
+1. Every state whose outline touches the Reich footprint is clipped once per sample day (every
+   1 January from 1939 to 1945 plus each moment date) and was stored once per day even when the clipped
+   shape did not change (the Soviet Union had eight identical periods from 1941 to 1945). Identical
+   consecutive samples are now one period: 890 periods became 757.
+2. Broad earcut triangles were split below 2.5°, which turned 1.4 million outline points into 3.2
+   million vertices and 4.8 million triangles. The caps sit 0.3 above the sphere (`CAP_RADIUS`), so a 6°
+   edge (sag about 0.14) is safe, and 6° is what the live tessellator already uses for the current
+   map (`CURVATURE_RESOLUTION`).
+
+| Measured (vite preview, uncompressed) | Before | After |
+| --- | --- | --- |
+| `historical-geometry.bin` | 53,137 KB | 18,805 KB |
+| `historical-topology.json` | 7,240 KB | 6,931 KB |
+| WWII view, transfer in total | 70,760 KB | 36,113 KB |
+| WWII view, area triangles | 490k | 304k |
+| Home page, transfer in total | 4,017 KB | 4,014 KB |
+
+The remaining 18.8 MB is still 6 MB above the pre-WWII file; the wartime copies of states that the
+Reich footprint really changes (Germany, Poland, Czechoslovakia, the Baltic states) are genuinely
+different shapes. GitHub Pages probably does not compress `.bin` files, so the wire size there is the
+raw size.
+
+Time until the areas are on screen: about 38 s in this software-GL run on a machine under memory
+pressure, but only about 3.5 s of that is tessellation (measured in Node without rendering; the
+Soviet Union takes 1.1 s, Canada 0.8 s). The rest is SwiftShader rendering competing for the CPU.
+
+**Home page budget re-baselined to 4.4 MB.** The 3 MB limit had been exceeded by 1 MB without notice
+because `npm run perf` was not in CI. Today's 4.0 MB: data 2.1 MB (`geometry.bin` 1.5 MB raw, 0.67 MB
+gzip), textures 0.9 MB, JS and CSS 1.0 MB raw. Added since the 2.9 MB measurement: the star catalogue
+(142 KB), `territories-today.json` (140 KB) and a duplicated `night-sky.webp` (44 KB, the preload lacked
+`crossorigin` and did not match the texture request; fixed).
 
 **Bug found while measuring:** the service worker gave the 5.6 MB `territories-history.json` an overall
 time limit of 5 s. On a slow connection the download was cut off and the panel showed "Gebietsflächen
-nicht verfügbar". The limit now ends when the response headers arrive; two new tests cover a slow
+nicht verfügbar". The limit now ends when the response headers arrive; two tests cover a slow
 download and a server that does not answer.

@@ -12,7 +12,7 @@ The underlying records are [ADR 0001](adr/0001-historical-snapshots.md) and [ADR
 | --- | --- | --- |
 | CShapes 2.0 periods, sampled on 1 January | Reproducible academic border source with exact validity dates | The map is a reconstruction; disputed and dependent territories follow the source's coding. No coverage after 2019. |
 | Separate historical and current maps | Current World Bank indicators have a different timeline and entity model | No indicator overlay for historical entities. |
-| One shared TopoJSON plus packed precomputed geometry | Neighboring boundaries share arcs; WebGL caps do not need browser triangulation on every year change | The first historical visit still downloads about 12 MiB of geometry. |
+| One shared TopoJSON plus packed precomputed geometry | Neighboring boundaries share arcs; WebGL caps do not need browser triangulation on every year change | The first historical visit still downloads about 19 MiB of geometry (12 MiB before the WWII periods; see PERFORMANCE.md section 6). |
 | Period changes highlighted in amber | Fast and reproducible comparison from the source identifiers | The color is **not** an exact geometric border difference. |
 | Static GitHub Pages demo plus separate full-stack deployment | The map can be viewed without an account or server | GitHub Pages cannot run Spring Boot, Kafka, Redis, PostgreSQL or Elasticsearch. |
 | Transactional outbox with scheduled retry | Business writes survive a Kafka outage | At-least-once delivery requires idempotent consumers and an operator path for exhausted events. |
@@ -40,12 +40,14 @@ What made the data trustworthy was not the digitising but the checks around it:
 - **Honest limits:** the second batch is written by the same author, so it is a second pass and not an
   independent audit; partisan zones, the Solomon and Gilbert Islands and some atolls are not drawn.
 
-Two engineering findings came out of measuring rather than building. The service worker cut off the
-5.6 MB territory file after 5 s on slow connections, and the historical base geometry had grown from
-12 MB to 54 MB through the WWII work; the first is fixed and tested, the second is described with
-numbers and options in [PERFORMANCE.md](PERFORMANCE.md#6-world-war-ii-view-and-the-historical-geometry-november-2026).
-The build keeps a per-date cache, so changing one source or the side table rebuilds only the affected
-dates (about one minute instead of twelve).
+Two engineering findings came out of measuring rather than building, and both are fixed and tested.
+The service worker cut off the 5.6 MB territory file after 5 s on slow connections. The historical
+base geometry had grown from 12 MB to 54 MB through the WWII work (71 MB for the WWII view); merging
+identical samples and tessellating at the resolution the live map already uses brought it to 19 MB
+(36 MB for the view), and a transfer budget for both views now runs in CI so it cannot grow unseen
+again (numbers in [PERFORMANCE.md](PERFORMANCE.md#6-world-war-ii-view-and-the-historical-geometry-november-2026)).
+The build keeps a per-date cache, so changing one source or the side table rebuilds only the
+affected dates (about one minute instead of twelve).
 
 ## Reproduction and evidence
 

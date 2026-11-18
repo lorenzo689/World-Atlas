@@ -44,6 +44,10 @@ jobs:
           for i in $(seq 1 30); do curl -sf localhost:4173/ > /dev/null && break; sleep 1; done
           CHROME_PATH=$(which google-chrome) SMOKE_URL=http://localhost:4173/ npm run smoke:ww2
           CHROME_PATH=$(which google-chrome) SMOKE_URL=http://localhost:4173/explore npm run smoke:scenarios
+      - name: Transfer size and draw-call budgets (home and WWII view)
+        # perf-budget.json "always" limits hold on software GL. The 54 MB historical geometry went unnoticed
+        # for weeks because nothing measured the WWII view in CI.
+        run: CHROME_PATH=$(which google-chrome) npm run perf
 
   backend:
     runs-on: ubuntu-latest # has Docker, which Testcontainers needs for the *IT tests
