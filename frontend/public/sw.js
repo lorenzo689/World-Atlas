@@ -13,6 +13,8 @@ const VERSION = 'v7'
 const STATIC = `we-static-${VERSION}`
 const SHELL = `we-shell-${VERSION}`
 const BASE = new URL(self.registration.scope).pathname
+// How long the network may take to start answering for the mutable datasets before the cached copy is used.
+const HEADER_TIMEOUT_MS = 5000
 const CACHE_FIRST = [/\/(?:assets|textures|flags|data|icons)\//, /\.(?:woff2?|webp|svg|png)$/]
 
 self.addEventListener('install', (event) => {
@@ -52,14 +54,20 @@ self.addEventListener('fetch', (event) => {
   // retaining the last dated response for offline use instead of freezing a first-visit snapshot.
   if (/\/territories-(?:today|history)\.json$/.test(url.pathname)) {
     event.respondWith(caches.open(STATIC).then(async (cache) => {
+      // The limit covers the wait for the response, not the download: territories-history.json is about
+      // 6 MB and must be allowed to finish on a slow connection (an overall timeout cut it off).
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), HEADER_TIMEOUT_MS)
       try {
-        const res = await fetch(req, { signal: AbortSignal.timeout(5000) })
+        const res = await fetch(req, { signal: controller.signal })
+        clearTimeout(timer)
         if (res.ok) {
           event.waitUntil(cache.put(req, res.clone()).catch(() => {}))
           return res
         }
         return (await cache.match(req)) ?? res
       } catch {
+        clearTimeout(timer)
         return (await cache.match(req)) ?? Response.error()
       }
     }))
