@@ -23,9 +23,13 @@ a country adds exact-year World Bank population and UNHCR refugee stock where a 
 statistical match exists. Two years
 can be compared side by side, including geometric border and area changes. Guided lessons and
 source-dated conflict learning points add context. See [historical data and licensing](docs/HISTORY.md).
-The [World War II learning view](docs/WW2.md) adds seven dated 1939–1945 source cards, selected
-schematic front sections, theater filters, event locations and short interpretation questions.
-It does not claim complete military-front or occupation coverage.
+The [World War II learning view](docs/WW2.md) shows seven dated 1939–1945 situations on one day each:
+state borders, occupation areas and fronts, with every Allied power in blue and every Axis power in
+red. From December 1943 the fronts and the Axis-held area are digitised from the public-domain
+U.S. Army *Atlas of the World Battle Fronts* (Europe ±8–10 km, Asia/Pacific ±28–34 km); 1939–1942
+are labelled schematic. Every area names its source and precision, and an
+[audit against dated sources](docs/WW2.md#audit-of-15-april-1945-november-2026) lists what was
+corrected and which limits remain (partisan zones and bypassed Pacific garrisons are partly drawn).
 
 The present-day globe loads [higher-detail borders, rivers, lakes, administrative boundaries,
 place labels and NASA image tiles](docs/MAP-DETAIL.md) for the visible area as the camera zooms in.
@@ -134,6 +138,9 @@ Missing values render as `—` or an explicit empty state. Charts show their dat
 - **Country metadata**: [mledoze/countries](https://github.com/mledoze/countries) (ODbL), snapshotted in `frontend/scripts/source/countries.json`.
   (REST Countries v3.1 is deprecated and v5 needs an API key, so it isn't used.)
 - **Boundaries**: Natural Earth 1:50m world view and 1:10m close-zoom tiles via `world-atlas` (public domain).
+- **Historical borders**: CShapes 2.0 (CC BY-NC-SA 4.0, so the historical layers are non-commercial) and dated OpenHistoricalMap relations (CC0). See [historical data and licensing](docs/HISTORY.md).
+- **World War II fronts**: U.S. Army *Atlas of the World Battle Fronts* (1943–1945, public domain, via Wikimedia Commons, SHA-256 pinned), georeferenced with the leave-one-out error reported in [docs/WW2.md](docs/WW2.md).
+- **Star sky**: Yale Bright Star Catalogue, 5th revised edition (Hoffleit & Warren), downloaded by `npm run data:stars` from the Harvard TDC mirror and checksum-pinned.
 - **Flags**: `flag-icons` (MIT), copied to `frontend/public/flags`.
 - **Descriptions**: Wikipedia REST summary API (CC BY-SA), attributed on the page.
 - **Textures**: NASA Blue Marble Next Generation January 2004 with topography and bathymetry. From `frontend/`, `node scripts/optimize-textures.mjs` checks the pinned original and writes 4K/2K base maps plus close-zoom WebP tiles.

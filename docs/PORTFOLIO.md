@@ -18,6 +18,35 @@ The underlying records are [ADR 0001](adr/0001-historical-snapshots.md) and [ADR
 | Transactional outbox with scheduled retry | Business writes survive a Kafka outage | At-least-once delivery requires idempotent consumers and an operator path for exhausted events. |
 | Camera-local close-zoom detail | Modern 1:10m borders and NASA image tiles improve close views without increasing initial transfer | Extra requests and GPU memory appear only at close zoom; historical states keep their separate border source. |
 
+## World War II scenario: evidence and limits
+
+The scenario draws seven dated situations from 1939 to 1945 with every Allied power in blue and every
+Axis power in red. Positions from December 1943 are digitised from the public-domain U.S. Army
+*Atlas of the World Battle Fronts*: the sheets are georeferenced from control points, the error is
+reported as leave-one-out distance (Europe 8–10 km, Asia/Pacific 28–34 km) and every area carries its
+source and precision. Details, tables and the audit trail are in [WW2.md](WW2.md).
+
+What made the data trustworthy was not the digitising but the checks around it:
+
+- **391 control points** with a documented status on each date (capture, liberation, change of sides). The
+  first rebuild failed 76 of the first 147; a second batch of 152, written afterwards from other
+  sources, failed 28, of which about half were data errors.
+- **Failures that taught something:** the Asia sheets put Manila into the sea (coast offset of 35 km), the
+  April 1945 sheet prints a hatched air-operations zone over the Irrawaddy delta that reads as Allied
+  territory, and the digitiser removes every island below 450 px, so Rabaul and Truk vanished. Each is
+  now a documented finding with its fix or an explicit limit.
+- **A known deviation is kept as a test** (an inverted test): the Senio sector in December 1944 is about 20
+  km off, and the test fails the day somebody fixes it.
+- **Honest limits:** the second batch is written by the same author, so it is a second pass and not an
+  independent audit; partisan zones, the Solomon and Gilbert Islands and some atolls are not drawn.
+
+Two engineering findings came out of measuring rather than building. The service worker cut off the
+5.6 MB territory file after 5 s on slow connections, and the historical base geometry had grown from
+12 MB to 54 MB through the WWII work; the first is fixed and tested, the second is described with
+numbers and options in [PERFORMANCE.md](PERFORMANCE.md#6-world-war-ii-view-and-the-historical-geometry-november-2026).
+The build keeps a per-date cache, so changing one source or the side table rebuilds only the affected
+dates (about one minute instead of twelve).
+
 ## Reproduction and evidence
 
 - `npm run data:history` pins the source SHA-256 and regenerates the map. `npm run data:history:verify` checks every annual snapshot, overlapping state periods, geometry ranges, flag metadata and output hashes against `historical-manifest.json`.

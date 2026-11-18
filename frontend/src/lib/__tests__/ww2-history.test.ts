@@ -1,7 +1,6 @@
-import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { decodeTopologySnapshots, pickTerritory, type TerritoryDataset } from '../territories'
 import { WW2_MOMENTS } from '../ww2'
+import { data, sideAt, type Side } from './ww2-sides-helper'
 
 // Historical control points for the World War II scenario: places with a documented status on each
 // map date (capture, liberation, entry into the war, change of sides). Every place must get the
@@ -9,16 +8,6 @@ import { WW2_MOMENTS } from '../ww2'
 // control), the Soviet Union before it joined the Allies, contested, or none (neutral, Vichy France,
 // no claim). Coastal cities are replaced by inland places: generalised coastlines run a few km past
 // them. When a check fails, either the data or the fact is wrong – look up the date first.
-type Side = 'axis' | 'allied' | 'soviet' | 'contested' | 'none'
-const data = decodeTopologySnapshots(JSON.parse(readFileSync('public/data/territories-history.json', 'utf8')) as TerritoryDataset)
-const SIDE_OF: Record<string, Side> = { axisState: 'axis', axisOccupied: 'axis', alliedState: 'allied', alliedControl: 'allied', sovietPact: 'soviet', contested: 'contested' }
-
-function sideAt(date: string, lng: number, lat: number): Side {
-  const snapshot = data.snapshots.find((s) => s.scenario === 'ww2' && s.date === date)!
-  const hit = pickTerritory(snapshot.features, new Set(snapshot.features.map((f) => f.id)), lng, lat)
-  return hit ? SIDE_OF[hit.actorId] : 'none'
-}
-
 const POINTS: Record<string, [string, number, number, Side][]> = {
   '1939-09-16': [
     ['Kraków (taken 6 Sep)', 19.94, 50.06, 'axis'], ['Łódź (taken 9 Sep)', 19.46, 51.76, 'axis'], ['Berlin', 13.4, 52.52, 'axis'], ['Vienna (annexed 1938)', 16.37, 48.21, 'axis'],

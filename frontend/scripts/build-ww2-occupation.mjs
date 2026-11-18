@@ -8,7 +8,7 @@
 //    (1943-12-15, 1944-12-15, 1945-04-15; positional uncertainty is the sheet's leave-one-out error);
 //  - schematic: an original generalisation where neither exists (named in `note`).
 // Occupation is not sovereignty: the base map keeps its separate state borders.
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { gunzipSync } from 'node:zlib'
 import polygonClipping from 'polygon-clipping'
@@ -58,9 +58,10 @@ const strongholdGeometry = (h) => {
   return intersection(union(...shapes), union(...h.codes.map((c) => neLand.get(c))))
 }
 const activeStrongholds = (date) => STRONGHOLDS.filter((h) => h.from <= date && date < h.to).map((h) => ({ ...h, geometry: strongholdGeometry(h) }))
+const ALLIED_STRONGHOLD_ACTORS = new Set(['westernAllies', 'partisans'])
 const toSheet = (s) => {
   const axis = planar(s.axisHeld.coordinates)
-  const held = activeStrongholds(s.date).filter((h) => !h.contested).map((h) => h.geometry)
+  const held = activeStrongholds(s.date).filter((h) => !h.contested && !ALLIED_STRONGHOLD_ACTORS.has(h.actor)).map((h) => h.geometry)
   return { ...s, axis: held.length ? union(axis, ...held) : axis, frame: planar(s.extent.type === 'Polygon' ? [s.extent.coordinates] : s.extent.coordinates) }
 }
 /** The European sheet of a date (the regime clipping below concerns Europe). */
@@ -86,6 +87,8 @@ const ACTORS = {
   sovietUnion: { actor: { de: 'Sowjetunion', en: 'Soviet Union' }, color: '#c084fc' },
   westernAllies: { actor: { de: 'Westalliierte Streitkräfte', en: 'Western Allied forces' }, color: '#38bdf8' },
   japan: { actor: { de: 'Kaiserreich Japan', en: 'Empire of Japan' }, color: '#fb7185' },
+  finland: { actor: { de: 'Finnland (Fortsetzungskrieg)', en: 'Finland (Continuation War)' }, color: '#fb7185' },
+  partisans: { actor: { de: 'Jugoslawische Partisanen', en: 'Yugoslav Partisans' }, color: '#38bdf8' },
 }
 
 // ---- sources ----------------------------------------------------------------------------------
@@ -306,10 +309,11 @@ const CATEGORIES = {
   sovietPact: { actor: { de: 'Sowjetunion (bis 22. Juni 1941 nicht alliiert)', en: 'Soviet Union (not Allied until 22 June 1941)' }, color: '#a1a1aa' },
   contested: { actor: { de: 'Umkämpft', en: 'Contested' }, color: '#f59e0b' },
 }
+const ALLIED_ACTORS = new Set(['westernAllies', 'sovietUnion', 'partisans'])
 function categoryOf(entry, date) {
   if (entry.kind === 'contested') return 'contested'
   if (entry.actorId === 'sovietUnion' && date < '1941-06-22') return 'sovietPact'
-  if (entry.actorId === 'westernAllies' || entry.actorId === 'sovietUnion') return 'alliedControl'
+  if (ALLIED_ACTORS.has(entry.actorId)) return 'alliedControl'
   return entry.kind === 'annexation' || entry.kind === 'client' ? 'axisState' : 'axisOccupied'
 }
 
@@ -324,6 +328,8 @@ const planarArea = (coords) => coords.reduce((s, polygon) => s + polygon.reduce(
 /** Drops numerical slivers left by clipping two independently traced boundaries (< 0.02 deg²). */
 const solid = (coords) => coords.filter((polygon) => planarArea([polygon]) >= 0.02)
 const CSHAPES_SOURCE = { title: 'CShapes 2.0 · state borders on the map date', url: 'https://icr.ethz.ch/data/cshapes/', ...CSHAPES_LICENSE }
+const ussr1941Land = state('Russia (Soviet Union)', '1941-06-21')
+const finland1939Land = state('Finland', '1939-09-16')
 const manchukuo = await ohmRelation(2885965, '1932', '1945-08-17').catch((error) => { console.log(`Manchukuo skipped: ${error.message}`); return null })
 
 function stateFeatures(date, taken) {
@@ -393,14 +399,65 @@ function stateFeatures(date, taken) {
   return out
 }
 
+// ---- Finnish-held Soviet land, 1941-1943 ------------------------------------------------------
+// Two parts. (1) The territory Finland ceded in March 1940 (Karelian Isthmus with Vyborg, the north
+// of Lake Ladoga with Sortavala, Salla): Finland's 1939 border intersected with the Soviet Union's
+// 1941 border; the Finns retook it in August 1941 and held it until June 1944. (2) East Karelia
+// beyond the old border. No atlas sheet exists before December 1943 and the sheets of Finland are
+// only partly coloured, but the front hardly moved between the halt at Medvezhyegorsk (5 December
+// 1941) and the Soviet offensive of June 1944, so the area is taken from the Axis-held part of the
+// 15 December 1943 sheet, limited to Soviet land north of 60°N. On 12 November 1941 the Finns had not
+// yet reached Medvezhyegorsk, so only the part south of 62.35°N is drawn then (schematic). For 15
+// December 1943 the sheet itself already splits the Soviet state; only part (1) is added.
+const KARELIA_SOURCE = { title: 'Wikipedia · Continuation War, and U.S. Army atlas of 15 December 1943', url: 'https://en.wikipedia.org/wiki/Continuation_War', license: 'Schematic area from the cited text and the public-domain atlas sheet' }
+function eastKarelia(date) {
+  if (date !== '1941-11-12' && date !== '1942-11-18' && date !== '1943-12-15') return []
+  const ceded = intersection(ussr1941Land, finland1939Land)
+  const east = date === '1943-12-15' ? [] : intersection(sheet('1943-12-15').axis, ussr1941Land, box(27.5, 60.0, 38.5, date === '1941-11-12' ? 62.35 : 67))
+  const geometry = east.length ? union(ceded, east) : ceded
+  return [{ id: 'east-karelia-finnish', actorId: 'finland', kind: 'occupation', precision: 'schematic', title: { de: 'Finnisch besetztes Karelien', en: 'Finnish-held Karelia' }, geometry, source: KARELIA_SOURCE,
+    note: { de: 'Die 1940 abgetretenen Gebiete (Wyborg, Sortawala, Salla) und Ostkarelien; Ostkarelien ist vom Atlasblatt vom 15. Dezember 1943 übernommen, die Front blieb von Dezember 1941 bis Juni 1944 nahezu unverändert. Am 12. November 1941 nur der Teil südlich von 62,35° N (Medweschjegorsk fiel am 5. Dezember).', en: 'The territory ceded in 1940 (Vyborg, Sortavala, Salla) and East Karelia; East Karelia is taken from the 15 December 1943 atlas sheet, as the front hardly moved from December 1941 to June 1944. On 12 November 1941 only the part south of 62.35°N (Medvezhyegorsk fell on 5 December).' } }]
+}
+
 // ---- assemble ---------------------------------------------------------------------------------
+const clock = Date.now()
 const M = await moments()
+console.log(`moments: ${((Date.now() - clock) / 1000).toFixed(0)} s`)
+// A date is rebuilt only when something it depends on changed: the build scripts, CShapes, the
+// date's entries, atlas sheets, Reich footprint or strongholds. Everything else comes from the cache.
+const sha = (value) => createHash('sha256').update(value).digest('hex')
+const CACHE_DIR = 'scripts/data/occupation-cache'
+mkdirSync(CACHE_DIR, { recursive: true })
+// Bump CACHE_VERSION when the clipping logic of this file changes for every date.
+const CACHE_VERSION = 2
+const fresh = process.argv.includes('--fresh')
+const adopt = (process.argv.find((a) => a.startsWith('--adopt='))?.slice(8) ?? '').split(',').filter(Boolean)
+const SCRIPTS = sha(CACHE_VERSION + ['scripts/lib/ohm.mjs', 'src/lib/ww2.ts'].map((path) => readFileSync(path, 'utf8').replace(/\r\n/g, '\n')).join('\0'))
+// What scripts/lib/ww2-sides.mjs says about every CShapes state on a date (side, reason, title).
+const sidesOn = (date) => {
+  const day = asNumber(date)
+  return cshapes.features.filter((f) => dayOf(f.properties, 'gws') <= day && dayOf(f.properties, 'gwe') >= day)
+    .map((f) => [f.properties.cntry_name, roleOf(f.properties.cntry_name, date), reasonOf(f.properties.cntry_name, date), unitTitle(f.properties.cntry_name)])
+}
+const cacheKey = (date) => sha([SCRIPTS, cshapesHash, JSON.stringify(M[date]), JSON.stringify(atlas.sheets.filter((x) => x.date === date)), JSON.stringify(reichByDay.get(asNumber(date)) ?? null), JSON.stringify(activeStrongholds(date)), JSON.stringify(sidesOn(date)), JSON.stringify(eastKarelia(date))].join('\0'))
 const dates = WW2_MOMENTS.map((m) => m.date)
 const snapshots = []
 for (const date of dates) {
   if (!M[date]) throw new Error(`No occupation entries for ${date}`)
-  const entries = [...M[date], ...activeStrongholds(date).filter((h) => !h.german).map((h) => ({
-    id: h.id, actorId: h.contested ? 'japan' : (h.actor ?? 'naziGermany'), kind: h.contested ? 'contested' : 'occupation', precision: 'schematic', title: h.title,
+  const key = cacheKey(date)
+  const cacheFile = `${CACHE_DIR}/${date}.json`
+  if (!fresh && existsSync(cacheFile)) {
+    const cached = JSON.parse(readFileSync(cacheFile, 'utf8'))
+    if (adopt.includes(date)) { cached.key = key; writeFileSync(cacheFile, JSON.stringify(cached)) }
+    if (cached.key === key) { snapshots.push(cached.snapshot); console.log(`${date}: ${cached.snapshot.features.length} areas (cached)`); continue }
+  }
+  const started = Date.now()
+  const active = activeStrongholds(date)
+  // Areas that other regimes' entries must not cover (a partisan republic inside occupied Serbia).
+  const carved = active.filter((h) => h.carve).map((h) => h.geometry)
+  const base = carved.length ? M[date].map((e) => (e.geometry?.length ? { ...e, geometry: difference(e.geometry, ...carved) } : e)) : M[date]
+  const entries = [...base, ...eastKarelia(date), ...active.filter((h) => !h.german).map((h) => ({
+    id: h.id, actorId: h.contested ? 'japan' : (h.actor ?? 'naziGermany'), kind: h.contested ? 'contested' : ALLIED_STRONGHOLD_ACTORS.has(h.actor) ? 'control' : 'occupation', precision: 'schematic', title: h.title,
     geometry: h.geometry, source: { ...h.source, license: 'Schematic area from the cited text; land outline Natural Earth (public domain)' }, ...(h.note ? { note: h.note } : {}),
   }))]
   const features = []
@@ -417,8 +474,9 @@ for (const date of dates) {
     features.push({ id: f.id, actorId: f.category, kind: f.kind, precision: f.precision, title: f.title, ...(f.note ? { note: f.note } : {}), source: f.source, geometry: { type: 'MultiPolygon', coordinates: forSphere(f.geometry) } })
   }
   snapshots.push({ date, features })
+  writeFileSync(cacheFile, JSON.stringify({ key, snapshot: { date, features } }))
   const counts = Object.keys(CATEGORIES).map((c) => `${c} ${features.filter((f) => f.actorId === c).length}`).join(', ')
-  console.log(`${date}: ${features.length} areas (${counts})`)
+  console.log(`${date}: ${features.length} areas (${counts}) in ${((Date.now() - started) / 1000).toFixed(0)} s`)
 }
 writeFileSync('scripts/data/ww2-occupation.json', JSON.stringify({ schemaVersion: 2, actors: CATEGORIES, cshapesSha256: cshapesHash, snapshots }))
 console.log('Wrote scripts/data/ww2-occupation.json')

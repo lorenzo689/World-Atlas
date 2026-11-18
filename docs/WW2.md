@@ -99,9 +99,10 @@ end around 43°N (1944/45): all of Italy south of the sheet is Allied-held and t
 | 1944-12-15 | Western, Alpine, Italian, Eastern and Balkan fronts (digitised) | Remaining occupation, Courland, Reich territory taken by the Western Allies and the Red Army |
 | 1945-04-15 | All European fronts incl. the Ruhr and Harz pockets (digitised) | Remaining occupation, Allied-held Reich territory split at 13.5°E |
 
-Known gaps: Finnish-occupied East Karelia (1941–1944), Romanian-administered Transnistria before
-1943 (inside the eastern area from 1943), North Africa before 1943, partisan-held areas, and the
-exact Japanese perimeter in China in 1941–1942 (schematic, see above). Southeast Asian colonies are
+Known gaps: Romanian-administered Transnistria before 1943 (inside the eastern area from 1943),
+North Africa before 1943 (Tunisia in 1942 is amber; the Libyan and Egyptian fronts are not drawn),
+partisan zones other than the two named below, the Solomon and Gilbert Islands, Wake and the
+Aleutians, and the exact Japanese perimeter in China in 1941–1942 (schematic, see above). Southeast Asian colonies are
 coloured as whole units by the dated side table, not split by the atlas. The schematic 1939–1942 fronts are generalised through towns; they
 are not traced from a map.
 
@@ -132,9 +133,53 @@ The strongholds are schematic circles around the fortress towns (boxes for Crete
 not boundaries.
 
 Remaining limits: positions carry the atlas error (Europe ±8–10 km, Asia/Pacific ±28–34 km);
-Pacific atolls and bypassed island garrisons (e.g. Rabaul, Truk, Wake) are below the resolution;
-partisan-held areas in Yugoslavia, Italy and China are not drawn; the base map keeps the Reich's
+some Pacific atolls and garrisons (Wake, the Gilbert and Solomon Islands, Rota, the bypassed
+Marshall atolls) are not drawn; partisan zones other than Užice and Bihać (Italy, China, the
+Yugoslav interior in 1943–44) are not drawn; the base map keeps the Reich's
 dated annexation borders as lines.
+
+## Second review (November 2026)
+
+The control points of the first audit were chosen while the data was built, so they share its blind
+spots. A second batch was written afterwards from the capture and liberation dates in the Wikipedia
+articles of the places, in regions the first batch hardly touched: Ukraine, the Caucasus, the
+Adriatic side of Italy, the Netherlands, central Germany, the south-west Pacific, Burma and the
+Philippines. It is a second pass by the same author, **not an independent audit**: a truly
+independent review needs another person or another dataset.
+
+Of 132 new points 28 disagreed with the map. About half were badly placed test points (a coast, a river
+line or a tiny island closer than the sources' error); the others were data errors:
+
+| Finding | Correct state | Source |
+| --- | --- | --- |
+| Finnish-held Karelia missing in 1941–1943 (Vyborg, Sortavala, Petrozavodsk showed as Soviet). The atlas colours Finland only partly (Helsinki and Joensuu are not marked as Axis) | The territory ceded in 1940 (Finland's 1939 border within the Soviet Union's 1941 border) plus East Karelia, from the Axis-held part of the December 1943 sheet because the front hardly moved between December 1941 and June 1944 | [Continuation War](https://en.wikipedia.org/wiki/Continuation_War) |
+| Deepest German advance in the north missing | Tikhvin German-held from 8 November to 9 December 1941 | [Tikhvin offensive](https://en.wikipedia.org/wiki/Tikhvin_offensive) |
+| Rabaul, New Ireland, Bougainville, Wewak, Lae/Salamaua, Madang and Buna–Gona shown as Allied. The atlas digitisation removes islands below 450 px as specks | Japanese-held with their dates; Rabaul and Kavieng bypassed; Bougainville amber from the Australian offensive of November 1944 | [Rabaul](https://en.wikipedia.org/wiki/Rabaul), [Bougainville campaign](https://en.wikipedia.org/wiki/Bougainville_campaign), [Wewak](https://en.wikipedia.org/wiki/Wewak) |
+| Japan's Pacific mandate not drawn (Marshalls, Carolines with Truk, Palau, Marianas, Guam) | Japanese from 7 December 1941; Marshalls, Saipan/Tinian and Guam U.S.-controlled after their conquest in 1944; Truk and Babeldaob bypassed | [Truk Lagoon](https://en.wikipedia.org/wiki/Truk_Lagoon), [Mariana and Palau campaign](https://en.wikipedia.org/wiki/Mariana_and_Palau_Islands_campaign) |
+| Resistance-held territory missing | Republic of Užice (24 September–1 December 1941), Bihać Republic (4 November 1942–29 January 1943) | [Užice](https://en.wikipedia.org/wiki/Republic_of_U%C5%BEice), [Bihać](https://en.wikipedia.org/wiki/Biha%C4%87_Republic) |
+
+Decisions, not facts: Tunisia on 18 November 1942 stays amber (Axis forces landed on 9 November, French
+forces still held parts); Cebu and Zamboanga on 15 April 1945 stay amber because the Japanese held
+the interior for months after the landings; Ethiopia is not coloured (its status in 1941 was a
+British-protected restoration). Points moved inland or dropped: Ortona, Madang (coast), Guam,
+Tacloban, Liepāja, Iloilo, Palawan, Tarakan, Faenza (taken one day after the map date), Magdeburg,
+Groningen, Frankfurt (Oder) and Stettin (all within the atlas error of a river or front).
+
+**Known deviation, not fixed:** in the Senio sector (Imola, 15 December 1944) the digitised sheet
+puts the Allied area about 20 km too far north-west. The test `known deviation` keeps it visible: it
+passes while the data is wrong and fails as soon as the data is fixed.
+
+The 1:50 m land model has no polygon for some atolls (Kwajalein) and drops others (Wake), so the
+Pacific areas are clipped to the islands it does contain.
+
+## Reproducible, incremental build
+
+`npm run data:ww2:occupation` computes each map date separately and keeps the result in
+`scripts/data/occupation-cache/` (ignored by Git). A date is rebuilt only when its inputs change:
+its entries, atlas sheets, Reich footprint, strongholds, the side table for that date, CShapes, or
+`CACHE_VERSION` in the script. Without any change the whole build takes about one minute instead
+of twelve. `--fresh` ignores the cache; `--adopt=<dates>` re-keys dates that a change provably
+does not affect. Bump `CACHE_VERSION` when the clipping logic itself changes for every date.
 
 ## Verification
 
@@ -148,9 +193,10 @@ npm test -- src/lib/__tests__/ww2-history.test.ts
 npm run smoke:ww2 && npm run smoke:scenarios   # against a running app (SMOKE_URL)
 ```
 
-`ww2-history.test.ts` checks **147 historical control points**: places with a documented status
-on each date (e.g. Kalinin German since 14 October 1941, Bremen still German on 15 April 1945,
-Naples Allied since 1 October 1943). The data before this rebuild failed 76 of them. Coastal
+`ww2-history.test.ts` and `ww2-second-review.test.ts` check **391 historical control points**
+(239 and 152): places with a documented status on each date (e.g. Kalinin German since 14 October 1941, Bremen still German on 15 April 1945,
+Naples Allied since 1 October 1943). The data before the first rebuild failed 76 of the first batch,
+and the audited data 28 of the second. Coastal
 cities are replaced by inland places, because generalised coastlines run a few kilometres past
 them. When a check fails, verify the historical date before changing either the data or the test.
 
