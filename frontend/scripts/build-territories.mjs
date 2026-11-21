@@ -77,6 +77,9 @@ for (const year of [1914, 1915, 1916, 1917, 1918]) {
 if (!existsSync('scripts/data/ww2-occupation.json')) throw new Error('Missing scripts/data/ww2-occupation.json: run npm run data:ww2:occupation first')
 const ww2 = JSON.parse(readFileSync('scripts/data/ww2-occupation.json', 'utf8'))
 if (ww2.cshapesSha256 !== hash) throw new Error('ww2-occupation.json was built from another CShapes revision; rebuild it')
+// Hash the text with LF line endings: a Windows checkout (core.autocrlf) has CRLF, the CI checkout LF.
+const strongholdsSha256 = createHash('sha256').update(readFileSync('scripts/lib/ww2-strongholds.mjs', 'utf8').replace(/\r\n/g, '\n')).digest('hex')
+if (ww2.strongholdsSha256 !== strongholdsSha256) throw new Error('ww2-occupation.json was built from outdated stronghold sources; run npm run data:ww2:occupation first')
 const ww2Coverage = {
   de: 'Achsenmächte rot, Alliierte blau: Staatsgebiet und Annexionen dunkel, Besatzung und Militärpräsenz hell. Grenzen aus CShapes und datierten OpenHistoricalMap-Grenzen; 1943–1945 auf das im US-Armee-Atlas (Europa und Asien/Pazifik) gehaltene Gebiet zugeschnitten; das japanisch besetzte China 1941–1942 schematisch nach dem Blatt vom 1. Juli 1943. Ungefärbt heißt neutral oder „keine Aussage“.',
   en: 'Axis red, Allies blue: state territory and annexations dark, occupation and military presence light. Boundaries from CShapes and dated OpenHistoricalMap borders; 1943–1945 clipped to the area held according to the U.S. Army atlas (Europe and Asia/Pacific); Japanese-occupied China in 1941–1942 schematic from the sheet of 1 July 1943. Unshaded means neutral or "no claim".',
@@ -120,5 +123,5 @@ for (const { date, features } of ww2.snapshots) {
     })
   }
 }
-writeFileSync('public/data/territories-history.json', JSON.stringify({ schemaVersion: 1, sourceSha256: { 'CShapes-2.0.geojson': hash }, method: 'Original regional schematic masks clipped to pre-war CShapes footprints; not exact or exhaustive occupation boundaries.', snapshots }))
+writeFileSync('public/data/territories-history.json', JSON.stringify({ schemaVersion: 1, sourceSha256: { 'CShapes-2.0.geojson': hash, 'ww2-strongholds.mjs': strongholdsSha256 }, method: 'Original regional schematic masks clipped to pre-war CShapes footprints; not exact or exhaustive occupation boundaries.', snapshots }))
 console.log(`Wrote ${snapshots.length} occupation snapshots / ${snapshots.reduce((n, s) => n + s.features.length, 0)} sourced features`)

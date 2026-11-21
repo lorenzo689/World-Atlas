@@ -18,6 +18,7 @@
     "data:detail": "node scripts/build-map-detail.mjs",
     "data:detail:verify": "node scripts/verify-map-detail.mjs",
     "data:history:verify": "node scripts/verify-history.mjs",
+    "data:ww2:verify": "node scripts/verify-ww2-territories.mjs",
     "audit:map": "node scripts/audit-map.mjs --check",
     "perf": "node scripts/perf.mjs",
     "smoke": "node scripts/smoke.mjs",
