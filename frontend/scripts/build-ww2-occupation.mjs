@@ -478,5 +478,8 @@ for (const date of dates) {
   const counts = Object.keys(CATEGORIES).map((c) => `${c} ${features.filter((f) => f.actorId === c).length}`).join(', ')
   console.log(`${date}: ${features.length} areas (${counts}) in ${((Date.now() - started) / 1000).toFixed(0)} s`)
 }
-writeFileSync('scripts/data/ww2-occupation.json', JSON.stringify({ schemaVersion: 2, actors: CATEGORIES, cshapesSha256: cshapesHash, snapshots }))
+// Propagate the exact dated-stronghold revision to the shipped browser data.
+// Hash the text with LF line endings: a Windows checkout (core.autocrlf) has CRLF, the CI checkout LF.
+const strongholdsSha256 = sha(readFileSync('scripts/lib/ww2-strongholds.mjs', 'utf8').replace(/\r\n/g, '\n'))
+writeFileSync('scripts/data/ww2-occupation.json', JSON.stringify({ schemaVersion: 2, actors: CATEGORIES, cshapesSha256: cshapesHash, strongholdsSha256, snapshots }))
 console.log('Wrote scripts/data/ww2-occupation.json')

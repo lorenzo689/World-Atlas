@@ -20,6 +20,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run data:history:verify
+      - run: npm run data:ww2:verify
       - run: npm run data:detail:verify
       - name: Country geometry is reproducible from its sources
         # Rebuilds countries/boundaries/geometry and fails if the committed files differ, so the
