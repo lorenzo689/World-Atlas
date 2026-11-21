@@ -7,6 +7,7 @@ import polygonClipping from 'polygon-clipping'
 import { topology } from 'topojson-server'
 import { feature, quantize } from 'topojson-client'
 import { presimplify, simplify } from 'topojson-simplify'
+import { CSHAPES_PATH, OCCUPATION_INPUTS, OCCUPATION_PACKAGES, TERRITORIES_INPUTS, TERRITORIES_PACKAGES, checkProvenance, currentInputs, packageVersions, provenanceRecord } from './lib/provenance.mjs'
 const { intersection, union } = polygonClipping
 
 const input = readFileSync('scripts/source/historical/CShapes-2.0.geojson')
@@ -80,6 +81,15 @@ if (ww2.cshapesSha256 !== hash) throw new Error('ww2-occupation.json was built f
 // Hash the text with LF line endings: a Windows checkout (core.autocrlf) has CRLF, the CI checkout LF.
 const strongholdsSha256 = createHash('sha256').update(readFileSync('scripts/lib/ww2-strongholds.mjs', 'utf8').replace(/\r\n/g, '\n')).digest('hex')
 if (ww2.strongholdsSha256 !== strongholdsSha256) throw new Error('ww2-occupation.json was built from outdated stronghold sources; run npm run data:ww2:occupation first')
+// Every other input of the intermediate (sides, moments, atlas, OHM files, its builder, ...).
+// All its external inputs must be present here: this build vouches for them in the shipped file.
+const occupation = checkProvenance(ww2.provenance, { inputs: OCCUPATION_INPUTS, packages: OCCUPATION_PACKAGES, strictExternal: true })
+if (occupation.errors.length) throw new Error(`ww2-occupation.json is stale or has no provenance; run npm run data:ww2:occupation first:\n  ${occupation.errors.join('\n  ')}`)
+const provenance = provenanceRecord({
+  inputs: { ...ww2.provenance.inputs, ...currentInputs(TERRITORIES_INPUTS) },
+  packages: { ...ww2.provenance.packages, ...packageVersions(TERRITORIES_PACKAGES) },
+  external: { ...ww2.provenance.external, [CSHAPES_PATH]: hash },
+})
 const ww2Coverage = {
   de: 'Achsenmächte rot, Alliierte blau: Staatsgebiet und Annexionen dunkel, Besatzung und Militärpräsenz hell. Grenzen aus CShapes und datierten OpenHistoricalMap-Grenzen; 1943–1945 auf das im US-Armee-Atlas (Europa und Asien/Pazifik) gehaltene Gebiet zugeschnitten; das japanisch besetzte China 1941–1942 schematisch nach dem Blatt vom 1. Juli 1943. Ungefärbt heißt neutral oder „keine Aussage“.',
   en: 'Axis red, Allies blue: state territory and annexations dark, occupation and military presence light. Boundaries from CShapes and dated OpenHistoricalMap borders; 1943–1945 clipped to the area held according to the U.S. Army atlas (Europe and Asia/Pacific); Japanese-occupied China in 1941–1942 schematic from the sheet of 1 July 1943. Unshaded means neutral or "no claim".',
@@ -123,5 +133,5 @@ for (const { date, features } of ww2.snapshots) {
     })
   }
 }
-writeFileSync('public/data/territories-history.json', JSON.stringify({ schemaVersion: 1, sourceSha256: { 'CShapes-2.0.geojson': hash, 'ww2-strongholds.mjs': strongholdsSha256 }, method: 'Original regional schematic masks clipped to pre-war CShapes footprints; not exact or exhaustive occupation boundaries.', snapshots }))
+writeFileSync('public/data/territories-history.json', JSON.stringify({ schemaVersion: 1, sourceSha256: { 'CShapes-2.0.geojson': hash, 'ww2-strongholds.mjs': strongholdsSha256 }, provenance, method: 'Original regional schematic masks clipped to pre-war CShapes footprints; not exact or exhaustive occupation boundaries.', snapshots }))
 console.log(`Wrote ${snapshots.length} occupation snapshots / ${snapshots.reduce((n, s) => n + s.features.length, 0)} sourced features`)

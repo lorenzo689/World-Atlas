@@ -184,10 +184,28 @@ Pacific areas are clipped to the islands it does contain.
 
 `npm run data:ww2:occupation` computes each map date separately and keeps the result in
 `scripts/data/occupation-cache/` (ignored by Git). A date is rebuilt only when its inputs change:
-its entries, atlas sheets, Reich footprint, strongholds, the side table for that date, CShapes, or
-`CACHE_VERSION` in the script. Without any change the whole build takes about one minute instead
-of twelve. `--fresh` ignores the cache; `--adopt=<dates>` re-keys dates that a change provably
-does not affect. Bump `CACHE_VERSION` when the clipping logic itself changes for every date.
+its entries, atlas sheets, Reich footprint, strongholds, the side table for that date, CShapes, the
+build script itself, `ohm.mjs`, `ww2.ts` with its fronts, or the geometry package versions. Without
+any change the whole build takes about one minute instead of twelve. `--fresh` ignores the cache;
+`--adopt=<dates>` re-keys dates that a change provably does not affect (e.g. a comment edit).
+
+## Provenance of the shipped territory data
+
+Both generators record the SHA-256 of every input that can change their output
+(`scripts/lib/provenance.mjs` lists them per stage): `ww2-occupation.json` its own inputs, and
+`public/data/territories-history.json` those plus `build-territories.mjs`, under `provenance`.
+Text is hashed with LF line endings, so Windows and CI checkouts agree.
+
+- `npm run data:territories` refuses an intermediate `ww2-occupation.json` that is older than any
+  of its inputs, or whose gitignored inputs (CShapes, OHM downloads) are missing.
+- `npm run data:ww2:verify` (also in CI) recomputes every committed input and the pinned package
+  versions from `package-lock.json` and fails when any differs from the record. Gitignored inputs
+  cannot be recomputed in a clean checkout: the verifier lists them as **not recomputed** (and
+  checks the recorded CShapes hash against its pin). Locally, with the sources downloaded, run
+  `npm run data:ww2:verify -- --require-external` to make their absence or change an error too.
+
+When a generator starts reading a new file, add it to `scripts/lib/provenance.mjs`; the verifier
+then demands a regeneration.
 
 ## Verification
 
