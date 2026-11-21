@@ -15,6 +15,7 @@ import polygonClipping from 'polygon-clipping'
 import { ohmRelation, forSphere } from './lib/ohm.mjs'
 import { roleOf, reasonOf, unitTitle } from './lib/ww2-sides.mjs'
 import { STRONGHOLDS, circle } from './lib/ww2-strongholds.mjs'
+import { CSHAPES_PATH, OCCUPATION_INPUTS, OCCUPATION_PACKAGES, currentInputs, packageVersions, provenanceRecord } from './lib/provenance.mjs'
 import { feature as topoFeature } from 'topojson-client'
 import { WW2_MOMENTS } from '../src/lib/ww2.ts'
 
@@ -73,7 +74,10 @@ const sheet = (date, region = 'europe') => {
 const box = (w, s, e, n) => [[[[w, s], [e, s], [e, n], [w, n], [w, s]]]]
 /** Area west of a north–south front line, closed at `closureLng` (only within the line's latitude span). */
 const westOf = (line, closureLng) => [[[...line, [closureLng, line.at(-1)[1]], [closureLng, line[0][1]], line[0]]]]
-const ohm = (id, start, end) => ohmRelation(id, start, end).then((r) => ({ ...r, coordinates: r.coordinates }))
+// Every OHM relation file read (gitignored download) is recorded with its hash in the provenance.
+const ohmFiles = {}
+const relation = (id, start, end) => ohmRelation(id, start, end).then((r) => { ohmFiles[`scripts/source/historical/ohm-ww2-${id}.json`] = r.provenance.sha256; return r })
+const ohm = (id, start, end) => relation(id, start, end).then((r) => ({ ...r, coordinates: r.coordinates }))
 
 // ---- actors -----------------------------------------------------------------------------------
 const ACTORS = {
@@ -330,7 +334,8 @@ const solid = (coords) => coords.filter((polygon) => planarArea([polygon]) >= 0.
 const CSHAPES_SOURCE = { title: 'CShapes 2.0 · state borders on the map date', url: 'https://icr.ethz.ch/data/cshapes/', ...CSHAPES_LICENSE }
 const ussr1941Land = state('Russia (Soviet Union)', '1941-06-21')
 const finland1939Land = state('Finland', '1939-09-16')
-const manchukuo = await ohmRelation(2885965, '1932', '1945-08-17').catch((error) => { console.log(`Manchukuo skipped: ${error.message}`); return null })
+// Required like every other relation: skipping it would silently drop Manchukuo from the output.
+const manchukuo = await relation(2885965, '1932', '1945-08-17')
 
 function stateFeatures(date, taken) {
   const day = asNumber(date)
@@ -428,11 +433,14 @@ console.log(`moments: ${((Date.now() - clock) / 1000).toFixed(0)} s`)
 const sha = (value) => createHash('sha256').update(value).digest('hex')
 const CACHE_DIR = 'scripts/data/occupation-cache'
 mkdirSync(CACHE_DIR, { recursive: true })
-// Bump CACHE_VERSION when the clipping logic of this file changes for every date.
+// The key covers this script, its code inputs and the geometry packages, so a cached date never
+// carries an older revision than the provenance written below records. After an edit that provably
+// changes no output (a comment), --adopt=<dates> keeps those caches deliberately.
 const CACHE_VERSION = 2
 const fresh = process.argv.includes('--fresh')
 const adopt = (process.argv.find((a) => a.startsWith('--adopt='))?.slice(8) ?? '').split(',').filter(Boolean)
-const SCRIPTS = sha(CACHE_VERSION + ['scripts/lib/ohm.mjs', 'src/lib/ww2.ts'].map((path) => readFileSync(path, 'utf8').replace(/\r\n/g, '\n')).join('\0'))
+const SCRIPTS = sha(CACHE_VERSION + JSON.stringify(currentInputs(['scripts/build-ww2-occupation.mjs', 'scripts/lib/ohm.mjs', 'src/lib/ww2.ts', 'src/lib/ww2-atlas-fronts.json']))
+  + JSON.stringify(packageVersions(OCCUPATION_PACKAGES)))
 // What scripts/lib/ww2-sides.mjs says about every CShapes state on a date (side, reason, title).
 const sidesOn = (date) => {
   const day = asNumber(date)
@@ -481,5 +489,7 @@ for (const date of dates) {
 // Propagate the exact dated-stronghold revision to the shipped browser data.
 // Hash the text with LF line endings: a Windows checkout (core.autocrlf) has CRLF, the CI checkout LF.
 const strongholdsSha256 = sha(readFileSync('scripts/lib/ww2-strongholds.mjs', 'utf8').replace(/\r\n/g, '\n'))
-writeFileSync('scripts/data/ww2-occupation.json', JSON.stringify({ schemaVersion: 2, actors: CATEGORIES, cshapesSha256: cshapesHash, strongholdsSha256, snapshots }))
+// Every input of this build, so build-territories.mjs and the verifier can detect a stale file.
+const provenance = provenanceRecord({ inputs: currentInputs(OCCUPATION_INPUTS), packages: packageVersions(OCCUPATION_PACKAGES), external: { [CSHAPES_PATH]: cshapesHash, ...ohmFiles } })
+writeFileSync('scripts/data/ww2-occupation.json', JSON.stringify({ schemaVersion: 2, actors: CATEGORIES, cshapesSha256: cshapesHash, strongholdsSha256, provenance, snapshots }))
 console.log('Wrote scripts/data/ww2-occupation.json')
