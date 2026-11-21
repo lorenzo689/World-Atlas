@@ -158,6 +158,14 @@ line or a tiny island closer than the sources' error); the others were data erro
 | Japan's Pacific mandate not drawn (Marshalls, Carolines with Truk, Palau, Marianas, Guam) | Japanese from 7 December 1941; Marshalls, Saipan/Tinian and Guam U.S.-controlled after their conquest in 1944; Truk and Babeldaob bypassed | [Truk Lagoon](https://en.wikipedia.org/wiki/Truk_Lagoon), [Mariana and Palau campaign](https://en.wikipedia.org/wiki/Mariana_and_Palau_Islands_campaign) |
 | Resistance-held territory missing | Republic of Užice (24 September–1 December 1941), Bihać Republic (4 November 1942–29 January 1943) | [Užice](https://en.wikipedia.org/wiki/Republic_of_U%C5%BEice), [Bihać](https://en.wikipedia.org/wiki/Biha%C4%87_Republic) |
 
+Dates checked against the Wikipedia articles during the follow-up (November 2026): Kavieng fell on 24 January
+1942, Bougainville was invaded from 9 March to 5 April 1942, Buna–Gona 21 July 1942 to 22 January 1943,
+Majuro/Kwajalein/Eniwetok 31 January/7 February/23 February 1944, Saipan 9 July, Tinian 1 August and Guam
+10 August 1944, Peleliu from 15 September 1944 (Koror bypassed until August 1945). For Wewak and Madang the
+sources disagree and mention mid-December 1942, so they are drawn only from 15 December 1942 and the
+map of 18 November 1942 makes no claim about them. Statements I could not confirm in a source were
+removed (Rota and a list of four bypassed Marshall atolls; Mili is documented).
+
 Decisions, not facts: Tunisia on 18 November 1942 stays amber (Axis forces landed on 9 November, French
 forces still held parts); Cebu and Zamboanga on 15 April 1945 stay amber because the Japanese held
 the interior for months after the landings; Ethiopia is not coloured (its status in 1941 was a

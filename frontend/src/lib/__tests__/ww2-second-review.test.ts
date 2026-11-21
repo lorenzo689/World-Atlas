@@ -21,7 +21,7 @@ const POINTS: Record<string, [string, number, number, Side][]> = {
     ['Rostov-on-Don (retaken 24 Jul)', 39.72, 47.24, 'axis'], ['Krasnodar (taken Aug)', 38.98, 45.04, 'axis'], ['Pyatigorsk (taken Aug)', 43.06, 44.04, 'axis'], ['Nalchik (taken Oct)', 43.62, 43.5, 'axis'],
     ['Grozny (held)', 45.7, 43.32, 'allied'], ['Elista (taken Aug)', 44.27, 46.31, 'axis'], ['Voroshilovgrad/Luhansk (taken Jul)', 39.3, 48.57, 'axis'], ['Belgorod (German)', 36.6, 50.6, 'axis'],
     ['Bihać (Partisan republic, 4 Nov 1942–29 Jan 1943)', 15.87, 44.81, 'allied'], ['Bosanski Petrovac (Partisan republic)', 16.37, 44.55, 'allied'], ['Petrozavodsk (Finnish since 1 Oct 1941)', 34.35, 61.78, 'axis'], ['West of Medvezhyegorsk (Finnish from 5 Dec 1941)', 34.2, 62.85, 'axis'], ['Kondopoga (Finnish)', 34.28, 62.2, 'axis'], ['Vyborg (Finnish)', 28.75, 60.7, 'axis'], ['Sortavala (Finnish since Aug 1941)', 30.68, 61.7, 'axis'],
-    ['Rabaul (Japanese since Jan 1942)', 152.1, -4.3, 'axis'], ['Northern New Ireland near Kavieng', 151.0, -2.7, 'axis'], ['Buna–Gona (Japanese beachhead until Jan 1943)', 148.35, -8.75, 'axis'],
+    ['Rabaul (Japanese since Jan 1942)', 152.1, -4.3, 'axis'], ['Lae (Japanese since 8 Mar 1942)', 146.99, -6.73, 'axis'], ['Bougainville (Japanese since Apr 1942)', 155.7, -6.75, 'axis'], ['Northern New Ireland near Kavieng', 151.0, -2.7, 'axis'], ['Buna–Gona (Japanese beachhead until Jan 1943)', 148.35, -8.75, 'axis'],
     ['Tunis (Axis since 9 Nov; Tunisia is shown amber)', 10.18, 36.8, 'contested'], ['Constantine (Allied since Torch)', 6.61, 36.37, 'allied'], ['Kokoda (retaken 2 Nov)', 147.74, -8.88, 'allied'],
   ],
   '1943-12-15': [
