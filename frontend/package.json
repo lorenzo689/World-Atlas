@@ -14,6 +14,8 @@
     "data:history": "node scripts/build-history.mjs",
     "data:ww2": "node scripts/build-ww2-annexations.mjs",
     "data:conflicts": "node scripts/build-conflict-lines.mjs",
+    "data:conflicts:verify": "node scripts/verify-conflict-data.mjs",
+    "data:conflicts:refresh": "node scripts/refresh-conflicts.mjs",
     "data:territories": "node scripts/build-territories.mjs",
     "data:detail": "node scripts/build-map-detail.mjs",
     "data:detail:verify": "node scripts/verify-map-detail.mjs",

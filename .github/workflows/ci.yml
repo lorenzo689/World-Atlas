@@ -22,6 +22,7 @@ jobs:
       - run: npm run data:history:verify
       - run: npm run data:ww2:verify
       - run: npm run data:detail:verify
+      - run: npm run data:conflicts:verify
       - name: Country geometry is reproducible from its sources
         # Rebuilds countries/boundaries/geometry and fails if the committed files differ, so the
         # shipped map can only change through scripts/build-data.mjs.

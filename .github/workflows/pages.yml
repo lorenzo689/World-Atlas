@@ -29,9 +29,11 @@ jobs:
       - run: npm ci
       - run: npm run data:history:verify
       - run: npm run data:detail:verify
-      - name: Refresh dated conflict geometry
-        run: npm run data:conflicts -- --refresh
-        continue-on-error: true
+      - run: npm run data:ww2:verify
+      - name: Refresh dated conflict geometry (verified; falls back to the verified committed snapshot)
+        # Fails only when not even the committed snapshot verifies or the generator touched other
+        # files; a rejected refresh restores the committed pair and shows a warning (docs/DEPLOY.md).
+        run: npm run data:conflicts:refresh
       - run: npm test
       - run: npm run build
         env:
@@ -43,6 +45,11 @@ jobs:
           SMOKE_URL=http://127.0.0.1:4173/World-Atlas/explore CHROME_PATH=$(which google-chrome) npm run smoke:history
           SMOKE_URL=http://127.0.0.1:4173/World-Atlas/explore CHROME_PATH=$(which google-chrome) npm run smoke:ww2
           SMOKE_URL=http://127.0.0.1:4173/World-Atlas/explore CHROME_PATH=$(which google-chrome) npm run smoke:scenarios
+      - name: Verify the conflict data being published
+        run: |
+          npm run data:conflicts:verify -- --dir dist/data
+          cmp public/data/conflict-lines.json dist/data/conflict-lines.json
+          cmp public/data/territories-today.json dist/data/territories-today.json
       - run: cp dist/index.html dist/404.html && touch dist/.nojekyll
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4

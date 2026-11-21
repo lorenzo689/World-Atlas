@@ -43,7 +43,7 @@ npm run build
 npm run smoke:scenarios      # Browser with a running app; override SMOKE_URL and CHROME_PATH
 ```
 
-The historical generator requires `scripts/source/historical/CShapes-2.0.geojson`, populated by the existing history generator. Source caches are ignored by Git; generated JSON is committed. The Pages workflow refreshes VIINA at build time and retains the last committed dated product if upstream access fails. It also runs the scenario browser check.
+The historical generator requires `scripts/source/historical/CShapes-2.0.geojson`, populated by the existing history generator. Source caches are ignored by Git; generated JSON is committed. The Pages workflow refreshes VIINA at build time, publishes the result only after it verifies, and otherwise retains the last committed (verified) dated product. It also runs the scenario browser check.
 
 JSON loads on demand. Triangulation runs in cancellable Web Workers. A four-snapshot cache bounds prepared geometry. Changing the year immediately removes old geometry; unsupported years never reuse a previous front. Per-feature GPU geometry is reused for visibility changes and disposed when its snapshot is replaced or the globe is destroyed. Areas render in a small number of draw calls; no per-frame polygon triangulation or React rendering is added. Geographic picking runs on clicks only, preserving holes and actor filters. When occupation areas are enabled in year comparison, territorial gain/loss fills are suppressed to avoid mixing two meanings of area color; difference lines remain available.
 
