@@ -92,8 +92,10 @@ geometry and generated files and runs in CI.
 GeoNames settlement tessellation, uses **only `status_boost`** (VIINA reports and crowdsourced
 Wikipedia status), and writes `public/data/conflict-lines.json`. It does not use the dataset's
 ISW-based `status` column. The result carries observation date, source hashes and ODbL metadata.
-GitHub Pages attempts a refresh every Monday; a failed upstream download leaves the checked-in
-snapshot in place, visibly dated and flagged when old. The derived data is available at
+GitHub Pages attempts a refresh every Monday (`npm run data:conflicts:refresh`). The refreshed pair
+is published only if it passes `npm run data:conflicts:verify`; a failed download or an invalid
+result restores the verified checked-in snapshot, visibly dated and flagged when old, and the
+deployment stops if no verified snapshot exists (policy in [DEPLOY.md](DEPLOY.md)). The derived data is available at
 `/data/conflict-lines.json` (or `/World-Atlas/data/conflict-lines.json` on GitHub Pages).
 Source: [VIINA 2.0](https://github.com/zhukovyuri/VIINA), [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/).
 

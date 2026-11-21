@@ -92,6 +92,36 @@ cloudflared tunnel --url http://localhost:80          # oder: ngrok http 80
 Dann `PUBLIC_URL` auf die Tunnel-Adresse setzen (`https://….trycloudflare.com`), damit die Links in den
 E-Mails und die WebSocket-Prüfung stimmen.
 
+## GitHub-Pages-Demo: Sicherheitsregeln für die Konfliktdaten
+
+Die statische Demo (`.github/workflows/pages.yml`, bei jedem Push auf `main`, montags per Zeitplan und
+manuell) lädt vor dem Build die aktuellen VIINA-Daten für die Ukraine neu. Dabei entstehen zwei
+Dateien, die nur **gemeinsam** gelten: `public/data/conflict-lines.json` (Grenzlinien) und
+`public/data/territories-today.json` (Kontrollflächen). Veröffentlicht wird nur, was geprüft ist:
+
+1. `npm run data:conflicts:refresh` prüft zuerst den committeten Stand. Ist er ungültig, gibt es keinen
+   sicheren Rückfall: Der Schritt schlägt fehl, **es wird nicht deployt**.
+2. Danach läuft der Generator (`build-conflict-lines.mjs --refresh`). Das neue Paar wird nur übernommen,
+   wenn es `scripts/lib/conflict-data.mjs` besteht und gegenüber dem committeten Stand plausibel ist:
+   kein älteres Datum, Linienzahl und RU/UA-Flächen höchstens um Faktor 2 verändert.
+3. Download-Fehler, Absturz, nur eine geschriebene Datei, kaputtes JSON oder ungültige Geometrie:
+   Beide Dateien werden byteweise auf den committeten Stand zurückgesetzt. Der Lauf geht weiter, mit einer
+   **sichtbaren Warnung** (Annotation „Conflict data fallback“ und Eintrag in der Job-Zusammenfassung).
+4. Ändert der Generator irgendeine andere Datei unter `public/`, wird abgebrochen: Das wäre ein
+   ungeprüftes Artefakt.
+5. Nach dem Build prüft der Workflow die Kopien in `dist/data/` noch einmal und vergleicht sie byteweise
+   mit `public/data/`. Außerdem laufen vor dem Build `data:history:verify`, `data:detail:verify` und
+   `data:ww2:verify`. Damit wird kein historischer Datensatz ungeprüft veröffentlicht.
+
+Geprüft werden: Schema und Pflichtfelder, https-Quellen und Lizenz, Kalenderdatum (ab 2022-02-24,
+nicht in der Zukunft), SHA-256 der Quelldateien (in beiden Dateien identisch, Archivjahr = Datenjahr),
+Positionen (endlich, höchstens 5 Nachkommastellen, innerhalb der Ukraine, keine Doppelpunkte), Ringe
+(geschlossen, mindestens 4 Punkte, Fläche ≠ 0, Umlaufsinn außen/innen), keine Selbstüberschneidung,
+keine Überlappung zwischen RU, UA und umstrittenen Flächen, RU und UA vorhanden.
+
+Lokal: `npm run data:conflicts:verify` (läuft auch in der CI für jeden PR), für eine gebaute Seite
+`npm run data:conflicts:verify -- --dir dist/data`. Zeitplan und Datenquelle sind unverändert.
+
 ## Beobachtbarkeit (optional, lokal)
 
 ```bash
