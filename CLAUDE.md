@@ -33,6 +33,7 @@ content into these files.
 | Deployment, Pages conflict-data policy (German) | `docs/DEPLOY.md` |
 | Security | `docs/SECURITY-AUDIT.md` |
 | Agent permissions, guard hook, GitHub protection | `docs/AGENT-GUARDRAILS.md`, `.claude/settings.json`, `.claude/hooks/guard.mjs` |
+| Agent skills (`/implement-feature`), skill policy and benchmark | `docs/AGENT-SKILLS.md`, `.claude/skills/` |
 | Architecture decisions | `docs/adr/0001`–`0005` |
 
 ## Workflow: Understand → Plan → Implement → Verify → Review → Report
