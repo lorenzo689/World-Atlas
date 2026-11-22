@@ -10,6 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
+    "verify:data": "node scripts/verify-data.mjs",
+    "verify:fast": "npm run verify:data && npm run typecheck && npm test",
     "data": "node scripts/build-data.mjs",
     "data:history": "node scripts/build-history.mjs",
     "data:ww2": "node scripts/build-ww2-annexations.mjs",
