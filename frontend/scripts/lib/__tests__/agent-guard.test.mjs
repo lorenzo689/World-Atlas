@@ -306,6 +306,82 @@ describe('shell parsing', () => {
   })
 })
 
+describe('permission-bypass keywords: executable content versus inert heredoc data', () => {
+  const prBody = 'gh pr create --title "feat: guardrails" --body "$(cat <<\'EOF\'\n## Limitations\nA user can still set disableAllHooks or pass --dangerously-skip-permissions or bypassPermissions.\nEOF\n)"'
+
+  it('gh pr create with a heredoc description mentioning disableAllHooks asks (publishing), not deny', () => {
+    expect(bash(prBody)).toBe('ask')
+    expect(bash('gh pr create --title x --body-file - <<\'EOF\'\nSettings flag disableAllHooks is documented.\nEOF')).toBe('ask')
+    const r = hookProcess(event('Bash', { command: prBody }))
+    expect(r.status).toBe(0)
+    expect(JSON.parse(r.stdout).hookSpecificOutput.permissionDecision).toBe('ask')
+  })
+
+  it('a commit message mentioning --dangerously-skip-permissions asks (commit), not deny', () => {
+    expect(bash('git commit -F - <<\'EOF\'\nfix(harness): block --dangerously-skip-permissions\nEOF')).toBe('ask')
+    expect(bash('git commit -m "$(cat <<\'EOF\'\nfix(harness): block --dangerously-skip-permissions\n\nAlso disableAllHooks.\nEOF\n)"')).toBe('ask')
+    expect(ps("git commit -m @'\nfix: block --dangerously-skip-permissions\n'@")).toBe('ask')
+    // Documented: an inline quoted argument is executable text and stays blocked (use a heredoc).
+    expect(bash('git commit -m "fix: block disableAllHooks"')).toBe('deny')
+  })
+
+  it.each([
+    ['claude flag', 'claude --dangerously-skip-permissions -p "x"'],
+    ['claude permission mode', 'claude --permission-mode bypassPermissions -p "x"'],
+    ['settings override', 'claude --settings \'{"disableAllHooks": true}\''],
+    ['writing user settings', 'echo \'{"disableAllHooks": true}\' > ~/.claude/settings.json'],
+    ['via npx', 'npx @anthropic-ai/claude-code --dangerously-skip-permissions'],
+    ['after a heredoc', 'cat <<\'EOF\'\nharmless\nEOF\nclaude --dangerously-skip-permissions'],
+    ['fake terminator does not hide it', 'cat <<\'EOF\'\nEOF-not-really\nclaude --dangerously-skip-permissions'],
+    ['inline in an executed string', 'bash -c "claude --dangerously-skip-permissions"'],
+  ])('genuine bypass is still denied: %s', (_name, command) => {
+    expect(bash(command)).toBe('deny')
+  })
+
+  it('genuine bypass in PowerShell is still denied', () => {
+    expect(ps('claude --dangerously-skip-permissions')).toBe('deny')
+    expect(ps("@'\nclaude --dangerously-skip-permissions\n'@ | iex")).toBe('deny')
+    expect(ps("@'\n{\"disableAllHooks\": true}\n'@ | Set-Content $env:USERPROFILE\\.claude\\settings.json")).toBe('deny')
+  })
+
+  it.each([
+    ['bash heredoc, destructive git', 'bash <<\'EOF\'\ngit reset --hard\nEOF'],
+    ['bash heredoc, bypass', 'bash <<\'EOF\'\nclaude --dangerously-skip-permissions\nEOF'],
+    ['heredoc piped to sh', 'cat <<\'EOF\' | sh\necho {"disableAllHooks": true} > x\nEOF'],
+    ['node heredoc writing settings', 'node <<\'EOF\'\nrequire("fs").writeFileSync(".claude/settings.local.json", \'{"disableAllHooks":true}\')\nEOF'],
+    ['eval of a heredoc', 'eval "$(cat <<\'EOF\'\ngit push --force\nEOF\n)"'],
+    ['heredoc written to a script file', 'cat > run.sh <<\'EOF\'\nclaude --dangerously-skip-permissions\nEOF'],
+    ['heredoc written with tee', 'tee run.sh <<\'EOF\'\nclaude --dangerously-skip-permissions\nEOF'],
+    ['PowerShell here-string to iex', "@'\ngit reset --hard\n'@ | Invoke-Expression"],
+  ])('dangerous content in an executed or stored heredoc is denied: %s', (_name, command) => {
+    const tool = command.startsWith('@') ? 'PowerShell' : 'Bash'
+    expect(bash(command, ROOT, tool)).toBe('deny')
+  })
+
+  it('executed heredocs nested beyond the analysis depth fail safe', () => {
+    const nest = (inner, levels) => Array.from({ length: levels }).reduce((acc, _, i) => `bash <<'E${i}'\n${acc}\nE${i}`, inner)
+    expect(bash(nest('claude --dangerously-skip-permissions', 7))).toBe('deny')
+    expect(bash(nest('echo hello', 7))).toBe('ask')
+    expect(bash(nest('echo hello', 2))).toBe('none')
+  })
+
+  it('heredoc data does not unlock protected files or destructive git', () => {
+    expect(bash('cp x frontend/perf-budget.json && git commit -F - <<\'EOF\'\nchore: disableAllHooks note\nEOF')).toBe('ask')
+    expect(bash('git reset --hard && git commit -F - <<\'EOF\'\nmsg mentioning disableAllHooks\nEOF')).toBe('deny')
+    expect(bash('git commit -F - <<\'EOF\'\nmsg\nEOF\ngit push --force')).toBe('deny')
+    expect(edit(`${ROOT}/frontend/perf-budget.json`)).toBe('ask')
+    expect(bash('git push -f origin main')).toBe('deny')
+    expect(bash('git push origin main')).toBe('ask')
+  })
+
+  it('classifies heredoc bodies', () => {
+    expect(stripHeredocs('git commit -F - <<EOF\nmsg\nEOF')).toEqual({ text: 'git commit -F - << HEREDOC', scripts: [], written: [] })
+    expect(stripHeredocs('cat > a.sh <<EOF\nbody\nEOF').written).toEqual(['body'])
+    expect(stripHeredocs('cat <<EOF > /dev/null\nbody\nEOF').written).toEqual([])
+    expect(stripHeredocs('eval "$(cat <<EOF\nbody\nEOF\n)"').scripts).toEqual(['body'])
+  })
+})
+
 describe('.claude/settings.json', () => {
   const p = SETTINGS.permissions
   const hookEntries = SETTINGS.hooks?.PreToolUse ?? []

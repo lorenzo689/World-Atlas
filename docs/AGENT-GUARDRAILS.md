@@ -96,15 +96,22 @@ quotes. The checker:
 - removes environment assignments and wrappers (`sudo`, `env`, `timeout`, `nohup`, `xargs`, `&`),
   and git's global options (`-C`, `-c`, `--git-dir`, …);
 - recurses into `bash -c`, `sh -lc`, `cmd /c`, `powershell -Command` (and the positional form),
-  `pwsh -c`, `eval`, `Invoke-Expression`, and heredocs fed to a shell. An `-EncodedCommand` asks;
-- treats heredoc and PowerShell here-string bodies used as data (commit messages, file contents) as
-  data, so a message that mentions `git push --force` does not block the commit;
+  `pwsh -c`, `eval`, `Invoke-Expression`. An `-EncodedCommand` asks;
+- classifies each heredoc and PowerShell here-string body by what consumes it:
+  - **executed** (`bash <<EOF`, `cat <<EOF | sh`, `node <<EOF`, `eval "$(cat <<EOF …)"`,
+    `@'…'@ | iex`): analysed as commands, with every rule applied;
+  - **written to a file** (`cat > run.sh <<EOF`, `tee`, `Set-Content`): keeps the
+    permission-bypass keyword check, because the file may run or configure Claude Code later;
+  - **inert data** (commit messages, `gh pr create --body`): ignored. So a message that mentions
+    `git push --force` or `disableAllHooks` does not block the commit or the PR;
 - follows a literal `cd` / `Set-Location` within the command line.
 
 Decisions: deny for the destructive commands listed under the permission configuration, plus
 `rm -rf` on `/`, `~`, `$HOME`, a drive root, the repository or `.git`; `curl|wget|iwr … | sh|bash|iex`;
-and any command containing `--dangerously-skip-permissions`, `bypassPermissions` or
-`disableAllHooks`. Ask for publishing, merging and history changes (push, merge, pull, rebase,
+and any command whose executable text (outside inert heredoc data) contains
+`--dangerously-skip-permissions`, `bypassPermissions` or `disableAllHooks`. A quoted argument such as
+`git commit -m "… disableAllHooks …"` is still executable text and is blocked; use a heredoc
+(`git commit -F - <<'EOF'`) for such messages. Ask for publishing, merging and history changes (push, merge, pull, rebase,
 commit, tag, restore, checkout of paths, `gh` writes, `gh api` with a non-GET method or fields);
 dependency changes and `npx` of a package that is not installed locally; data generators
 (`npm run data*` other than `*:verify`, `node scripts/build-*.mjs`); `docker push|stop|kill|rm`;

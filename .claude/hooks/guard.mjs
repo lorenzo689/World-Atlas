@@ -277,22 +277,36 @@ export function splitCommands(command, { powershell = false } = {}) {
   return commands
 }
 
-const SHELL_LINE = /(^|[\s;&|(])(sh|bash|zsh|dash|ksh|pwsh|powershell|cmd|python3?|node|iex|invoke-expression)(\.exe)?(\s|$)/i
+const SHELL_LINE = /(^|[\s;&|(])(sh|bash|zsh|dash|ksh|pwsh|powershell|cmd|python3?|node|perl|ruby|iex|invoke-expression|eval|source)(\.exe)?(\s|$)/i
+const WRITES_FILE = /(^|[^0-9&>])>>?[ \t]*(?!(\/dev\/null|\$null|nul)(\s|$))[^\s&]|(^|[\s|])(tee|tee-object|set-content|add-content|out-file)(\s|$)/i
 
 /**
- * Removes heredoc and PowerShell here-string bodies (commit messages, file contents), which are data,
- * not commands. A body fed to a shell or interpreter (`bash <<EOF`) is returned for analysis instead.
+ * Separates heredoc and PowerShell here-string bodies from the executable command text.
+ * - `scripts`: bodies a shell, interpreter or eval reads (`bash <<EOF`, `cat <<EOF | sh`,
+ *   `@'...'@ | iex`). They are code and get the full analysis.
+ * - `written`: bodies stored in a file (`cat > run.sh <<EOF`). They may run or configure Claude Code
+ *   later, so they keep the permission-bypass keyword check.
+ * - everything else (commit messages, PR bodies) is inert data and is removed from `text`.
  */
 export function stripHeredocs(command) {
   const scripts = []
+  const written = []
+  const classify = (body, before, after) => {
+    if (SHELL_LINE.test(before) || SHELL_LINE.test(after)) scripts.push(body)
+    else if (WRITES_FILE.test(before) || WRITES_FILE.test(after)) written.push(body)
+  }
   let text = command.replace(/<<-?[ \t]*(['"]?)([A-Za-z_][\w-]*)\1([^\n]*)\n([\s\S]*?)\n[ \t]*\2[ \t]*(?=\n|$)/g, (_all, _q, _tag, rest, body, offset) => {
-    const line = command.slice(command.lastIndexOf('\n', offset) + 1, offset)
-    if (SHELL_LINE.test(line) || SHELL_LINE.test(rest)) scripts.push(body)
+    classify(body, command.slice(command.lastIndexOf('\n', offset) + 1, offset), rest)
     return `<< HEREDOC${rest}`
   })
-  text = text.replace(/@(['"])\r?\n[\s\S]*?\r?\n\1@/g, "''")
-  return { text, scripts }
+  text = text.replace(/@(['"])\r?\n([\s\S]*?)\r?\n\1@/g, (all, _q, body, offset, whole) => {
+    classify(body, whole.slice(whole.lastIndexOf('\n', offset) + 1, offset), whole.slice(offset + all.length).split('\n')[0])
+    return "''"
+  })
+  return { text, scripts, written }
 }
+
+const BYPASS = /--dangerously-skip-permissions|bypassPermissions|disableAllHooks/i
 
 /** Removes redirection operators and their targets from an argv. */
 function stripRedirects(argv) {
@@ -408,7 +422,7 @@ function checkGit(args) {
 }
 
 function checkGh(args) {
-  const [group = '', sub = '', ...rest] = args.map((a, i) => (i < 2 ? a.toLowerCase() : a))
+  const [group = '', sub = ''] = args.map((a, i) => (i < 2 ? a.toLowerCase() : a))
   const cmd = `gh ${args.join(' ')}`
   const approval = (why) => ask(`\`${cmd}\`: ${why} ${APPROVAL}`)
   if (group === 'repo' && sub === 'delete') return deny(`\`${cmd}\` is blocked: deleting the repository has no role in feature development.`)
@@ -559,15 +573,18 @@ function decideShell(tool, input, ctx, depth = 0) {
   const { command } = input
   if (typeof command !== 'string') return deny(`Malformed hook input: ${tool} has no string command.`)
   const powershell = tool === 'PowerShell'
-  if (/--dangerously-skip-permissions|bypassPermissions|disableAllHooks/i.test(command)) {
+  // Checked on the executable text and on heredocs written to files; executed heredocs are checked
+  // when they are analysed below. Inert heredoc data (commit messages, PR bodies) may mention these.
+  const { text, scripts, written } = stripHeredocs(command)
+  if (BYPASS.test(text) || written.some((body) => BYPASS.test(body))) {
     return deny('Commands that bypass permissions or disable hooks are blocked.')
   }
-  const { text, scripts } = stripHeredocs(command)
   const argvs = splitCommands(text, { powershell })
   const results = []
 
   for (const nested of [...nestedCommands(text, powershell), ...scripts]) {
     if (depth < 4) results.push(decideShell(tool, { command: nested }, ctx, depth + 1))
+    else results.push(BYPASS.test(nested) ? deny('Commands that bypass permissions or disable hooks are blocked.') : ask(`Command nesting is too deep to check. ${APPROVAL}`))
   }
 
   // Download-and-execute pipelines: curl ... | sh, iwr ... | iex.
