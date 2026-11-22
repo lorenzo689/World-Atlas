@@ -18,3 +18,7 @@ frontend/scripts/source/historical/atlas/
 frontend/scripts/data/ww2-occupation.json
 frontend/scripts/data/occupation-cache/
 frontend/scripts/source/stars/
+
+# Secrets and personal agent settings (CLAUDE.md: never commit)
+deploy/.env
+.claude/settings.local.json

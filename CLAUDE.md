@@ -32,6 +32,7 @@ content into these files.
 | Backend architecture (German) | `docs/BACKEND-GUIDE.md`, `docs/adr/0005-module-dependency-rules.md` |
 | Deployment, Pages conflict-data policy (German) | `docs/DEPLOY.md` |
 | Security | `docs/SECURITY-AUDIT.md` |
+| Agent permissions, guard hook, GitHub protection | `docs/AGENT-GUARDRAILS.md`, `.claude/settings.json`, `.claude/hooks/guard.mjs` |
 | Architecture decisions | `docs/adr/0001`–`0005` |
 
 ## Workflow: Understand → Plan → Implement → Verify → Review → Report
