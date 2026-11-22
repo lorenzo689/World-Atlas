@@ -77,6 +77,8 @@ interface GlobeViewProps {
   /** Follow a camera controlled by another globe (historical side-by-side view). */
   externalPose?: Pose | null
   focusPose?: Pose | null
+  /** Increment to fly back to the default view (the pose the globe opens with). */
+  resetNonce?: number
 }
 
 export interface GlobeMarker {
@@ -135,6 +137,7 @@ export function GlobeView({
   historicalEntities = null,
   externalPose = null,
   focusPose = null,
+  resetNonce = 0,
 }: GlobeViewProps) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const tipRef = useRef<HTMLDivElement>(null)
@@ -389,6 +392,14 @@ export function GlobeView({
   useEffect(() => {
     if (scene && ready && focusPose) scene.pointOfView(focusPose, reduced ? 0 : 1200)
   }, [scene, ready, focusPose, reduced])
+
+  // ---- reset to the default view --------------------------------------------------------------
+  const handledReset = useRef(resetNonce)
+  useEffect(() => {
+    if (!scene || !ready || resetNonce === handledReset.current) return
+    handledReset.current = resetNonce
+    scene.pointOfView(DEFAULT_POSE, reduced ? 0 : 1200)
+  }, [scene, ready, resetNonce, reduced])
 
   // ---- fly to selection ---------------------------------------------------------------------
   useEffect(() => {

@@ -35,6 +35,7 @@ import { useConflictBriefs } from '@/hooks/useConflictBriefs'
 import type { Pose } from '@/lib/geo'
 import type { GlobeMode } from '@/types'
 import { readScenarioLink, scenarioYear } from '@/lib/scenarios'
+import { isCameraResetShortcut } from '@/lib/shortcuts'
 import { useTerritories } from '@/hooks/useTerritories'
 import { TerritoryPanel } from '@/components/globe/TerritoryPanel'
 
@@ -269,6 +270,18 @@ export default function ExplorerPage() {
     return () => window.removeEventListener('keydown', onKey)
   }, [select])
 
+  // "R" flies the camera back to the default view; scenario, year and selection stay as they are.
+  const [resetNonce, setResetNonce] = useState(0)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!isCameraResetShortcut(e)) return
+      e.preventDefault()
+      setResetNonce((n) => n + 1)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   const showPanel = historyYear != null ? ww2Open || ww1Open || !!historicalEntity : conflictsOpen || !!country
   const insets = useMemo(
     () => ({
@@ -321,6 +334,7 @@ export default function ExplorerPage() {
                 territoryFeatures={territoriesEnabled ? territoryDisplay?.features : undefined}
                 onTerritorySelect={setSelectedTerritoryId}
                 focusPose={storyFocus}
+                resetNonce={resetNonce}
                 markers={ww1Open ? firstWarMarkers : ww2Open ? warMarkers : conflictMarkers}
                 conflictLines={conflictsOpen && historyYear == null ? CONFLICT_LINES.lines : null}
                 ww2Fronts={warLines}

@@ -15,6 +15,8 @@ The public landing page opens the present-day atlas through **Explore now**. The
 
 Changing presentation mode never changes scenario. Closing a war view returns to the scenario menu. The global timeline and historical comparison tools only appear in Changing borders. Today has no historical timeline; historical scenarios cannot activate current indicator or conflict layers. The current-conflict API is not called from historical scenarios. WWII territory areas respect the selected theater; the current historical dataset has no verified area coverage outside Europe.
 
+In every scenario the `R` key flies the globe camera back to its default view (the pose the explorer opens with). It is ignored while typing in an input, textarea, select or editable element, with Ctrl, Alt or Meta held, and for key repeat. The reset only moves the camera: scenario, year, comparison, mode, selection and data stay unchanged. Covered by `frontend/src/lib/__tests__/shortcuts.test.ts` and `npm run smoke:scenarios`.
+
 Shared personal atlas views open Today with `restore=1`, preserving their saved camera, metric and selection. This parameter restores local application state; it does not grant authentication or access to private views.
 
 ## What the territory layer means
