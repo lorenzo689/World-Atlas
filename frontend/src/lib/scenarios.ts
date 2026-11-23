@@ -37,7 +37,16 @@ export function readScenarioLink(search: string) {
   // A selected historical dataset identifier (Historical Country Explorer) belongs to Changing borders
   // only; other scenarios never inherit it. Existence in the dataset is checked once it has loaded.
   const entity = scenario.capabilities.timeline ? parseEntityParam(params.get('entity')) : null
-  return { scenario, year, compare, entity }
+  // Selected historical event and guided tour (Historical Events Explorer), Changing borders only.
+  // Ids are checked against the event catalog once the page has loaded it.
+  const event = scenario.capabilities.timeline ? parseSlugParam(params.get('event')) : null
+  const tour = scenario.capabilities.timeline ? parseSlugParam(params.get('tour')) : null
+  return { scenario, year, compare, entity, event, tour }
+}
+
+/** Event and tour ids: lowercase letters, digits and hyphens. */
+export function parseSlugParam(value: string | null): string | null {
+  return value && /^[a-z0-9-]{1,40}$/.test(value) ? value : null
 }
 
 /** Dataset identifiers are "H" + Gleditsch–Ward number, or a few named reconstructions (HDANZIG). */

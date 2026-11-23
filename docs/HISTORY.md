@@ -87,6 +87,44 @@ Year changes use the Time Machine’s year (there is no second year state). The 
 as `entity=<identifier>` together with `year` and `compare` (Changing borders only; see
 [SCENARIOS.md](SCENARIOS.md)).
 
+### Historical events explorer and regional time travel
+
+The **Events** control in Changing borders opens a catalog of dated events
+(`src/lib/historicalEvents.ts`). It adapts the existing catalogs without changing them:
+the four Changing-borders lessons (`HISTORY_EVENTS`), the WWI events (`WW1_MOMENTS`) and the WWII
+events (`WW2_MOMENTS`), plus three events added with a checked source. Merging keeps one entry per id
+and per (date, English title). Region (Europe, Africa, Asia & Pacific, Americas) and theme (war,
+statehood, diplomacy) are filter groupings, not historical classifications.
+
+| Added event | Date | Source checked for the date |
+| --- | --- | --- |
+| India and Pakistan become independent dominions | 15 August 1947 | [Indian Independence Act 1947, s. 1](https://www.legislation.gov.uk/ukpga/Geo6/10-11/30/enacted) |
+| Peace treaty with Japan signed | 8 September 1951 | [U.S. Office of the Historian](https://history.state.gov/milestones/1945-1952/korean-war) |
+| Ghana proclaimed independent | 6 March 1957 | [U.S. Office of the Historian](https://history.state.gov/countries/ghana) |
+
+None of these pages names a place, so these events are listed without a globe marker. Candidate
+events whose source could not be fetched, or whose source gave a different date (Eritrea), were
+not added.
+
+- **Markers**: only events whose source catalog gives a place anchor (the WWI and WWII events) get
+  a marker, and only while the explorer is open; the four lessons carry a camera focus, not a place.
+  Markers are the filtered results, or the tour's events during a tour.
+- **Event date vs. map date**: the detail shows the exact event day and the shown 1 January map,
+  with the distance in days and whether the map is before, on or after the event. A map before the
+  event never shows its outcome; a later map is not evidence that the event caused what it shows.
+  “Show map of …” opens the first 1 January after the event (the same day for an event on
+  1 January); for events after 1 January 2019 the nearest allowed map is shown and labelled as
+  before the event. WWI events state that the WWI view uses 1 January maps of their year; WWII
+  events name their WWII moment, whose maps use that moment's exact date.
+- **Comparison and lessons**: only the curated lessons offer a before/after comparison, a guided
+  lesson and Country Explorer links (`EVENT_ENTITIES`). No event triggers a claim of a border change,
+  annexation, occupation or succession.
+- **Time travel**: curated tours (Europe in WWI, Europe in WWII, Asia and the Pacific 1941–1951,
+  states dissolving and emerging) are built only from catalog events; a tour can also run through
+  the current filter results. Each step sets the Time Machine year to the event's first later map
+  and focuses the camera. Playback waits seven seconds per step and schedules the next step only
+  when the map and any comparison are ready; any other year change pauses the tour.
+
 The comparison control shows two selected snapshots side by side. Rose lines show removed boundary
 segments; teal lines show added segments. Translucent areas show geometric losses and gains for
 states present in both snapshots. A Web Worker computes the polygon difference, debounced while

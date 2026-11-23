@@ -55,6 +55,11 @@ interpolated intermediate borders. Controls, all keyboard-operable and labelled 
   dated flags, documented events, sources) with buttons that move the timeline year, step between
   dataset periods or start a comparison. The selection stays open in years without a record and is
   shareable with `entity=`; Back/Forward restore it. Method and limits: [HISTORY.md](HISTORY.md).
+- **Events**: the header control opens a searchable, filterable event list (region, theme, period)
+  with globe markers for events with a documented place, a detail that separates event date and map
+  date, and guided time travel (curated tours or the current results) with previous/next, pause and
+  end. Shareable with `event=` and `tour=`; selecting events and starting tours are Back/Forward
+  steps, tour steps replace the entry.
 
 Covered by `src/components/__tests__/HistoricalTimeline.test.tsx`, `src/lib/__tests__/timeMachine.test.ts`,
 `src/components/__tests__/HistoricalDevelopment.test.tsx`, `src/lib/__tests__/historyEntity.test.ts`

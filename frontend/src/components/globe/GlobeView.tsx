@@ -414,13 +414,16 @@ export function GlobeView({
     if (!PERF_DEBUG || !scene || !ready || externalPose) return
     const getPose = () => scene.getPose()
     const getDetail = () => scene.getDetailDiagnostics()
+    const getScreenPoint = (lat: number, lng: number) => scene.screenPoint(lat, lng)
     window.__globePose = getPose
     window.__globeDetail = getDetail
+    window.__globeScreenPoint = getScreenPoint
     const stop = startPerfProbe(() => scene.renderer)
     return () => {
       stop()
       if (window.__globePose === getPose) delete window.__globePose
       if (window.__globeDetail === getDetail) delete window.__globeDetail
+      if (window.__globeScreenPoint === getScreenPoint) delete window.__globeScreenPoint
     }
   }, [scene, ready, externalPose])
 

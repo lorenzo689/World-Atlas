@@ -24,9 +24,10 @@ try {
     const triangles = await page.evaluate(() => window.__globeDetail().territoryTriangles)
     if (!triangles || triangles > 100000) throw new Error(`Regional occupation mesh exceeds budget: ${triangles}`)
   }
-  await open('today', { year: '1942', compare: '1914', ww2: '1', entity: 'H265' })
+  await open('today', { year: '1942', compare: '1914', ww2: '1', entity: 'H265', event: 'barbarossa', tour: 'europe-ww2' })
   if (new URL(page.url()).searchParams.has('year')) throw new Error('Today retained a historical year')
   if (new URL(page.url()).searchParams.has('entity') || await page.getByTestId('entity-development').count()) throw new Error('Today retained a historical entity')
+  if (['event', 'tour'].some((key) => new URL(page.url()).searchParams.has(key)) || await page.getByTestId('event-explorer').count() || await page.getByRole('button', { name: /^(Events|Ereignisse)$/ }).count()) throw new Error('Today retained the historical events explorer')
   if (await page.getByRole('slider', { name: /Year|Jahr/ }).count()) throw new Error('Today exposes a historical timeline')
   await areas()
   const panel = page.getByTestId('territory-panel').first()
@@ -55,9 +56,10 @@ try {
   await page.getByRole('group', { name: /War year|Kriegsjahr/ }).getByRole('button', { name: '1918' }).click()
   await panel.locator('time[datetime="1918-05-01"]').waitFor()
   await areas()
-  await open('ww2', { year: '1942', compare: '1914', entity: 'H255' })
+  await open('ww2', { year: '1942', compare: '1914', entity: 'H255', event: 'midway' })
   if (new URL(page.url()).searchParams.has('compare')) throw new Error('WWII retained comparison')
   if (new URL(page.url()).searchParams.has('entity') || await page.getByTestId('entity-development').count()) throw new Error('WWII retained a historical entity')
+  if (new URL(page.url()).searchParams.has('event') || await page.getByTestId('event-explorer').count()) throw new Error('WWII opened the Changing-borders events explorer')
   await areas()
   if (requests.slice(historicRequests).some((url) => /\/api\/conflicts(?:\?|$)/.test(url))) throw new Error('Historical scenario requested current conflict data')
   await page.getByRole('group', { name: /Theater|Kriegsschauplatz/ }).getByRole('button', { name: /Asia|Asien/ }).click()
@@ -115,7 +117,12 @@ try {
   await mobile.getByTestId('entity-development').waitFor({ state: 'attached', timeout: 120000 })
   await mobile.getByRole('heading', { name: 'East Germany', exact: true }).waitFor()
   if (await mobile.evaluate(() => document.documentElement.scrollWidth > innerWidth)) throw new Error('Mobile country explorer overflows horizontally')
+  // Events explorer on a phone.
+  const eventsUrl = new URL(base); eventsUrl.search = 'scenario=borders&year=1941&event=barbarossa'
+  await mobile.goto(eventsUrl.href, { waitUntil: 'domcontentloaded' })
+  await mobile.getByTestId('event-detail').waitFor({ state: 'attached', timeout: 120000 })
+  if (await mobile.evaluate(() => document.documentElement.scrollWidth > innerWidth)) throw new Error('Mobile events explorer overflows horizontally')
   await mobile.close()
   if (errors.length) throw new Error(errors.join('; '))
-  console.log('Scenario browser smoke: isolated capabilities, URL normalization, worker geometry, actor visibility, theater filtering, sources, unknown years, camera reset shortcut, entity isolation and mobile (incl. country explorer): PASS')
+  console.log('Scenario browser smoke: isolated capabilities, URL normalization, worker geometry, actor visibility, theater filtering, sources, unknown years, camera reset shortcut, entity and event isolation and mobile (incl. country and events explorer): PASS')
 } finally { await browser.close() }

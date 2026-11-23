@@ -38,6 +38,8 @@ declare global {
     __perf?: PerfApi
     /** Current camera pose; only with ?debug=1 (used by scripts/smoke.mjs). */
     __globePose?: () => { lat: number; lng: number; altitude: number }
+    /** Client pixel position of a globe point; only with ?debug=1 (marker click in scripts/history-smoke.mjs). */
+    __globeScreenPoint?: (lat: number, lng: number) => { x: number; y: number; visible: boolean }
     __globeDetail?: () => { bordersReady: boolean; borderTiles: number; roadsVisible: number; imageTiles: number; labelMaxErrorPx: number; labelsProjected: number; conflictLineSegments: number; ww2FrontSegments: number; territoryAreas: number; territoryTriangles: number; baseBordersVisible: boolean; autoRotate: boolean }
   }
 }
