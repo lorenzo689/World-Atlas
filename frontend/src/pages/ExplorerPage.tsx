@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useExplorer } from '@/store/explorer'
 import { useCountries } from '@/hooks/useCountries'
@@ -27,6 +27,7 @@ import { loadHistory, snapshotForDate, snapshotForYear, type HistoryData } from 
 import { changedEntities, HISTORY_EVENTS } from '@/lib/historyCompare'
 import { storyForEvent, storyEvent } from '@/lib/historyStories'
 import { eventDates, formatHistoricalDate } from '@/lib/timeMachine'
+import { buildEntityIndex, nearestLabel } from '@/lib/historyEntity'
 import { differenceBetweenBorders } from '@/lib/historyBoundaryDiff'
 import { loadAreaDifference, type AreaDifference } from '@/lib/historyAreaDiff'
 import { CONFLICT_LINES, type ConflictBrief } from '@/lib/conflicts'
@@ -105,9 +106,11 @@ export default function ExplorerPage() {
     return next
   }), [])
   const [historyData, setHistoryData] = useState<HistoryData | null>(null)
+  // The entity currently written to the URL; a change of it creates a browser history entry.
+  const entityInUrl = useRef<string | null>(entry.entity)
   const [historyError, setHistoryError] = useState(false)
   const [historyAttempt, setHistoryAttempt] = useState(0)
-  const [historicalSelected, setHistoricalSelected] = useState<string | null>(null)
+  const [historicalSelected, setHistoricalSelected] = useState<string | null>(entry.entity)
   const [areaDiff, setAreaDiff] = useState<AreaDifference | null>(null)
   const [areaError, setAreaError] = useState(false)
   const [activeStory, setActiveStory] = useState<string | null>(null)
@@ -218,8 +221,39 @@ export default function ExplorerPage() {
     else url.searchParams.delete('ww2')
     if (ww1Open && ww1Moment(historyYear)) url.searchParams.set('ww1', '1')
     else url.searchParams.delete('ww1')
-    window.history.replaceState(window.history.state, '', url)
-  }, [historyYear, compareYear, ww2Open, ww1Open, scenario.id])
+    // Only Changing borders shares a selected historical identifier; other scenarios drop the parameter.
+    const entity = scenario.capabilities.timeline && historyYear != null ? historicalSelected : null
+    if (entity) url.searchParams.set('entity', entity)
+    else url.searchParams.delete('entity')
+    // Selecting or closing an entity is a step the browser can go back to; year changes (playback,
+    // scrubbing) replace the current entry instead of flooding the history.
+    const push = entityInUrl.current !== entity
+    entityInUrl.current = entity
+    if (url.href === window.location.href) return
+    if (push) window.history.pushState(window.history.state, '', url)
+    else window.history.replaceState(window.history.state, '', url)
+  }, [historyYear, compareYear, ww2Open, ww1Open, scenario, historicalSelected])
+  useEffect(() => {
+    const onPop = () => {
+      const link = readScenarioLink(window.location.search)
+      if (link.scenario.id !== scenario.id) return // ExplorerRoute remounts the page for another scenario
+      entityInUrl.current = link.entity
+      setHistoryYear(link.year)
+      setCompareYear(link.compare)
+      setHistoricalSelected(link.entity)
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [scenario.id])
+  // Historical Country Explorer: per-identifier overview of the dataset periods (no geometry decoded).
+  const entityIndex = useMemo(() => historyData && scenario.capabilities.timeline ? buildEntityIndex(historyData.topology) : null, [historyData, scenario])
+  const entityPeriods = historicalSelected && entityIndex ? entityIndex.get(historicalSelected) ?? null : null
+  useEffect(() => {
+    // A deep link may name an identifier that is not in the loaded dataset: ignore it quietly.
+    if (!entityIndex || !historicalSelected || entityIndex.has(historicalSelected)) return
+    entityInUrl.current = null
+    setHistoricalSelected(null)
+  }, [entityIndex, historicalSelected])
   const timelineWaiting = (compareYear != null && !!history && !!comparison && !areaDiff && !areaError)
     || (territoriesEnabled && (territories.status === 'loading' || (compareYear != null && comparisonTerritories.status === 'loading')))
   const timelineBlocked = compareYear != null && areaError ? t('history.pausedCompare')
@@ -265,6 +299,13 @@ export default function ExplorerPage() {
     setStoryFocus(focus ? { ...focus } : null)
   }, [changeHistoryYear])
 
+  // Year changes from the country explorer keep the mobile sheet where the user is reading.
+  const keepSheet = useCallback((year: number) => {
+    const current = snap
+    changeHistoryYear(year)
+    setSnap(current)
+  }, [snap, changeHistoryYear])
+
   const changeMode = useCallback((next: GlobeMode) => {
     if (scenario.modes.includes(next)) setMode(next)
   }, [scenario, setMode])
@@ -304,7 +345,8 @@ export default function ExplorerPage() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  const showPanel = historyYear != null ? ww2Open || ww1Open || !!historicalEntity : conflictsOpen || !!country
+  const explorerOpen = historyYear != null && !!history && !ww2Open && !ww1Open && !!historicalSelected && !!(historicalEntity || entityPeriods)
+  const showPanel = historyYear != null ? ww2Open || ww1Open || explorerOpen : conflictsOpen || !!country
   const insets = useMemo(
     () => ({
       right: showPanel && isDesktop ? PANEL_WIDTH + 32 : 0,
@@ -312,6 +354,26 @@ export default function ExplorerPage() {
     }),
     [showPanel, isDesktop],
   )
+
+  const explorerName = historicalEntity?.name ?? (historicalSelected && entityPeriods && historyYear != null ? nearestLabel(historicalSelected, entityPeriods, historyYear) : '')
+  const explorerPreview = explorerOpen && historicalSelected && historyYear != null ? (
+    <HistoricalPreview
+      entity={historicalEntity ?? null}
+      absentLabel={explorerName}
+      year={historyYear}
+      onClose={() => setHistoricalSelected(null)}
+      development={entityPeriods && historyData ? {
+        code: historicalSelected,
+        periods: entityPeriods,
+        year: historyYear,
+        compareYear,
+        flags: historyData.flags[historicalSelected.slice(1)] ?? [],
+        areaFailed: !!areaDiff?.failedStates.includes(historicalSelected),
+        onYearChange: keepSheet,
+        onCompare: (next) => { if (scenario.capabilities.comparison) setCompareYear(next) },
+      } : undefined}
+    />
+  ) : null
 
   return (
     <main className="fixed inset-0 overflow-hidden bg-background">
@@ -520,14 +582,14 @@ export default function ExplorerPage() {
       {historyYear == null && conflictsOpen && <ConflictPanel briefs={conflictBriefs} lang={lang} selected={activeConflict} onSelect={(brief) => { setActiveConflict(brief); setStoryFocus({ ...brief.location, altitude: 1.25 }); select(null) }} onClose={() => { setConflictsOpen(false); setActiveConflict(null) }} />}
       {warMoment && (isDesktop ? <aside className="glass scrollbar-thin absolute bottom-4 right-4 top-[88px] z-20 overflow-y-auto rounded-[28px]" style={{ width: PANEL_WIDTH }} aria-label={lang === 'de' ? 'Zweiter Weltkrieg' : 'World War II'}><Ww2Panel moment={warMoment} lang={lang} theater={ww2Theater} onTheaterChange={setWw2Theater} showFronts={ww2ShowFronts} onShowFrontsChange={setWw2ShowFronts} showEvents={ww2ShowEvents} onShowEventsChange={setWw2ShowEvents} onYearChange={changeHistoryYear} onFocus={(lat, lng) => setStoryFocus({ lat, lng, altitude: 0.85 })} selectedEventId={selectedWw2EventId} onClose={() => { navigate('/scenarios'); setStoryFocus(null) }} /></aside> : <BottomSheet snap={snap} onSnapChange={setSnap} onDismiss={() => navigate('/scenarios')} label={lang === 'de' ? 'Zweiter Weltkrieg' : 'World War II'}><Ww2Panel moment={warMoment} lang={lang} theater={ww2Theater} onTheaterChange={setWw2Theater} showFronts={ww2ShowFronts} onShowFrontsChange={setWw2ShowFronts} showEvents={ww2ShowEvents} onShowEventsChange={setWw2ShowEvents} onYearChange={changeHistoryYear} onFocus={(lat, lng) => setStoryFocus({ lat, lng, altitude: 0.85 })} selectedEventId={selectedWw2EventId} onClose={() => navigate('/scenarios')} /></BottomSheet>)}
       {firstWarMoment && (isDesktop ? <aside className="glass scrollbar-thin absolute bottom-4 right-4 top-[88px] z-20 overflow-y-auto rounded-[28px]" style={{ width: PANEL_WIDTH }} aria-label={lang === 'de' ? 'Erster Weltkrieg' : 'World War I'}><Ww1Panel moment={firstWarMoment} lang={lang} selectedEventId={selectedWw1EventId} onYearChange={changeHistoryYear} onFocus={(lat, lng) => setStoryFocus({ lat, lng, altitude: 0.85 })} onClose={() => { navigate('/scenarios'); setStoryFocus(null) }} /></aside> : <BottomSheet snap={snap} onSnapChange={setSnap} onDismiss={() => navigate('/scenarios')} label={lang === 'de' ? 'Erster Weltkrieg' : 'World War I'}><Ww1Panel moment={firstWarMoment} lang={lang} selectedEventId={selectedWw1EventId} onYearChange={changeHistoryYear} onFocus={(lat, lng) => setStoryFocus({ lat, lng, altitude: 0.85 })} onClose={() => navigate('/scenarios')} /></BottomSheet>)}
-      {historyYear != null && historicalEntity && history && !ww2Open && !ww1Open &&
+      {explorerOpen && historicalSelected &&
         (isDesktop ? (
-          <aside key={historicalEntity.code} aria-label={historicalEntity.name} className="glass scrollbar-thin animate-rise absolute bottom-4 right-4 top-[88px] z-20 overflow-y-auto rounded-[28px]" style={{ width: PANEL_WIDTH }}>
-            <HistoricalPreview entity={historicalEntity} year={historyYear} onClose={() => setHistoricalSelected(null)} />
+          <aside key={historicalSelected} aria-label={explorerName} className="glass scrollbar-thin animate-rise absolute bottom-4 right-4 top-[88px] z-20 overflow-y-auto rounded-[28px]" style={{ width: PANEL_WIDTH }}>
+            {explorerPreview}
           </aside>
         ) : (
-          <BottomSheet snap={snap} onSnapChange={setSnap} onDismiss={() => setHistoricalSelected(null)} label={historicalEntity.name}>
-            <HistoricalPreview entity={historicalEntity} year={historyYear} onClose={() => setHistoricalSelected(null)} />
+          <BottomSheet snap={snap} onSnapChange={setSnap} onDismiss={() => setHistoricalSelected(null)} label={explorerName}>
+            {explorerPreview}
           </BottomSheet>
         ))}
       {historyYear == null && country && !conflictsOpen &&

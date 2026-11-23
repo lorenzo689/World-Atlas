@@ -47,6 +47,46 @@ that year. The statistical country and the CShapes footprint may differ. To avoi
 matches, the viewer withholds statistics before 1992 and for known state successions until a
 comparable modern state exists. These limits also apply on the static GitHub Pages demo.
 
+### Historical Country Explorer
+
+Selecting a state in Changing borders adds a **Development in the dataset** section to its panel.
+It is derived in the browser from the period properties of `historical-topology.json`
+(`code`, `period`, inclusive `start`/`end`, `name`, `capital`) plus `historical-flags.json`, once per
+load and without decoding geometry or building snapshots (`src/lib/historyEntity.ts`). Each period
+gets a hash of its topology arcs, so the panel can say whether the **dataset geometry** of two
+periods is identical; it does not measure or classify the difference.
+
+- **Map date**: the shown 1 January snapshot; the current dataset period with its exact dates.
+- **Periods**: every record for the identifier, with the 1 January maps it covers (some short
+  periods contain no 1 January and never appear on the map), capital, changed geometry or capital,
+  and gaps in the dataset (for example H365 has no record from 2–3 June 1940 and from 28 June to
+  31 December 1940). A new period is a new source record or a processing split; it is **not** by
+  itself a regime change or a border shift. Periods starting 1939–1945 are marked as possibly split
+  by the WWII annexation correction; Germany 1939–1945 and Danzig are marked as OHM geometry.
+- **Labels**: the atlas labels per snapshot year (`historicalName`, which clarifies the single
+  CShapes label for Germany, East/West Germany and Russia/the Soviet Union) next to the CShapes label.
+  Known limitation, unchanged pending review: these labels switch on the year, not the date, so
+  `H260` is labelled “West Germany” on 1 January 1949 although the Federal Republic was founded on
+  23 May 1949, and `H365` is labelled “Soviet Union” on 1 January 1922 although the Union treaty dates
+  from 30 December 1922. Correcting them is a classification change that needs separate approval.
+- **Flags**: the dated FlagsData records of the identifier; the one valid on the map date is marked.
+- **Documented events**: the four curated `HISTORY_EVENTS`, linked to the identifiers their own
+  description names (`EVENT_ENTITIES`), with event date and primary source shown apart from the
+  1 January snapshots used to compare them.
+- **Absent identifier**: when the shown year has no record, the selection stays open and says
+  “not in this snapshot”; the dataset’s silence is not presented as evidence that the state did not
+  exist. Buttons lead to the nearest earlier and later snapshots that contain it.
+- **Comparison**: from the panel, a period or event sets the existing `compareYear` (two globes,
+  shared camera, border and area difference). The panel compares the identifier on both map dates:
+  presence, label, period, capital and whether the dataset geometry is identical. When both
+  snapshots contain the same identifier it states that CShapes can keep one identifier across
+  successive regimes, so this is no evidence of state continuity. It never reports gains, losses or
+  ownership for the identifier; a missing side makes the geometry “not comparable”.
+
+Year changes use the Time Machine’s year (there is no second year state). The selection is shared
+as `entity=<identifier>` together with `year` and `compare` (Changing borders only; see
+[SCENARIOS.md](SCENARIOS.md)).
+
 The comparison control shows two selected snapshots side by side. Rose lines show removed boundary
 segments; teal lines show added segments. Translucent areas show geometric losses and gains for
 states present in both snapshots. A Web Worker computes the polygon difference, debounced while
