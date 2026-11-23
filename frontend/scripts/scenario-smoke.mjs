@@ -24,8 +24,9 @@ try {
     const triangles = await page.evaluate(() => window.__globeDetail().territoryTriangles)
     if (!triangles || triangles > 100000) throw new Error(`Regional occupation mesh exceeds budget: ${triangles}`)
   }
-  await open('today', { year: '1942', compare: '1914', ww2: '1' })
+  await open('today', { year: '1942', compare: '1914', ww2: '1', entity: 'H265' })
   if (new URL(page.url()).searchParams.has('year')) throw new Error('Today retained a historical year')
+  if (new URL(page.url()).searchParams.has('entity') || await page.getByTestId('entity-development').count()) throw new Error('Today retained a historical entity')
   if (await page.getByRole('slider', { name: /Year|Jahr/ }).count()) throw new Error('Today exposes a historical timeline')
   await areas()
   const panel = page.getByTestId('territory-panel').first()
@@ -54,8 +55,9 @@ try {
   await page.getByRole('group', { name: /War year|Kriegsjahr/ }).getByRole('button', { name: '1918' }).click()
   await panel.locator('time[datetime="1918-05-01"]').waitFor()
   await areas()
-  await open('ww2', { year: '1942', compare: '1914' })
+  await open('ww2', { year: '1942', compare: '1914', entity: 'H255' })
   if (new URL(page.url()).searchParams.has('compare')) throw new Error('WWII retained comparison')
+  if (new URL(page.url()).searchParams.has('entity') || await page.getByTestId('entity-development').count()) throw new Error('WWII retained a historical entity')
   await areas()
   if (requests.slice(historicRequests).some((url) => /\/api\/conflicts(?:\?|$)/.test(url))) throw new Error('Historical scenario requested current conflict data')
   await page.getByRole('group', { name: /Theater|Kriegsschauplatz/ }).getByRole('button', { name: /Asia|Asien/ }).click()
@@ -107,7 +109,13 @@ try {
   await mobile.goto(mobileUrl.href, { waitUntil: 'domcontentloaded' })
   await mobile.getByTestId('territory-date').waitFor({ timeout: 120000 })
   if (await mobile.evaluate(() => document.documentElement.scrollWidth > innerWidth)) throw new Error('Mobile scenario overflows horizontally')
+  // Country explorer on a phone: the bottom sheet holds the dataset chronology without overflow.
+  const explorerUrl = new URL(base); explorerUrl.search = 'scenario=borders&year=1990&entity=H265'
+  await mobile.goto(explorerUrl.href, { waitUntil: 'domcontentloaded' })
+  await mobile.getByTestId('entity-development').waitFor({ state: 'attached', timeout: 120000 })
+  await mobile.getByRole('heading', { name: 'East Germany', exact: true }).waitFor()
+  if (await mobile.evaluate(() => document.documentElement.scrollWidth > innerWidth)) throw new Error('Mobile country explorer overflows horizontally')
   await mobile.close()
   if (errors.length) throw new Error(errors.join('; '))
-  console.log('Scenario browser smoke: isolated capabilities, URL normalization, worker geometry, actor visibility, theater filtering, sources, unknown years, camera reset shortcut and mobile: PASS')
+  console.log('Scenario browser smoke: isolated capabilities, URL normalization, worker geometry, actor visibility, theater filtering, sources, unknown years, camera reset shortcut, entity isolation and mobile (incl. country explorer): PASS')
 } finally { await browser.close() }

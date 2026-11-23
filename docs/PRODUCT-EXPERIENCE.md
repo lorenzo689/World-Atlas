@@ -51,7 +51,13 @@ interpolated intermediate borders. Controls, all keyboard-operable and labelled 
 - Camera flights to an event are instant when `prefers-reduced-motion` is set; the controls use no
   motion beyond colour transitions, which are disabled with reduced motion.
 
-Covered by `src/components/__tests__/HistoricalTimeline.test.tsx`, `src/lib/__tests__/timeMachine.test.ts`
+- **Country explorer**: selecting a state opens its dataset chronology (periods, labels, capitals,
+  dated flags, documented events, sources) with buttons that move the timeline year, step between
+  dataset periods or start a comparison. The selection stays open in years without a record and is
+  shareable with `entity=`; Back/Forward restore it. Method and limits: [HISTORY.md](HISTORY.md).
+
+Covered by `src/components/__tests__/HistoricalTimeline.test.tsx`, `src/lib/__tests__/timeMachine.test.ts`,
+`src/components/__tests__/HistoricalDevelopment.test.tsx`, `src/lib/__tests__/historyEntity.test.ts`
 and `npm run smoke:history`.
 
 The First World War view uses CShapes 2.0 boundaries at 1 January of the selected year and a small,

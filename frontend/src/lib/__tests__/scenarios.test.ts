@@ -19,6 +19,13 @@ describe('scenario boundaries', () => {
     expect(readScenarioLink('?scenario=__proto__&year=1942abc').scenario.id).toBe('borders')
     expect(readScenarioLink('?scenario=constructor').scenario.id).toBe('today')
   })
+  it('keeps a selected historical entity only in Changing borders and drops malformed values', () => {
+    expect(readScenarioLink('?scenario=borders&year=1990&entity=H265')).toMatchObject({ year: 1990, entity: 'H265' })
+    expect(readScenarioLink('?year=1990&compare=1991&entity=H260')).toMatchObject({ compare: 1991, entity: 'H260' })
+    for (const other of ['today', 'ww1', 'ww2']) expect(readScenarioLink(`?scenario=${other}&year=1942&entity=H265`).entity).toBeNull()
+    expect(readScenarioLink('?entity=H265').entity).toBeNull()
+    for (const bad of ['h265', '%3Cscript%3E', 'H265%3Bx', 'H', '']) expect(readScenarioLink(`?scenario=borders&year=1990&entity=${bad}`).entity).toBeNull()
+  })
   it('uses canonical links with only valid capabilities', () => {
     for (const scenario of Object.values(SCENARIOS)) {
       expect(readScenarioLink(scenarioHref(scenario.id).split('?')[1]).scenario.id).toBe(scenario.id)

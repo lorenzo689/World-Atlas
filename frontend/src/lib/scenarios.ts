@@ -34,7 +34,15 @@ export function readScenarioLink(search: string) {
   const number = (key: string) => { const v = params.get(key); return v && /^\d{4}$/.test(v) ? Number(v) : null }
   const year = scenarioYear(scenario, number('year'))
   const compare = scenario.capabilities.comparison && number('compare') != null ? scenarioYear(scenario, number('compare')) : null
-  return { scenario, year, compare }
+  // A selected historical dataset identifier (Historical Country Explorer) belongs to Changing borders
+  // only; other scenarios never inherit it. Existence in the dataset is checked once it has loaded.
+  const entity = scenario.capabilities.timeline ? parseEntityParam(params.get('entity')) : null
+  return { scenario, year, compare, entity }
+}
+
+/** Dataset identifiers are "H" + Gleditsch–Ward number, or a few named reconstructions (HDANZIG). */
+export function parseEntityParam(value: string | null): string | null {
+  return value && /^H[0-9A-Z]{1,12}$/.test(value) ? value : null
 }
 
 export function scenarioHref(id: ScenarioId, year?: number | null): string {
