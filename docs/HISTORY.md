@@ -93,8 +93,8 @@ The **Events** control in Changing borders opens a catalog of dated events
 (`src/lib/historicalEvents.ts`). It adapts the existing catalogs without changing them:
 the four Changing-borders lessons (`HISTORY_EVENTS`), the WWI events (`WW1_MOMENTS`) and the WWII
 events (`WW2_MOMENTS`), plus three events added with a checked source. Merging keeps one entry per id
-and per (date, English title). Region (Europe, Africa, Asia & Pacific, Americas) and theme (war,
-statehood, diplomacy) are filter groupings, not historical classifications.
+and per (date, English title). Region (Europe, Africa, Middle East, Asia & Pacific, Americas) and
+theme (war, statehood, diplomacy, politics) are filter groupings, not historical classifications.
 
 | Added event | Date | Source checked for the date |
 | --- | --- | --- |
@@ -105,6 +105,48 @@ statehood, diplomacy) are filter groupings, not historical classifications.
 None of these pages names a place, so these events are listed without a globe marker. Candidate
 events whose source could not be fetched, or whose source gave a different date (Eritrea), were
 not added.
+
+#### Global expansion (37 events, `src/lib/historicalEventsCatalog.ts`)
+
+Each date below was read on the cited U.S. Office of the Historian page
+(`https://history.state.gov/countries/<slug>` or `.../milestones/<period>/<essay>`); the unit test
+`historicalEvents.test.ts` pins every date and URL. Where a country page dates only the United
+States' **recognition** of a state, the event is titled and described as that recognition
+("United States recognizes …") and says that independence and recognition can fall on different
+days; such a date is never presented as an independence day. No source names a place precise enough
+for coordinates, so these events have no marker. A new region **Middle East** and a theme
+**politics** (revolutions, coups, constitutional change) were added for filtering.
+
+| Region | Dated by the event itself | Dated by U.S. recognition |
+| --- | --- | --- |
+| Africa | Libya declares independence (24 Dec 1951), France recognizes Moroccan independence (2 Mar 1956; U.S. on 7 Mar), South Africa declared a republic (31 May 1961), Kenya independent (12 Dec 1963), Portugal grants Angola independence (11 Nov 1975) | Sudan (1 Jan 1956), Tunisia (22 Mar 1956), Guinea (1 Nov 1958), Congo (30 Jun 1960), Nigeria (1 Oct 1960), Tanganyika (9 Dec 1961), Algeria (3 Jul 1962), Mozambique (25 Jun 1975), Zimbabwe (18 Apr 1980), Namibia (21 Mar 1990) |
+| Asia | People's Republic of China proclaimed (1 Oct 1949) | Philippines (4 Jul 1946), Burma (4 Jan 1948), Ceylon (4 Feb 1948), Indonesia (28 Dec 1949), Singapore (11 Aug 1965) |
+| Middle East | Kingdom of Saudi Arabia named by decree (18 Sep 1932), Transjordan declares independence (25 May 1946), State of Israel proclaimed (14 May 1948), Israeli attack across Sinai in the Suez Crisis (29 Oct 1956), Six-Day War begins (5 Jun 1967), Camp David Summit begins (5 Sep 1978), Iraq invades Kuwait (2 Aug 1990), Oslo Declaration of Principles signed (13 Sep 1993) | — |
+| Americas | U.S. Congress votes for war with Spain (25 Apr 1898), Panama declares independence (3 Nov 1903), Jamaica (6 Aug 1962) and Trinidad and Tobago (31 Aug 1962) independent, Khrushchev announces dismantling of missiles in Cuba (28 Oct 1962), military coup in Chile (11 Sep 1973), Panama Canal Treaties signed (7 Sep 1977), Belize independent (21 Sep 1981) | — |
+
+Checked but **not added**:
+- The page gave only a month or a year: Korean War (June 1950), Malaysia (1963), Treaty of
+  Portsmouth (September 1905), Panama Canal opening (1914), Cuban Revolution (1959).
+- The page gave a different event or date than the candidate: South Korea (U.S. recognition
+  1 Jan 1949), Lebanon (recognition 8 Sep 1944), Bangladesh (recognition 4 Apr 1972).
+- The page has no date for the event: Mexican Revolution (1910), South Africa 1994, Latin American
+  returns to democracy.
+- The CIA World Factbook, tried as a second source for independence dates, now serves only a
+  retirement notice. Its pages could not be used.
+
+The Milestones essays are marked as retired by the Office of the Historian but are still served;
+their source labels name the Milestones period, not the essay title.
+
+#### Regional history packs
+
+Four curated packs are guided tours with an introduction, listed as cards with period and step
+count: **Africa Through Independence** (17 steps, 1951–2011), **Asia in Transformation** (8,
+1946–1965), **Middle East: A Changing Region** (8, 1932–1993) and **Americas: Political Turning
+Points** (8, 1898–1981). Their event lists are explicit, chronological and drawn only from the
+catalog; the thematic "States dissolve and emerge" tour keeps its original six events. Packs share
+as `tour=<id>&event=<id>` and show the introduction and a copy-link control while running. Their
+introductions repeat that war, occupation and military control are events, not changes of state
+borders, and that the maps show 1 January borders.
 
 - **Markers**: only events whose source catalog gives a place anchor (the WWI and WWII events) get
   a marker, and only while the explorer is open; the four lessons carry a camera focus, not a place.

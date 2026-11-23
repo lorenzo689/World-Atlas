@@ -31,17 +31,17 @@ describe('EventExplorer list', () => {
   it('lists all events chronologically with the real result count', () => {
     render(<Harness />)
     expect(screen.getByTestId('event-count')).toHaveTextContent(`${total} of ${total} events`)
-    expect(listTitles()[0]).toBe('Assassination in Sarajevo')
+    expect(listTitles()[0]).toBe('U.S. Congress votes for war with Spain')
     expect(listTitles().at(-1)).toBe('South Sudan independence')
   })
 
   it('filters by region, theme, period and search, and shows an empty state with reset', () => {
     render(<Harness />)
     fireEvent.click(within(screen.getByRole('group', { name: 'Region' })).getByRole('button', { name: 'Africa' }))
-    expect(screen.getByTestId('event-count')).toHaveTextContent(`3 of ${total} events`)
-    expect(listTitles()).toEqual(['Second Battle of El Alamein', 'Ghana becomes independent', 'South Sudan independence'])
+    expect(screen.getByTestId('event-count')).toHaveTextContent(`18 of ${total} events`)
+    expect(listTitles().slice(0, 3)).toEqual(['Second Battle of El Alamein', 'Libya declares independence', 'United States recognizes Sudan'])
     fireEvent.click(within(screen.getByRole('group', { name: 'Theme' })).getByRole('button', { name: 'Statehood' }))
-    expect(screen.getByTestId('event-count')).toHaveTextContent(`2 of ${total} events`)
+    expect(screen.getByTestId('event-count')).toHaveTextContent(`17 of ${total} events`)
     const from = screen.getByRole('spinbutton', { name: 'From year' })
     fireEvent.change(from, { target: { value: '2000' } })
     fireEvent.blur(from)
@@ -152,5 +152,34 @@ describe('EventExplorer in German', () => {
     expect(screen.getByTestId('event-date')).toHaveTextContent('Ereignisdatum: 22. Juni 1941')
     expect(screen.getByTestId('event-relation')).toHaveTextContent('172 Tage vor dem Ereignis')
     expect(screen.getByTestId('event-count')).toHaveTextContent(`${total} von ${total} Ereignissen`)
+  })
+})
+
+describe('EventExplorer history packs', () => {
+  it('lists the four regional packs with period, step count and introduction, and starts one', () => {
+    const onTourStart = vi.fn()
+    render(<Harness overrides={{ onTourStart }} />)
+    const packs = within(screen.getByTestId('history-packs')).getAllByRole('button')
+    expect(packs).toHaveLength(4)
+    expect(packs[0]).toHaveTextContent('Africa Through Independence')
+    expect(packs[0]).toHaveTextContent('1951–2011 · 17 steps')
+    expect(packs[0]).toHaveTextContent('recognition and independence can fall on different days')
+    fireEvent.click(screen.getByRole('button', { name: 'Start history pack: Middle East: A Changing Region' }))
+    expect(onTourStart).toHaveBeenCalledWith('middle-east')
+  })
+
+  it('shows the introduction and a copy-link control while a pack runs', () => {
+    const tour: TourState = { id: 'americas-turning-points', eventIds: ['spanish-american-war-1898', 'panama-1903'], index: 0, playing: false }
+    render(<Harness year={1898} selected="spanish-american-war-1898" tour={tour} />)
+    expect(screen.getByTestId('tour-intro')).toHaveTextContent('From 1898 to 1981')
+    expect(screen.getByRole('button', { name: 'Copy tour link' })).toBeInTheDocument()
+  })
+
+  it('offers the Middle East region and German pack names', () => {
+    useLang.setState({ lang: 'de' })
+    render(<Harness />)
+    expect(within(screen.getByRole('group', { name: 'Region' })).getByRole('button', { name: 'Naher Osten' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Geschichtspaket starten: Afrika auf dem Weg zur Unabhängigkeit' })).toBeInTheDocument()
+    expect(within(screen.getByTestId('history-packs')).getAllByRole('button')[0]).toHaveTextContent('17 Schritte')
   })
 })

@@ -1,4 +1,4 @@
-import { useId } from 'react'
+import { useId, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Pause, Play, Square, X } from 'lucide-react'
 import { useLang, type Lang } from '@/i18n'
@@ -47,8 +47,11 @@ const TEXT = {
   en: {
     title: 'Historical events', close: 'Close events',
     search: 'Search events', region: 'Region', theme: 'Theme', period: 'Period', from: 'From year', to: 'To year',
-    regions: { europe: 'Europe', africa: 'Africa', 'asia-pacific': 'Asia & Pacific', americas: 'Americas' } as Record<EventRegion, string>,
-    themes: { war: 'War', statehood: 'Statehood', diplomacy: 'Diplomacy' } as Record<EventTheme, string>,
+    regions: { europe: 'Europe', africa: 'Africa', 'middle-east': 'Middle East', 'asia-pacific': 'Asia & Pacific', americas: 'Americas' } as Record<EventRegion, string>,
+    themes: { war: 'War', statehood: 'Statehood', diplomacy: 'Diplomacy', politics: 'Politics' } as Record<EventTheme, string>,
+    packs: 'Regional history packs', otherTours: 'Thematic tours', steps: (n: number) => `${n} steps`,
+    startPack: (title: string) => `Start history pack: ${title}`,
+    copyLink: 'Copy tour link', copied: 'Link copied', copyFailed: 'Copying failed; copy the address from the browser bar.',
     count: (n: number, total: number) => `${n} of ${total} events`,
     empty: 'No event matches these filters.', reset: 'Reset filters',
     noPlace: 'no map position',
@@ -76,8 +79,11 @@ const TEXT = {
   de: {
     title: 'Historische Ereignisse', close: 'Ereignisse schließen',
     search: 'Ereignisse durchsuchen', region: 'Region', theme: 'Thema', period: 'Zeitraum', from: 'Ab Jahr', to: 'Bis Jahr',
-    regions: { europe: 'Europa', africa: 'Afrika', 'asia-pacific': 'Asien & Pazifik', americas: 'Amerika' } as Record<EventRegion, string>,
-    themes: { war: 'Krieg', statehood: 'Staatlichkeit', diplomacy: 'Diplomatie' } as Record<EventTheme, string>,
+    regions: { europe: 'Europa', africa: 'Afrika', 'middle-east': 'Naher Osten', 'asia-pacific': 'Asien & Pazifik', americas: 'Amerika' } as Record<EventRegion, string>,
+    themes: { war: 'Krieg', statehood: 'Staatlichkeit', diplomacy: 'Diplomatie', politics: 'Politik' } as Record<EventTheme, string>,
+    packs: 'Regionale Geschichtspakete', otherTours: 'Thematische Zeitreisen', steps: (n: number) => `${n} Schritte`,
+    startPack: (title: string) => `Geschichtspaket starten: ${title}`,
+    copyLink: 'Link zur Zeitreise kopieren', copied: 'Link kopiert', copyFailed: 'Kopieren fehlgeschlagen; kopiere die Adresse aus der Browserzeile.',
     count: (n: number, total: number) => `${n} von ${total} Ereignissen`,
     empty: 'Kein Ereignis passt zu diesen Filtern.', reset: 'Filter zurücksetzen',
     noPlace: 'ohne Kartenposition',
@@ -114,6 +120,16 @@ export function EventExplorer(props: Props) {
   const fmt = (date: string) => formatHistoricalDate(date, lang)
   const jan1 = (y: number) => fmt(`${y}-01-01`)
   const selected = eventById(selectedId)
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const runningTour = tour && tour.id !== 'results' ? EVENT_TOURS.find((t) => t.id === tour.id) ?? null : null
+  const span = (ids: string[]) => {
+    const years = ids.map((id) => eventById(id)?.date.slice(0, 4)).filter(Boolean)
+    return years.length ? `${years[0]}–${years.at(-1)}` : ''
+  }
+  const copyTourLink = () => {
+    setCopyState('idle')
+    navigator.clipboard?.writeText(window.location.href).then(() => setCopyState('copied'), () => setCopyState('failed')) ?? setCopyState('failed')
+  }
   const toggle = <T,>(list: T[], value: T) => list.includes(value) ? list.filter((v) => v !== value) : [...list, value]
   const setYear = (key: 'from' | 'to', value: string) => {
     const n = Number(value)
@@ -134,7 +150,8 @@ export function EventExplorer(props: Props) {
         <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{x.tours}</h3>
         {tour ? (
           <div className="mt-2">
-            <p className="font-medium">{tour.id === 'results' ? x.tourResults(tour.eventIds.length) : EVENT_TOURS.find((t) => t.id === tour.id)?.title[lang]}</p>
+            <p className="font-medium">{tour.id === 'results' ? x.tourResults(tour.eventIds.length) : runningTour?.title[lang]}</p>
+            {runningTour && <p className="mt-1 text-xs text-muted-foreground" data-testid="tour-intro">{runningTour.description[lang]}</p>}
             <p className="mt-1 text-xs text-muted-foreground" aria-live="polite" data-testid="tour-step">{x.step(tour.index + 1, tour.eventIds.length)}</p>
             <div role="progressbar" aria-label={x.progress} aria-valuemin={1} aria-valuemax={tour.eventIds.length} aria-valuenow={tour.index + 1}
               className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
@@ -147,13 +164,31 @@ export function EventExplorer(props: Props) {
               </button>
               <button type="button" className={chip} disabled={tour.index >= tour.eventIds.length - 1} onClick={() => props.onTourStep(tour.index + 1)}>{x.next} →</button>
               <button type="button" className={`${chip} flex items-center gap-1`} onClick={props.onTourEnd}><Square aria-hidden className="size-3" />{x.end}</button>
+              {runningTour && <button type="button" className={chip} onClick={copyTourLink}>{x.copyLink}</button>}
             </div>
+            <p className="mt-1 text-[11px] text-muted-foreground" aria-live="polite">{copyState === 'copied' ? x.copied : copyState === 'failed' ? x.copyFailed : ''}</p>
           </div>
         ) : (
-          <div className="mt-2 flex flex-wrap gap-2">
-            {EVENT_TOURS.map((t) => <button key={t.id} type="button" className={chip} title={t.description[lang]} onClick={() => props.onTourStart(t.id)}>{t.title[lang]}</button>)}
-            {results.length >= 2 && <button type="button" className={chip} onClick={() => props.onTourStart('results')}>{x.tourResults(results.length)}</button>}
-          </div>
+          <>
+            <h4 className="mt-2 text-xs font-medium">{x.packs}</h4>
+            <ul className="mt-1 grid gap-2" data-testid="history-packs">
+              {EVENT_TOURS.filter((t) => t.kind === 'pack').map((t) => (
+                <li key={t.id}>
+                  <button type="button" aria-label={x.startPack(t.title[lang])} onClick={() => props.onTourStart(t.id)}
+                    className="w-full rounded-xl border border-border px-3 py-2 text-left hover:border-primary">
+                    <span className="block font-medium">{t.title[lang]}</span>
+                    <span className="tabular block text-[11px] text-muted-foreground">{span(t.eventIds)} · {x.steps(t.eventIds.length)}</span>
+                    <span className="mt-1 block text-xs text-muted-foreground">{t.description[lang]}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <h4 className="mt-3 text-xs font-medium">{x.otherTours}</h4>
+            <div className="mt-1 flex flex-wrap gap-2">
+              {EVENT_TOURS.filter((t) => t.kind === 'tour').map((t) => <button key={t.id} type="button" className={chip} title={t.description[lang]} onClick={() => props.onTourStart(t.id)}>{t.title[lang]}</button>)}
+              {results.length >= 2 && <button type="button" className={chip} onClick={() => props.onTourStart('results')}>{x.tourResults(results.length)}</button>}
+            </div>
+          </>
         )}
       </div>
 

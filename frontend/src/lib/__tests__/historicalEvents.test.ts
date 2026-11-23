@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { HISTORY_EVENTS } from '../historyCompare'
 import { WW1_MOMENTS } from '../ww1'
 import { WW2_MOMENTS } from '../ww2'
+import { ADDITIONAL_EVENTS } from '../historicalEventsCatalog'
 import {
   EMPTY_FILTER, EVENT_TOURS, HISTORICAL_EVENTS, REGIONS, THEMES, eventById, filterEvents, mapRelation,
   mapYearForEvent, mergeEvents, snapshotYears, tourById, type HistoricalEvent,
@@ -15,7 +16,8 @@ describe('unified event catalog', () => {
     const ids = HISTORICAL_EVENTS.map((e) => e.id)
     expect(new Set(ids).size).toBe(ids.length)
     for (const id of [...HISTORY_EVENTS.map((e) => e.id), ...ww1.map((e) => e.id), ...ww2.map((e) => e.id)]) expect(ids).toContain(id)
-    expect(HISTORICAL_EVENTS).toHaveLength(HISTORY_EVENTS.length + ww1.length + ww2.length + 3)
+    expect(ADDITIONAL_EVENTS).toHaveLength(37)
+    expect(HISTORICAL_EVENTS).toHaveLength(HISTORY_EVENTS.length + ww1.length + ww2.length + 3 + ADDITIONAL_EVENTS.length)
     for (const id of ids) expect(id).toMatch(/^[a-z0-9-]{1,40}$/)
     const dates = HISTORICAL_EVENTS.map((e) => e.date)
     expect([...dates].sort()).toEqual(dates)
@@ -92,9 +94,9 @@ describe('unified event catalog', () => {
 describe('filtering, search and sorting', () => {
   it('filters by region, theme and period and keeps chronological order', () => {
     const africa = filterEvents(HISTORICAL_EVENTS, { ...EMPTY_FILTER, regions: ['africa'] })
-    expect(africa.map((e) => e.id)).toEqual(['el-alamein', 'ghana-1957', 'south-sudan'])
+    expect(africa.map((e) => e.id)).toEqual(['el-alamein', 'libya-1951', 'sudan-1956', 'morocco-1956', 'tunisia-1956', 'ghana-1957', 'guinea-1958', 'congo-1960', 'nigeria-1960', 'south-africa-republic-1961', 'tanganyika-1961', 'algeria-1962', 'kenya-1963', 'mozambique-1975', 'angola-1975', 'zimbabwe-1980', 'namibia-1990', 'south-sudan'])
     const statehood = filterEvents(HISTORICAL_EVENTS, { ...EMPTY_FILTER, themes: ['statehood'], from: 1990, to: 1993 })
-    expect(statehood.map((e) => e.id)).toEqual(['german-unity', 'soviet-union', 'czechoslovakia'])
+    expect(statehood.map((e) => e.id)).toEqual(['namibia-1990', 'german-unity', 'soviet-union', 'czechoslovakia'])
     expect(filterEvents(HISTORICAL_EVENTS, { ...EMPTY_FILTER, from: 1914, to: 1918 }).every((e) => e.origin === 'ww1')).toBe(true)
   })
 
@@ -145,5 +147,117 @@ describe('curated tours', () => {
     expect(tourById('asia-pacific-ww2')!.eventIds).toEqual(['pearl-harbor', 'midway', 'okinawa-1945', 'san-francisco-treaty-1951'])
     expect(tourById('statehood')!.eventIds).toEqual(['india-pakistan-1947', 'ghana-1957', 'german-unity', 'soviet-union', 'czechoslovakia', 'south-sudan'])
     expect(tourById('nope')).toBeNull()
+  })
+})
+
+describe('global expansion: sourced additions', () => {
+  // Each date was read on the cited history.state.gov page (docs/HISTORY.md, verification log).
+  const VERIFIED: Record<string, [string, string]> = {
+    'libya-1951': ['1951-12-24', 'countries/libya'], 'sudan-1956': ['1956-01-01', 'countries/sudan'],
+    'morocco-1956': ['1956-03-02', 'countries/morocco'], 'tunisia-1956': ['1956-03-22', 'countries/tunisia'],
+    'guinea-1958': ['1958-11-01', 'countries/guinea'], 'congo-1960': ['1960-06-30', 'countries/congo-democratic-republic'],
+    'nigeria-1960': ['1960-10-01', 'countries/nigeria'], 'south-africa-republic-1961': ['1961-05-31', 'countries/south-africa'],
+    'tanganyika-1961': ['1961-12-09', 'countries/tanzania'], 'algeria-1962': ['1962-07-03', 'countries/algeria'],
+    'kenya-1963': ['1963-12-12', 'countries/kenya'], 'mozambique-1975': ['1975-06-25', 'countries/mozambique'],
+    'angola-1975': ['1975-11-11', 'countries/angola'], 'zimbabwe-1980': ['1980-04-18', 'countries/zimbabwe'],
+    'namibia-1990': ['1990-03-21', 'countries/namibia'],
+    'philippines-1946': ['1946-07-04', 'countries/philippines'], 'burma-1948': ['1948-01-04', 'countries/burma'],
+    'ceylon-1948': ['1948-02-04', 'countries/sri-lanka'], 'prc-1949': ['1949-10-01', 'milestones/1945-1952/chinese-rev'],
+    'indonesia-1949': ['1949-12-28', 'countries/indonesia'], 'singapore-1965': ['1965-08-11', 'countries/singapore'],
+    'saudi-arabia-1932': ['1932-09-18', 'countries/saudi-arabia'], 'jordan-1946': ['1946-05-25', 'countries/jordan'],
+    'israel-1948': ['1948-05-14', 'milestones/1945-1952/creation-israel'], 'suez-1956': ['1956-10-29', 'milestones/1953-1960/suez'],
+    'six-day-war-1967': ['1967-06-05', 'milestones/1961-1968/arab-israeli-war-1967'], 'camp-david-1978': ['1978-09-05', 'milestones/1977-1980/camp-david'],
+    'kuwait-invasion-1990': ['1990-08-02', 'milestones/1989-1992/gulf-war'], 'oslo-1993': ['1993-09-13', 'milestones/1993-2000/oslo'],
+    'spanish-american-war-1898': ['1898-04-25', 'milestones/1866-1898/spanish-american-war'], 'panama-1903': ['1903-11-03', 'milestones/1899-1913/panama-canal'],
+    'jamaica-1962': ['1962-08-06', 'countries/jamaica'], 'trinidad-tobago-1962': ['1962-08-31', 'countries/trinidad-and-tobago'],
+    'cuban-missile-crisis-1962': ['1962-10-28', 'milestones/1961-1968/cuban-missile-crisis'], 'chile-coup-1973': ['1973-09-11', 'milestones/1969-1976/allende'],
+    'panama-canal-treaties-1977': ['1977-09-07', 'milestones/1977-1980/panama-canal'], 'belize-1981': ['1981-09-21', 'countries/belize'],
+  }
+
+  it('pins the verified date and source page of every added event', () => {
+    expect(Object.keys(VERIFIED).sort()).toEqual(ADDITIONAL_EVENTS.map((e) => e.id).sort())
+    for (const e of ADDITIONAL_EVENTS) {
+      const [date, path] = VERIFIED[e.id]
+      expect(e.date).toBe(date)
+      expect(e.source.url).toBe(`https://history.state.gov/${path}`)
+      expect(e.source.title).toMatch(/^U\.S\. Office of the Historian · /)
+      expect(eventById(e.id)).toBe(e)
+    }
+  })
+
+  it('invents no places and claims no border change', () => {
+    for (const e of ADDITIONAL_EVENTS) {
+      expect(e.location).toBeNull()
+      expect(e.focus).toBeNull()
+      expect(e.compare).toBeNull()
+      expect(e.origin).toBe('catalog')
+    }
+    expect(eventById('six-day-war-1967')!.description.en).toMatch(/not shown as a change of state borders/)
+    expect(eventById('kuwait-invasion-1990')!.description.en).toMatch(/Occupation is not shown as a change of state borders/)
+  })
+
+  it('labels recognition-dated events as recognitions, not as independence days', () => {
+    const recognitions = ADDITIONAL_EVENTS.filter((e) => e.title.en.startsWith('United States recognizes'))
+    expect(recognitions.map((e) => e.id).sort()).toEqual(['algeria-1962', 'burma-1948', 'ceylon-1948', 'congo-1960', 'guinea-1958', 'indonesia-1949',
+      'mozambique-1975', 'namibia-1990', 'nigeria-1960', 'philippines-1946', 'singapore-1965', 'sudan-1956', 'tanganyika-1961', 'tunisia-1956', 'zimbabwe-1980'])
+    for (const e of recognitions) {
+      expect(e.title.de).toMatch(/^Vereinigte Staaten erkennen .+ an$/)
+      expect(e.description.en).toMatch(/independence and recognition can fall on different days/)
+      expect(e.description.de).toMatch(/Unabhängigkeit und Anerkennung können auf verschiedene Tage fallen/)
+      expect(e.themes).toEqual(['statehood', 'diplomacy'])
+    }
+  })
+
+  it('filters the new Middle East region and the politics theme', () => {
+    expect(filterEvents(HISTORICAL_EVENTS, { ...EMPTY_FILTER, regions: ['middle-east'] }).map((e) => e.id))
+      .toEqual(['saudi-arabia-1932', 'jordan-1946', 'israel-1948', 'suez-1956', 'six-day-war-1967', 'camp-david-1978', 'kuwait-invasion-1990', 'oslo-1993'])
+    expect(filterEvents(HISTORICAL_EVENTS, { ...EMPTY_FILTER, themes: ['politics'] }).map((e) => e.id))
+      .toEqual(['prc-1949', 'south-africa-republic-1961', 'chile-coup-1973'])
+  })
+})
+
+describe('regional history packs', () => {
+  const REGION_OF: Record<string, string> = { 'africa-independence': 'africa', 'asia-transformation': 'asia-pacific', 'middle-east': 'middle-east', 'americas-turning-points': 'americas' }
+
+  it('has four packs, each a chronological sequence of catalog events from its region', () => {
+    const packs = EVENT_TOURS.filter((t) => t.kind === 'pack')
+    expect(packs.map((t) => t.id)).toEqual(Object.keys(REGION_OF))
+    for (const p of packs) {
+      expect(p.eventIds.length).toBeGreaterThanOrEqual(8)
+      expect(new Set(p.eventIds).size).toBe(p.eventIds.length)
+      const events = p.eventIds.map((id) => eventById(id)!)
+      expect(events.every(Boolean)).toBe(true)
+      for (const e of events) expect(e.region).toBe(REGION_OF[p.id])
+      const dates = events.map((e) => e.date)
+      expect([...dates].sort()).toEqual(dates)
+      expect(p.description.en.length).toBeGreaterThan(40)
+      expect(p.description.de.length).toBeGreaterThan(40)
+    }
+    expect(tourById('africa-independence')!.eventIds[0]).toBe('libya-1951')
+    expect(tourById('africa-independence')!.eventIds.at(-1)).toBe('south-sudan')
+    expect(tourById('middle-east')!.description.en).toMatch(/never as changes of state borders/)
+  })
+
+  it('states in each pack introduction how many steps are dated by U.S. recognition', () => {
+    for (const p of EVENT_TOURS.filter((t) => t.kind === 'pack')) {
+      const recognized = p.eventIds.filter((id) => eventById(id)!.title.en.startsWith('United States recognizes')).length
+      if (recognized === 0) {
+        expect(p.description.en).not.toMatch(/recogni[sz]/i)
+        continue
+      }
+      expect(p.description.en).toContain(`${recognized} of the ${p.eventIds.length} steps are dated by the United States’ recognition, not by an independence day`)
+      expect(p.description.de).toContain(`${recognized} der ${p.eventIds.length} Schritte sind nach der Anerkennung durch die Vereinigten Staaten datiert, nicht nach einem Unabhängigkeitstag`)
+    }
+  })
+
+  it('does not present French recognition of Morocco as U.S. recognition', () => {
+    const morocco = eventById('morocco-1956')!
+    expect(morocco.date).toBe('1956-03-02')
+    expect(morocco.title.en).toBe('France recognizes Moroccan independence')
+    expect(morocco.description.en).toMatch(/The United States followed on 7 March/)
+  })
+
+  it('keeps the thematic tours unchanged by the larger catalog', () => {
+    expect(EVENT_TOURS.filter((t) => t.kind === 'tour').map((t) => t.id)).toEqual(['europe-ww1', 'europe-ww2', 'asia-pacific-ww2', 'statehood'])
   })
 })

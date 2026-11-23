@@ -59,7 +59,9 @@ interpolated intermediate borders. Controls, all keyboard-operable and labelled 
   with globe markers for events with a documented place, a detail that separates event date and map
   date, and guided time travel (curated tours or the current results) with previous/next, pause and
   end. Shareable with `event=` and `tour=`; selecting events and starting tours are Back/Forward
-  steps, tour steps replace the entry.
+  steps, tour steps replace the entry. Four regional history packs (Africa, Asia, Middle East,
+  Americas) appear as cards with period, step count and introduction; a running pack keeps its
+  introduction visible and offers a copy-link control.
 
 Covered by `src/components/__tests__/HistoricalTimeline.test.tsx`, `src/lib/__tests__/timeMachine.test.ts`,
 `src/components/__tests__/HistoricalDevelopment.test.tsx`, `src/lib/__tests__/historyEntity.test.ts`
