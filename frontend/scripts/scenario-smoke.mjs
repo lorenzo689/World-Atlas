@@ -66,6 +66,42 @@ try {
   await panel.getByRole('checkbox').first().check()
   await panel.getByRole('status').getByText(/No sourced|keine belegten/).waitFor()
   await page.waitForFunction(() => window.__globeDetail?.().territoryAreas === 0)
+  // "R" resets the camera to the default view (GlobeView DEFAULT_POSE) in every scenario, but not
+  // while typing in a search field or with a modifier, and never changes the scenario or year.
+  const pose = () => page.evaluate(() => window.__globePose())
+  const atDefault = () => page.waitForFunction(() => {
+    const p = window.__globePose()
+    return Math.abs(p.lat - 22) < 0.5 && Math.abs(p.lng - 12) < 0.5 && Math.abs(p.altitude - 2.3) < 0.05
+  }, null, { timeout: 15000 })
+  const zoomIn = async () => {
+    await page.mouse.move(600, 450)
+    for (let i = 0; i < 20 && (await pose()).altitude > 1.2; i++) { await page.mouse.wheel(0, -400); await page.waitForTimeout(80) }
+    await page.waitForTimeout(600)
+  }
+  const unchanged = async (before, label) => {
+    await page.waitForTimeout(1500)
+    const after = await pose()
+    if (Math.abs(after.altitude - before.altitude) > 0.05) throw new Error(`${label} moved the camera (${before.altitude} -> ${after.altitude})`)
+  }
+  for (const [scenario, extra] of [['today', {}], ['borders', { year: '1991' }], ['ww1', { year: '1916' }], ['ww2', { year: '1942' }]]) {
+    await open(scenario, extra)
+    const url = page.url()
+    await zoomIn()
+    if ((await pose()).altitude > 1.5) throw new Error(`${scenario}: could not move the camera away from the default view`)
+    const search = page.locator('input[role="combobox"], input[type="search"]').first()
+    await search.click()
+    let before = await pose()
+    await page.keyboard.press('r')
+    await unchanged(before, `${scenario}: R typed into the search field`)
+    await search.fill('')
+    await page.evaluate(() => document.activeElement instanceof HTMLElement && document.activeElement.blur())
+    before = await pose()
+    await page.keyboard.press('Alt+r')
+    await unchanged(before, `${scenario}: Alt+R`)
+    await page.keyboard.press('r')
+    await atDefault()
+    if (page.url() !== url) throw new Error(`${scenario}: camera reset changed the URL (${url} -> ${page.url()})`)
+  }
   const mobile = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
   const mobileUrl = new URL(base); mobileUrl.search = 'scenario=ww1&year=1916'
   await mobile.goto(mobileUrl.href, { waitUntil: 'domcontentloaded' })
@@ -73,5 +109,5 @@ try {
   if (await mobile.evaluate(() => document.documentElement.scrollWidth > innerWidth)) throw new Error('Mobile scenario overflows horizontally')
   await mobile.close()
   if (errors.length) throw new Error(errors.join('; '))
-  console.log('Scenario browser smoke: isolated capabilities, URL normalization, worker geometry, actor visibility, theater filtering, sources, unknown years and mobile: PASS')
+  console.log('Scenario browser smoke: isolated capabilities, URL normalization, worker geometry, actor visibility, theater filtering, sources, unknown years, camera reset shortcut and mobile: PASS')
 } finally { await browser.close() }
