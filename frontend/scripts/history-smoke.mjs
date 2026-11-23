@@ -261,6 +261,24 @@ try {
   await page.getByRole('button', { name: /^(Events|Ereignisse)$/ }).click()
   await events.waitFor({ state: 'detached' })
   await page.waitForFunction(() => window.__globeDetail?.().markers === 0)
+  // Regional history packs: start from the pack card, introduction, progress, map year rules
+  // (an event on 1 January is on that day's map) and a deep link into the middle of a pack.
+  await page.getByRole('button', { name: /^(Events|Ereignisse)$/ }).click()
+  await events.getByRole('button', { name: /^(Start history pack: Africa Through Independence|Geschichtspaket starten: Afrika auf dem Weg zur Unabhängigkeit)$/ }).click()
+  await events.getByTestId('tour-step').getByText(/Step 1 of 17|Schritt 1 von 17/).waitFor()
+  await events.getByRole('button', { name: /^(Pause tour|Zeitreise pausieren)$/ }).click()
+  await events.getByTestId('tour-intro').getByText(/recognition and independence can fall on different days|Anerkennung und Unabhängigkeit können auf verschiedene Tage fallen/).waitFor()
+  await events.getByRole('progressbar').waitFor()
+  await showsYear(1952)
+  await page.waitForURL(/event=libya-1951.*tour=africa-independence/)
+  await events.getByRole('button', { name: /Following event|Folgendes Ereignis/ }).click()
+  await events.getByTestId('tour-step').getByText(/Step 2 of 17|Schritt 2 von 17/).waitFor()
+  await showsYear(1956)
+  await events.getByTestId('event-relation').getByText(/shows the event day|zeigt den Ereignistag/).waitFor()
+  await explore({ year: '1968', event: 'six-day-war-1967', tour: 'middle-east' })
+  await events.getByTestId('tour-step').getByText(/Step 5 of 8|Schritt 5 von 8/).waitFor()
+  await events.getByTestId('event-detail').getByText(/Six-Day War begins|Beginn des Sechstagekriegs/).first().waitFor()
+  await events.getByTestId('tour-intro').waitFor()
   for (const query of [{ event: 'nope' }, { event: '<script>' }, { tour: 'nope' }]) {
     await explore({ year: '1990', ...query })
     await page.waitForFunction(() => { const p = new URL(window.location.href).searchParams; return !p.has('event') && !p.has('tour') }, null, { timeout: 15000 })
@@ -303,7 +321,7 @@ try {
   await conflictPanel.getByRole('link', { name: /UN OCHA/ }).waitFor()
   await conflictPanel.getByRole('button', { name: /Close conflicts|Konflikte schließen/ }).click()
   if (pageErrors.length) throw new Error(pageErrors.join('; '))
-  console.log('Historical browser smoke: time machine playback/steps/fixed comparison, country explorer (periods, absence, back/forward, deep links, comparison), events explorer (dates, markers, marker clicks, tours, links), dated borders/flag, exact-year population/refugees, event comparison, deep link, Today: PASS')
+  console.log('Historical browser smoke: time machine playback/steps/fixed comparison, country explorer (periods, absence, back/forward, deep links, comparison), events explorer (dates, markers, marker clicks, tours, regional packs, links), dated borders/flag, exact-year population/refugees, event comparison, deep link, Today: PASS')
 } finally {
   await browser.close()
 }

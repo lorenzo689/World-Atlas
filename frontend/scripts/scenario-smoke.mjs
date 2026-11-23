@@ -118,9 +118,10 @@ try {
   await mobile.getByRole('heading', { name: 'East Germany', exact: true }).waitFor()
   if (await mobile.evaluate(() => document.documentElement.scrollWidth > innerWidth)) throw new Error('Mobile country explorer overflows horizontally')
   // Events explorer on a phone.
-  const eventsUrl = new URL(base); eventsUrl.search = 'scenario=borders&year=1941&event=barbarossa'
+  const eventsUrl = new URL(base); eventsUrl.search = 'scenario=borders&year=1968&event=six-day-war-1967&tour=middle-east'
   await mobile.goto(eventsUrl.href, { waitUntil: 'domcontentloaded' })
   await mobile.getByTestId('event-detail').waitFor({ state: 'attached', timeout: 120000 })
+  await mobile.getByTestId('tour-intro').waitFor({ state: 'attached' })
   if (await mobile.evaluate(() => document.documentElement.scrollWidth > innerWidth)) throw new Error('Mobile events explorer overflows horizontally')
   await mobile.close()
   if (errors.length) throw new Error(errors.join('; '))

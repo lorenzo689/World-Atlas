@@ -5,6 +5,7 @@ import { storyForEvent } from './historyStories'
 import { EVENT_ENTITIES } from './historyEntity'
 import { WW1_MOMENTS } from './ww1'
 import { WW2_MOMENTS } from './ww2'
+import { ADDITIONAL_EVENTS } from './historicalEventsCatalog'
 
 /**
  * Unified, read-only catalog of the dated events the atlas already cites (Changing borders lessons,
@@ -15,8 +16,8 @@ import { WW2_MOMENTS } from './ww2'
  * only the curated Changing-borders lessons carry a before/after map comparison.
  */
 export type Localized = { de: string; en: string }
-export type EventRegion = 'europe' | 'africa' | 'asia-pacific' | 'americas'
-export type EventTheme = 'war' | 'statehood' | 'diplomacy'
+export type EventRegion = 'europe' | 'africa' | 'middle-east' | 'asia-pacific' | 'americas'
+export type EventTheme = 'war' | 'statehood' | 'diplomacy' | 'politics'
 export type EventOrigin = 'borders' | 'ww1' | 'ww2' | 'catalog'
 
 export interface HistoricalEvent {
@@ -42,8 +43,8 @@ export interface HistoricalEvent {
   entities: string[]
 }
 
-export const REGIONS: EventRegion[] = ['europe', 'africa', 'asia-pacific', 'americas']
-export const THEMES: EventTheme[] = ['war', 'statehood', 'diplomacy']
+export const REGIONS: EventRegion[] = ['europe', 'africa', 'middle-east', 'asia-pacific', 'americas']
+export const THEMES: EventTheme[] = ['war', 'statehood', 'diplomacy', 'politics']
 
 // UI grouping of the existing events by place; explicit so every event is reviewed once.
 const REGION_BY_ID: Record<string, EventRegion> = {
@@ -140,7 +141,7 @@ export function mergeEvents(...lists: HistoricalEvent[][]): HistoricalEvent[] {
   return merged.sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id))
 }
 
-export const HISTORICAL_EVENTS: HistoricalEvent[] = mergeEvents(fromBorders(), fromWw1(), fromWw2(), CATALOG_EVENTS)
+export const HISTORICAL_EVENTS: HistoricalEvent[] = mergeEvents(fromBorders(), fromWw1(), fromWw2(), CATALOG_EVENTS, ADDITIONAL_EVENTS)
 const BY_ID = new Map(HISTORICAL_EVENTS.map((e) => [e.id, e]))
 export const eventById = (id: string | null | undefined) => (id ? BY_ID.get(id) ?? null : null)
 
@@ -196,13 +197,18 @@ export function mapRelation(event: HistoricalEvent, year: number): { mapDate: st
 
 export interface EventTour {
   id: string
+  /** pack: a regional history pack with an introduction; tour: a thematic tour. */
+  kind: 'pack' | 'tour'
   title: Localized
   description: Localized
   eventIds: string[]
 }
 
 const tour = (id: string, title: Localized, description: Localized, pick: (e: HistoricalEvent) => boolean): EventTour =>
-  ({ id, title, description, eventIds: HISTORICAL_EVENTS.filter(pick).map((e) => e.id) })
+  ({ id, kind: 'tour', title, description, eventIds: HISTORICAL_EVENTS.filter(pick).map((e) => e.id) })
+/** A curated sequence, listed explicitly and chronologically (checked by test) so it does not change when the catalog grows. */
+const pack = (id: string, title: Localized, description: Localized, eventIds: string[]): EventTour =>
+  ({ id, kind: 'pack', title, description, eventIds })
 
 /** Curated tours, built only from catalog events. */
 export const EVENT_TOURS: EventTour[] = [
@@ -217,7 +223,31 @@ export const EVENT_TOURS: EventTour[] = [
     (e) => e.region === 'asia-pacific' && (e.origin === 'ww2' || e.id === 'san-francisco-treaty-1951')),
   tour('statehood', { en: 'States dissolve and emerge', de: 'Zerfall und Neugründung von Staaten' },
     { en: 'Independence, unification and dissolution events with sources, 1947–2011.', de: 'Belegte Unabhängigkeiten, Vereinigungen und Auflösungen, 1947–2011.' },
-    (e) => e.themes.includes('statehood')),
+    (e) => ['india-pakistan-1947', 'ghana-1957', 'german-unity', 'soviet-union', 'czechoslovakia', 'south-sudan'].includes(e.id)),
+  pack('africa-independence', { en: 'Africa Through Independence', de: 'Afrika auf dem Weg zur Unabhängigkeit' },
+    {
+      en: 'From Libya in 1951 to South Sudan in 2011: dated steps of decolonisation and new statehood. 10 of the 17 steps are dated by the United States’ recognition, not by an independence day, and are titled “United States recognizes …”; recognition and independence can fall on different days. The maps show 1 January borders, not the event day.',
+      de: 'Von Libyen 1951 bis zum Südsudan 2011: datierte Schritte der Dekolonisierung und neuer Staatlichkeit. 10 der 17 Schritte sind nach der Anerkennung durch die Vereinigten Staaten datiert, nicht nach einem Unabhängigkeitstag, und heißen „Vereinigte Staaten erkennen … an“; Anerkennung und Unabhängigkeit können auf verschiedene Tage fallen. Die Karten zeigen Grenzen am 1. Januar, nicht am Ereignistag.',
+    },
+    ['libya-1951', 'sudan-1956', 'morocco-1956', 'tunisia-1956', 'ghana-1957', 'guinea-1958', 'congo-1960', 'nigeria-1960', 'south-africa-republic-1961', 'tanganyika-1961', 'algeria-1962', 'kenya-1963', 'mozambique-1975', 'angola-1975', 'zimbabwe-1980', 'namibia-1990', 'south-sudan']),
+  pack('asia-transformation', { en: 'Asia in Transformation', de: 'Asien im Wandel' },
+    {
+      en: 'From the end of colonial rule after 1945 to Singapore in 1965: new states, a revolution and a peace treaty. 5 of the 8 steps are dated by the United States’ recognition, not by an independence day, and are titled “United States recognizes …”.',
+      de: 'Vom Ende kolonialer Herrschaft nach 1945 bis Singapur 1965: neue Staaten, eine Revolution und ein Friedensvertrag. 5 der 8 Schritte sind nach der Anerkennung durch die Vereinigten Staaten datiert, nicht nach einem Unabhängigkeitstag, und heißen „Vereinigte Staaten erkennen … an“.',
+    },
+    ['philippines-1946', 'india-pakistan-1947', 'burma-1948', 'ceylon-1948', 'prc-1949', 'indonesia-1949', 'san-francisco-treaty-1951', 'singapore-1965']),
+  pack('middle-east', { en: 'Middle East: A Changing Region', de: 'Naher Osten: eine Region im Wandel' },
+    {
+      en: 'From 1932 to 1993: state formation, wars and peace efforts. War, occupation and military control are shown as events, never as changes of state borders.',
+      de: 'Von 1932 bis 1993: Staatsbildung, Kriege und Friedensbemühungen. Krieg, Besatzung und militärische Kontrolle erscheinen als Ereignisse, nie als Änderung von Staatsgrenzen.',
+    },
+    ['saudi-arabia-1932', 'jordan-1946', 'israel-1948', 'suez-1956', 'six-day-war-1967', 'camp-david-1978', 'kuwait-invasion-1990', 'oslo-1993']),
+  pack('americas-turning-points', { en: 'Americas: Political Turning Points', de: 'Amerika: politische Wendepunkte' },
+    {
+      en: 'From 1898 to 1981: war, new states, the Cuban Missile Crisis, a coup and the Panama Canal treaties.',
+      de: 'Von 1898 bis 1981: Krieg, neue Staaten, die Kubakrise, ein Putsch und die Panamakanal-Verträge.',
+    },
+    ['spanish-american-war-1898', 'panama-1903', 'jamaica-1962', 'trinidad-tobago-1962', 'cuban-missile-crisis-1962', 'chile-coup-1973', 'panama-canal-treaties-1977', 'belize-1981']),
 ]
 export const tourById = (id: string | null | undefined) => EVENT_TOURS.find((t) => t.id === id) ?? null
 
