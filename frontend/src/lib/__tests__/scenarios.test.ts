@@ -26,6 +26,15 @@ describe('scenario boundaries', () => {
     expect(readScenarioLink('?entity=H265').entity).toBeNull()
     for (const bad of ['h265', '%3Cscript%3E', 'H265%3Bx', 'H', '']) expect(readScenarioLink(`?scenario=borders&year=1990&entity=${bad}`).entity).toBeNull()
   })
+  it('keeps event and tour parameters only in Changing borders, next to entity, year and compare', () => {
+    expect(readScenarioLink('?scenario=borders&year=1941&event=barbarossa')).toMatchObject({ year: 1941, event: 'barbarossa', tour: null })
+    expect(readScenarioLink('?scenario=borders&year=1990&compare=1991&entity=H265&event=german-unity&tour=statehood'))
+      .toMatchObject({ year: 1990, compare: 1991, entity: 'H265', event: 'german-unity', tour: 'statehood' })
+    for (const other of ['today', 'ww1', 'ww2']) expect(readScenarioLink(`?scenario=${other}&year=1941&event=barbarossa&tour=europe-ww2`)).toMatchObject({ event: null, tour: null })
+    for (const bad of ['Barbarossa', '%3Cscript%3E', 'a%20b', '../x', 'x'.repeat(41)]) {
+      expect(readScenarioLink(`?scenario=borders&year=1941&event=${bad}&tour=${bad}`)).toMatchObject({ event: null, tour: null })
+    }
+  })
   it('uses canonical links with only valid capabilities', () => {
     for (const scenario of Object.values(SCENARIOS)) {
       expect(readScenarioLink(scenarioHref(scenario.id).split('?')[1]).scenario.id).toBe(scenario.id)

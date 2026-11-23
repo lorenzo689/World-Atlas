@@ -28,6 +28,8 @@ import { changedEntities, HISTORY_EVENTS } from '@/lib/historyCompare'
 import { storyForEvent, storyEvent } from '@/lib/historyStories'
 import { eventDates, formatHistoricalDate } from '@/lib/timeMachine'
 import { buildEntityIndex, nearestLabel } from '@/lib/historyEntity'
+import { EMPTY_FILTER, HISTORICAL_EVENTS, eventById, filterEvents, mapYearForEvent, tourById, type EventFilter } from '@/lib/historicalEvents'
+import { EventExplorer, type TourState } from '@/components/globe/EventExplorer'
 import { differenceBetweenBorders } from '@/lib/historyBoundaryDiff'
 import { loadAreaDifference, type AreaDifference } from '@/lib/historyAreaDiff'
 import { CONFLICT_LINES, type ConflictBrief } from '@/lib/conflicts'
@@ -46,6 +48,8 @@ prefetchBoundaries()
 
 // Start fetching the (large) globe chunk immediately, in parallel with the country/boundary data,
 // instead of waiting until both have loaded and the lazy component first renders.
+// Dwell time of a guided time-travel step before the next one is scheduled.
+const TOUR_STEP_MS = 7000
 const globeChunk = import('@/components/globe/GlobeView').then((m) => ({ default: m.GlobeView }))
 const GlobeView = lazy(() => globeChunk)
 
@@ -106,8 +110,22 @@ export default function ExplorerPage() {
     return next
   }), [])
   const [historyData, setHistoryData] = useState<HistoryData | null>(null)
-  // The entity currently written to the URL; a change of it creates a browser history entry.
-  const entityInUrl = useRef<string | null>(entry.entity)
+  // Historical Events Explorer (Changing borders): selection and tour come from validated deep links.
+  const linkedEvent = scenario.capabilities.timeline ? eventById(entry.event) : null
+  // A tour is kept only with no event or with one of its own events.
+  const tourOfLink = scenario.capabilities.timeline ? tourById(entry.tour) : null
+  const linkedTour = tourOfLink && (!linkedEvent || tourOfLink.eventIds.includes(linkedEvent.id)) ? tourOfLink : null
+  const [eventsOpen, setEventsOpen] = useState(!!(linkedEvent || linkedTour))
+  const [eventFilter, setEventFilter] = useState<EventFilter>(EMPTY_FILTER)
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(linkedEvent?.id ?? (linkedTour ? linkedTour.eventIds[0] : null))
+  const [tour, setTour] = useState<TourState | null>(linkedTour ? {
+    id: linkedTour.id, eventIds: linkedTour.eventIds, playing: false,
+    index: Math.max(0, linkedEvent ? linkedTour.eventIds.indexOf(linkedEvent.id) : 0),
+  } : null)
+  // The selection written to the URL (entity, event, tour). A user change of it creates a browser
+  // history entry; year changes, tour steps and corrections of invalid links replace the entry.
+  const selectionInUrl = useRef(`${entry.entity}|${selectedEventId}|${linkedTour?.id ?? null}`)
+  const replaceNextUrl = useRef(false)
   const [historyError, setHistoryError] = useState(false)
   const [historyAttempt, setHistoryAttempt] = useState(0)
   const [historicalSelected, setHistoricalSelected] = useState<string | null>(entry.entity)
@@ -227,31 +245,47 @@ export default function ExplorerPage() {
     else url.searchParams.delete('entity')
     // Selecting or closing an entity is a step the browser can go back to; year changes (playback,
     // scrubbing) replace the current entry instead of flooding the history.
-    const push = entityInUrl.current !== entity
-    entityInUrl.current = entity
+    const event = scenario.capabilities.timeline && historyYear != null && eventsOpen ? selectedEventId : null
+    const tourId = event != null && tour && tour.id !== 'results' ? tour.id : null
+    if (event) url.searchParams.set('event', event)
+    else url.searchParams.delete('event')
+    if (tourId) url.searchParams.set('tour', tourId)
+    else url.searchParams.delete('tour')
+    const key = `${entity}|${event}|${tourId}`
+    const push = selectionInUrl.current !== key && !replaceNextUrl.current
+    selectionInUrl.current = key
+    replaceNextUrl.current = false
     if (url.href === window.location.href) return
     if (push) window.history.pushState(window.history.state, '', url)
     else window.history.replaceState(window.history.state, '', url)
-  }, [historyYear, compareYear, ww2Open, ww1Open, scenario, historicalSelected])
+  }, [historyYear, compareYear, ww2Open, ww1Open, scenario, historicalSelected, eventsOpen, selectedEventId, tour])
   useEffect(() => {
     const onPop = () => {
       const link = readScenarioLink(window.location.search)
       if (link.scenario.id !== scenario.id) return // ExplorerRoute remounts the page for another scenario
-      entityInUrl.current = link.entity
+      const event = scenario.capabilities.timeline ? eventById(link.event) : null
+      const tourOfLink = scenario.capabilities.timeline ? tourById(link.tour) : null
+      const linked = tourOfLink && event && tourOfLink.eventIds.includes(event.id) ? tourOfLink : null
+      selectionInUrl.current = `${link.entity}|${event?.id ?? null}|${event && linked ? linked.id : null}`
+      replaceNextUrl.current = true
       setHistoryYear(link.year)
       setCompareYear(link.compare)
       setHistoricalSelected(link.entity)
+      setEventsOpen(!!event)
+      setSelectedEventId(event?.id ?? null)
+      setTour(event && linked ? { id: linked.id, eventIds: linked.eventIds, playing: false, index: Math.max(0, linked.eventIds.indexOf(event.id)) } : null)
+      if (event?.focus) setStoryFocus({ ...event.focus })
     }
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
-  }, [scenario.id])
+  }, [scenario.id, scenario.capabilities.timeline])
   // Historical Country Explorer: per-identifier overview of the dataset periods (no geometry decoded).
   const entityIndex = useMemo(() => historyData && scenario.capabilities.timeline ? buildEntityIndex(historyData.topology) : null, [historyData, scenario])
   const entityPeriods = historicalSelected && entityIndex ? entityIndex.get(historicalSelected) ?? null : null
   useEffect(() => {
     // A deep link may name an identifier that is not in the loaded dataset: ignore it quietly.
     if (!entityIndex || !historicalSelected || entityIndex.has(historicalSelected)) return
-    entityInUrl.current = null
+    replaceNextUrl.current = true
     setHistoricalSelected(null)
   }, [entityIndex, historicalSelected])
   const timelineWaiting = (compareYear != null && !!history && !!comparison && !areaDiff && !areaError)
@@ -306,12 +340,81 @@ export default function ExplorerPage() {
     setSnap(current)
   }, [snap, changeHistoryYear])
 
+  // ---- Historical Events Explorer --------------------------------------------------------------
+  const eventResults = useMemo(() => filterEvents(HISTORICAL_EVENTS, eventFilter), [eventFilter])
+  // Markers: the tour's events while touring, else the filter results; only events with a documented place.
+  const markerEvents = useMemo(() => {
+    if (!eventsOpen || !scenario.capabilities.timeline) return []
+    const list = tour ? tour.eventIds.map((id) => eventById(id)).filter((e) => e != null) : eventResults
+    return list.filter((e) => e.location != null)
+  }, [eventsOpen, scenario, tour, eventResults])
+  const eventMarkers = useMemo(() => markerEvents.map((e) => ({ ...e.location!, color: e.id === selectedEventId ? '#ffffff' : '#c4b5fd' })), [markerEvents, selectedEventId])
+  const focusEvent = useCallback((id: string) => {
+    const focus = eventById(id)?.focus
+    if (focus) setStoryFocus({ ...focus })
+  }, [])
+  const selectEvent = useCallback((id: string | null) => {
+    setSelectedEventId(id)
+    if (!id) return
+    focusEvent(id)
+    // Selecting an event outside the running tour ends the tour; inside it, the tour pauses there.
+    setTour((current) => current && current.eventIds.includes(id) ? { ...current, playing: false, index: current.eventIds.indexOf(id) } : null)
+  }, [focusEvent])
+  // The map year a tour step set; any other year change (Time Machine, slider) pauses the tour.
+  const tourYear = useRef<number | null>(null)
+  const goTourStep = useCallback((eventIds: string[], index: number, record: 'push' | 'replace') => {
+    const event = eventById(eventIds[index])
+    if (!event) return
+    if (record === 'replace') replaceNextUrl.current = true
+    setSelectedEventId(event.id)
+    const year = mapYearForEvent(event)
+    tourYear.current = year
+    keepSheet(year)
+    focusEvent(event.id)
+  }, [keepSheet, focusEvent])
+  const startTour = useCallback((id: string) => {
+    const eventIds = id === 'results' ? eventResults.map((e) => e.id) : tourById(id)?.eventIds ?? []
+    if (eventIds.length < 2) return
+    setTour({ id, eventIds, index: 0, playing: true })
+    goTourStep(eventIds, 0, 'push')
+  }, [eventResults, goTourStep])
+  const stepTour = useCallback((index: number) => {
+    if (!tour || index < 0 || index >= tour.eventIds.length) return
+    setTour({ ...tour, index })
+    goTourStep(tour.eventIds, index, 'replace')
+  }, [tour, goTourStep])
+  const playTour = useCallback((playing: boolean) => {
+    if (!tour) return
+    // Resuming shows the current step's map again, so a year changed in between is not skipped.
+    if (playing) goTourStep(tour.eventIds, tour.index, 'replace')
+    setTour({ ...tour, playing })
+  }, [tour, goTourStep])
+  const endTour = useCallback(() => setTour(null), [])
+  useEffect(() => {
+    if (!tour?.playing) return
+    if (historyYear !== tourYear.current) { setTour((t) => t && { ...t, playing: false }); return }
+    // One pending step at most, scheduled only once the shown map and its comparison are ready.
+    if (!history || timelineWaiting) return
+    const timer = window.setTimeout(() => {
+      if (tour.index >= tour.eventIds.length - 1) { setTour((t) => t && { ...t, playing: false }); return }
+      setTour((t) => t && { ...t, index: t.index + 1 })
+      goTourStep(tour.eventIds, tour.index + 1, 'replace')
+    }, TOUR_STEP_MS)
+    return () => window.clearTimeout(timer)
+  }, [tour, historyYear, history, timelineWaiting, goTourStep])
+  const closeEvents = useCallback(() => { setEventsOpen(false); setTour(null) }, [])
+  // A linked event focuses the camera once the globe is ready (GlobeView applies focusPose then).
+  const linkedFocus = useRef(linkedEvent?.focus ?? null)
+  useEffect(() => { if (linkedFocus.current) setStoryFocus({ ...linkedFocus.current }) }, [])
+
   const changeMode = useCallback((next: GlobeMode) => {
     if (scenario.modes.includes(next)) setMode(next)
   }, [scenario, setMode])
 
   const onGlobeSelect = useCallback((code: string) => {
     if (historyYear != null) {
+      setEventsOpen(false)
+      setTour(null)
       setHistoricalSelected(code)
       setSnap('peek')
       setFocusNonce((n) => n + 1)
@@ -345,8 +448,9 @@ export default function ExplorerPage() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  const explorerOpen = historyYear != null && !!history && !ww2Open && !ww1Open && !!historicalSelected && !!(historicalEntity || entityPeriods)
-  const showPanel = historyYear != null ? ww2Open || ww1Open || explorerOpen : conflictsOpen || !!country
+  const eventsPanelOpen = eventsOpen && scenario.capabilities.timeline && historyYear != null
+  const explorerOpen = !eventsPanelOpen && historyYear != null && !!history && !ww2Open && !ww1Open && !!historicalSelected && !!(historicalEntity || entityPeriods)
+  const showPanel = historyYear != null ? ww2Open || ww1Open || explorerOpen || eventsPanelOpen : conflictsOpen || !!country
   const insets = useMemo(
     () => ({
       right: showPanel && isDesktop ? PANEL_WIDTH + 32 : 0,
@@ -372,6 +476,31 @@ export default function ExplorerPage() {
         onYearChange: keepSheet,
         onCompare: (next) => { if (scenario.capabilities.comparison) setCompareYear(next) },
       } : undefined}
+    />
+  ) : null
+
+  const eventsLabel = lang === 'de' ? 'Historische Ereignisse' : 'Historical events'
+  const eventsPanel = eventsPanelOpen && historyYear != null ? (
+    <EventExplorer
+      year={historyYear}
+      events={HISTORICAL_EVENTS}
+      results={eventResults}
+      filter={eventFilter}
+      onFilterChange={setEventFilter}
+      selectedId={selectedEventId}
+      onSelect={selectEvent}
+      tour={tour}
+      onTourStart={startTour}
+      onTourStep={stepTour}
+      onTourPlay={playTour}
+      onTourEnd={endTour}
+      mapError={historyError}
+      onShowYear={keepSheet}
+      onCompare={(before, after) => { keepSheet(before); setCompareYear(after) }}
+      onOpenLesson={openEvent}
+      onOpenEntity={(code) => { setEventsOpen(false); setTour(null); setHistoricalSelected(code) }}
+      entityLabel={(code) => { const periods = entityIndex?.get(code); return periods ? nearestLabel(code, periods, historyYear) : code }}
+      onClose={closeEvents}
     />
   ) : null
 
@@ -419,12 +548,13 @@ export default function ExplorerPage() {
                 onTerritorySelect={setSelectedTerritoryId}
                 focusPose={storyFocus}
                 resetNonce={resetNonce}
-                markers={ww1Open ? firstWarMarkers : ww2Open ? warMarkers : conflictMarkers}
+                markers={ww1Open ? firstWarMarkers : ww2Open ? warMarkers : scenario.capabilities.timeline ? eventMarkers : conflictMarkers}
                 conflictLines={conflictsOpen && historyYear == null ? CONFLICT_LINES.lines : null}
                 ww2Fronts={warLines}
                 onMarkerSelect={(index) => {
                   if (ww1Open) { const event = firstWarMoment?.events[index]; if (event) { setSelectedWw1EventId(event.id); setStoryFocus({ ...event.location, altitude: 0.85 }) }; return }
                   if (ww2Open) { const event = warEvents[index]; if (event) { setSelectedWw2EventId(event.id); setStoryFocus({ ...event.location, altitude: 0.85 }) }; return }
+                  if (scenario.capabilities.timeline) { const event = markerEvents[index]; if (event) selectEvent(event.id); return }
                   const brief = conflictBriefs[index]; if (brief) { setActiveConflict(brief); setStoryFocus({ ...brief.location, altitude: 1.25 }) }
                 }}
               />
@@ -486,6 +616,7 @@ export default function ExplorerPage() {
             <ModeSwitcher mode={mode} onChange={changeMode} allowedModes={scenario.modes} />
           </div>
           {scenario.capabilities.conflicts && <button type="button" className={`pointer-events-auto shrink-0 rounded-full border px-3 py-2 text-xs sm:text-sm ${conflictsOpen ? 'border-rose-300 bg-rose-300/20 text-rose-100' : 'border-input bg-background/75 text-foreground'}`} aria-pressed={conflictsOpen} onClick={() => { if (historyYear != null) changeHistoryYear(null); setConflictsOpen((open) => !open); setActiveConflict(null); select(null) }}>{lang === 'de' ? 'Konflikte' : 'Conflicts'}</button>}
+          {scenario.capabilities.timeline && <button type="button" className={`pointer-events-auto shrink-0 rounded-full border px-3 py-2 text-xs sm:text-sm ${eventsOpen ? 'border-violet-300 bg-violet-300/20 text-violet-100' : 'border-input bg-background/75 text-foreground'}`} aria-pressed={eventsOpen} onClick={() => (eventsOpen ? closeEvents() : setEventsOpen(true))}>{lang === 'de' ? 'Ereignisse' : 'Events'}</button>}
           <UserMenu className="pointer-events-auto shrink-0" />
         </div>
         <p className="text-xs text-primary lg:hidden">{scenario.title[lang]}{historyYear != null ? ` ? ${historyYear}` : ` ? ${new Date().getFullYear()}`}</p>
@@ -582,6 +713,16 @@ export default function ExplorerPage() {
       {historyYear == null && conflictsOpen && <ConflictPanel briefs={conflictBriefs} lang={lang} selected={activeConflict} onSelect={(brief) => { setActiveConflict(brief); setStoryFocus({ ...brief.location, altitude: 1.25 }); select(null) }} onClose={() => { setConflictsOpen(false); setActiveConflict(null) }} />}
       {warMoment && (isDesktop ? <aside className="glass scrollbar-thin absolute bottom-4 right-4 top-[88px] z-20 overflow-y-auto rounded-[28px]" style={{ width: PANEL_WIDTH }} aria-label={lang === 'de' ? 'Zweiter Weltkrieg' : 'World War II'}><Ww2Panel moment={warMoment} lang={lang} theater={ww2Theater} onTheaterChange={setWw2Theater} showFronts={ww2ShowFronts} onShowFrontsChange={setWw2ShowFronts} showEvents={ww2ShowEvents} onShowEventsChange={setWw2ShowEvents} onYearChange={changeHistoryYear} onFocus={(lat, lng) => setStoryFocus({ lat, lng, altitude: 0.85 })} selectedEventId={selectedWw2EventId} onClose={() => { navigate('/scenarios'); setStoryFocus(null) }} /></aside> : <BottomSheet snap={snap} onSnapChange={setSnap} onDismiss={() => navigate('/scenarios')} label={lang === 'de' ? 'Zweiter Weltkrieg' : 'World War II'}><Ww2Panel moment={warMoment} lang={lang} theater={ww2Theater} onTheaterChange={setWw2Theater} showFronts={ww2ShowFronts} onShowFrontsChange={setWw2ShowFronts} showEvents={ww2ShowEvents} onShowEventsChange={setWw2ShowEvents} onYearChange={changeHistoryYear} onFocus={(lat, lng) => setStoryFocus({ lat, lng, altitude: 0.85 })} selectedEventId={selectedWw2EventId} onClose={() => navigate('/scenarios')} /></BottomSheet>)}
       {firstWarMoment && (isDesktop ? <aside className="glass scrollbar-thin absolute bottom-4 right-4 top-[88px] z-20 overflow-y-auto rounded-[28px]" style={{ width: PANEL_WIDTH }} aria-label={lang === 'de' ? 'Erster Weltkrieg' : 'World War I'}><Ww1Panel moment={firstWarMoment} lang={lang} selectedEventId={selectedWw1EventId} onYearChange={changeHistoryYear} onFocus={(lat, lng) => setStoryFocus({ lat, lng, altitude: 0.85 })} onClose={() => { navigate('/scenarios'); setStoryFocus(null) }} /></aside> : <BottomSheet snap={snap} onSnapChange={setSnap} onDismiss={() => navigate('/scenarios')} label={lang === 'de' ? 'Erster Weltkrieg' : 'World War I'}><Ww1Panel moment={firstWarMoment} lang={lang} selectedEventId={selectedWw1EventId} onYearChange={changeHistoryYear} onFocus={(lat, lng) => setStoryFocus({ lat, lng, altitude: 0.85 })} onClose={() => navigate('/scenarios')} /></BottomSheet>)}
+      {eventsPanelOpen && historyYear != null &&
+        (isDesktop ? (
+          <aside aria-label={eventsLabel} className="glass scrollbar-thin animate-rise absolute bottom-4 right-4 top-[88px] z-20 overflow-y-auto rounded-[28px]" style={{ width: PANEL_WIDTH }}>
+            {eventsPanel}
+          </aside>
+        ) : (
+          <BottomSheet snap={snap} onSnapChange={setSnap} onDismiss={closeEvents} label={eventsLabel}>
+            {eventsPanel}
+          </BottomSheet>
+        ))}
       {explorerOpen && historicalSelected &&
         (isDesktop ? (
           <aside key={historicalSelected} aria-label={explorerName} className="glass scrollbar-thin animate-rise absolute bottom-4 right-4 top-[88px] z-20 overflow-y-auto rounded-[28px]" style={{ width: PANEL_WIDTH }}>

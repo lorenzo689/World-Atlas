@@ -466,6 +466,17 @@ export class GlobeScene {
   }
 
   /** Client coordinates → lat/lng on the globe, or null if the pointer is off the sphere. */
+  /** Client pixel position of a point on the globe and whether it faces the camera (browser checks, ?debug=1). */
+  screenPoint(lat: number, lng: number): { x: number; y: number; visible: boolean } {
+    const p: number[] = []
+    polarToXYZ(lat, lng, GLOBE_RADIUS, p)
+    const point = new Vector3(p[0], p[1], p[2])
+    const visible = point.dot(this.camera.position.clone().sub(point)) > 0
+    point.project(this.camera)
+    const rect = this.canvas.getBoundingClientRect()
+    return { x: rect.left + ((point.x + 1) / 2) * rect.width, y: rect.top + ((1 - point.y) / 2) * rect.height, visible }
+  }
+
   toGlobeCoords(clientX: number, clientY: number): { lat: number; lng: number } | null {
     const rect = this.canvas.getBoundingClientRect()
     this.ndc.set(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1)
@@ -486,6 +497,7 @@ export class GlobeScene {
       ...this.imageDetail.getDiagnostics(),
       conflictLineSegments: this.layers.conflictLines.visible ? this.layers.conflictLines.geometry.getAttribute('position').count / 2 : 0,
       ww2FrontSegments: this.layers.ww2Fronts.visible ? this.layers.ww2Fronts.geometry.getAttribute('position').count / 2 : 0,
+      markers: this.layers.markers.visible ? this.layers.markers.geometry.getAttribute('position')?.count ?? 0 : 0,
       // Areas only (each area also has an outline LineSegments child).
       territoryAreas: this.layers.territories.children.filter((child) => child.visible && (child as Mesh).isMesh).length,
       territoryTriangles: this.layers.territories.children.reduce((sum, child) => sum + (child.visible && (child as Mesh).isMesh ? ((child as Mesh).geometry.index?.count ?? 0) / 3 : 0), 0),
