@@ -26,6 +26,7 @@ import { ErrorState } from '@/components/ui/feedback'
 import { loadHistory, snapshotForDate, snapshotForYear, type HistoryData } from '@/lib/history'
 import { changedEntities, HISTORY_EVENTS } from '@/lib/historyCompare'
 import { storyForEvent, storyEvent } from '@/lib/historyStories'
+import { eventDates, formatHistoricalDate } from '@/lib/timeMachine'
 import { differenceBetweenBorders } from '@/lib/historyBoundaryDiff'
 import { loadAreaDifference, type AreaDifference } from '@/lib/historyAreaDiff'
 import { CONFLICT_LINES, type ConflictBrief } from '@/lib/conflicts'
@@ -122,7 +123,7 @@ export default function ExplorerPage() {
   const [ww2ShowEvents, setWw2ShowEvents] = useState(true)
   const [selectedWw2EventId, setSelectedWw2EventId] = useState<string | null>(null)
   const [ready, setReady] = useState(false)
-  const [comparePose, setComparePose] = useState<Pose | null>(initialPose)
+  const [comparePose, setComparePose] = useState<Pose | null>(null)
   const webgl = useMemo(hasWebGL, [])
   const [focusNonce, setFocusNonce] = useState(0)
   const [snap, setSnap] = useState<SheetSnap>('peek')
@@ -173,6 +174,10 @@ export default function ExplorerPage() {
     () => compareYear != null && historyData ? snapshotForYear(historyData, compareYear) : null,
     [compareYear, historyData],
   )
+  // The comparison globe follows the main camera. Poses are only forwarded while it is open, so a
+  // closed comparison forgets its pose and a new one starts from the main globe's current camera.
+  const comparing = comparison != null
+  useEffect(() => { if (!comparing) setComparePose(null) }, [comparing])
   const changed = useMemo(() => history && comparison ? changedEntities(history, comparison) : new Set<string>(), [history, comparison])
   const borderDiff = useMemo(() => history && comparison ? differenceBetweenBorders(history, comparison) : null, [history, comparison])
   const removedLines = useMemo(() => borderDiff ? { segments: borderDiff.removed, color: '#fb7185' } : null, [borderDiff])
@@ -215,6 +220,11 @@ export default function ExplorerPage() {
     else url.searchParams.delete('ww1')
     window.history.replaceState(window.history.state, '', url)
   }, [historyYear, compareYear, ww2Open, ww1Open, scenario.id])
+  const timelineWaiting = (compareYear != null && !!history && !!comparison && !areaDiff && !areaError)
+    || (territoriesEnabled && (territories.status === 'loading' || (compareYear != null && comparisonTerritories.status === 'loading')))
+  const timelineBlocked = compareYear != null && areaError ? t('history.pausedCompare')
+    : territoriesEnabled && (territories.status === 'error' || (compareYear != null && comparisonTerritories.status === 'error')) ? t('history.pausedLayer')
+      : null
   const historicalEntity = historicalSelected ? history?.entities.get(historicalSelected) : undefined
   const neighbours = useMemo(
     () => (country ? country.borders.map((b) => byCode.get(b)).filter((c): c is NonNullable<typeof c> => !!c) : []),
@@ -239,9 +249,21 @@ export default function ExplorerPage() {
     if (next == null) setHistoricalSelected(null)
     select(null)
     setSnap('peek')
-    if (next != null) setMode('political')
+    if (next != null && historyYear == null) setMode('political')
     if (next != null) { setConflictsOpen(false); setActiveConflict(null) }
   }, [historyYear, select, setMode, scenario])
+
+  const openEvent = useCallback((id: string) => {
+    const event = storyEvent(id)
+    if (!event) return
+    changeHistoryYear(event.before)
+    setCompareYear(event.after)
+    setActiveStory(id)
+    setStoryStep(0)
+    setStoryAnswer(false)
+    const focus = storyForEvent(id)?.focus
+    setStoryFocus(focus ? { ...focus } : null)
+  }, [changeHistoryYear])
 
   const changeMode = useCallback((next: GlobeMode) => {
     if (scenario.modes.includes(next)) setMode(next)
@@ -354,7 +376,7 @@ export default function ExplorerPage() {
           <WebGLBoundary><Suspense fallback={null}>
             <GlobeView boundaries={comparison.boundaries} countries={byCode} mode="political" values={null} metric={metric}
               selected={historicalSelected} onSelect={onGlobeSelect} historicalEntities={comparison.entities}
-              onReady={() => {}} onPoseChange={() => {}} initialPose={initialPose} externalPose={comparePose} insets={{ right: 0, bottom: 0 }}
+              onReady={() => {}} onPoseChange={() => {}} initialPose={initialPose} externalPose={comparePose ?? useExplorer.getState().view ?? initialPose} insets={{ right: 0, bottom: 0 }}
               focusNonce={focusNonce} changeLines={addedLines} changeAreas={territoriesEnabled ? null : gainedAreas}
               territoryAreas={territoriesEnabled ? comparisonTerritories.areas : undefined} visibleTerritories={visibleComparisonTerritories}
               territoryFeatures={territoriesEnabled ? comparisonTerritories.snapshot?.features : undefined} onTerritorySelect={setSelectedTerritoryId} />
@@ -438,19 +460,27 @@ export default function ExplorerPage() {
           onRetry={() => { setHistoryError(false); setHistoryAttempt((n) => n + 1) }}
           onReset={import.meta.env.VITE_STATIC_DEMO === 'true' ? () => { window.location.href = `${import.meta.env.BASE_URL}explore?scenario=borders&year=1886` } : undefined}
           resetLabel={lang === 'de' ? 'Demo zurücksetzen' : 'Reset demo'}
+          waiting={timelineWaiting}
+          blocked={timelineBlocked}
+          events={HISTORY_EVENTS}
+          selectedEventId={activeStory}
+          onEventSelect={openEvent}
         />}
         {historyYear != null && mode === 'satellite' && <p className="glass max-w-[min(31rem,calc(100vw-2rem))] rounded-xl px-3 py-2 text-[11px] text-muted-foreground" role="note">{lang === 'de' ? 'Satellitenbild: NASA, Januar 2004. Grenzen: CShapes 2.0; Reichsannexionen 1939–1945: OHM. Das Bild zeigt keine historische Landnutzung.' : 'Satellite image: NASA, January 2004. Borders: CShapes 2.0; Reich annexations 1939–1945: OHM. The image does not show historical land cover.'}</p>}
         {historyYear != null && history && !ww2Open && !ww1Open && <section className="glass max-h-[30vh] w-[min(31rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl p-3 text-xs" aria-label={lang === 'de' ? 'Historische Ereignisse und Vergleich' : 'Historical events and comparison'}>
           <div className="flex flex-wrap items-center gap-2">
-            <button type="button" className="rounded-full border border-primary px-3 py-1 text-primary" onClick={() => setCompareYear(compareYear == null ? Math.max(1886, historyYear - 1) : null)}>{compareYear == null ? (lang === 'de' ? 'Jahre vergleichen' : 'Compare years') : (lang === 'de' ? 'Vergleich schließen' : 'Close comparison')}</button>
+            <button type="button" className="rounded-full border border-primary px-3 py-1 text-primary" onClick={() => setCompareYear(compareYear == null ? Math.max(1886, historyYear - 1) : null)}>{compareYear == null ? (lang === 'de' ? 'Jahre vergleichen' : 'Compare years') : t('history.endCompare')}</button>
             <button type="button" className="rounded-full border border-input px-3 py-1" onClick={() => navigator.clipboard.writeText(window.location.href)}>{lang === 'de' ? 'Link kopieren' : 'Copy link'}</button>
+            {compareYear != null && <span className="text-primary" data-testid="compare-fixed">{t('history.compareFixed', { year: compareYear })}</span>}
             {comparison && <span className="text-amber-300">{changed.size} {lang === 'de' ? 'veränderte Staaten/Perioden' : 'changed states/periods'}</span>}
           </div>
           {compareYear != null && <label className="mt-2 block">{lang === 'de' ? 'Vergleichsjahr' : 'Comparison year'}: {compareYear}<input className="mt-1 w-full accent-amber-300" type="range" min="1886" max="2019" value={compareYear} onChange={(e) => setCompareYear(Number(e.target.value))} /></label>}
-          <div className="mt-2 flex flex-wrap gap-2">{HISTORY_EVENTS.map((event) => <button key={event.id} type="button" className="rounded-xl border border-input px-2 py-1 text-left hover:border-primary" onClick={() => { changeHistoryYear(event.before); setCompareYear(event.after); setActiveStory(event.id); setStoryStep(0); setStoryAnswer(false); setStoryFocus(storyForEvent(event.id)?.focus ?? null) }} title={event.detail[lang]}>{event.date.slice(0, 4)} · {event.title[lang]}</button>)}</div>
           {story && eventForStory && <article className="mt-3 rounded-xl border border-primary/50 bg-background/80 p-3" aria-label={lang === 'de' ? 'Geführte Zeitreise' : 'Guided history lesson'}>
             <div className="flex items-center justify-between gap-2"><strong className="text-sm">{eventForStory.title[lang]}</strong><button type="button" aria-label={lang === 'de' ? 'Lernpfad schließen' : 'Close lesson'} onClick={() => setActiveStory(null)}>×</button></div>
-            <p className="mt-1 text-muted-foreground">{eventForStory.date} · {storyStep + 1}/{story.steps.length}</p>
+            <p className="mt-1">{eventForStory.detail[lang]}</p>
+            <p className="mt-1 text-muted-foreground"><time dateTime={eventForStory.date}>{t('history.eventDate', { date: formatHistoricalDate(eventForStory.date, lang) })}</time></p>
+            <p className="mt-1 text-muted-foreground" data-testid="event-map-dates">{t('history.mapDates', { before: formatHistoricalDate(eventDates(eventForStory).before, lang), after: formatHistoricalDate(eventDates(eventForStory).after, lang) })}</p>
+            <p className="mt-2 text-muted-foreground">{storyStep + 1}/{story.steps.length}</p>
             <p className="mt-2 text-sm">{story.steps[storyStep][lang]}</p>
             <div className="mt-2 flex gap-2"><button type="button" disabled={storyStep === 0} className="rounded border border-input px-2 py-1 disabled:opacity-40" onClick={() => setStoryStep((n) => n - 1)}>{lang === 'de' ? 'Zurück' : 'Back'}</button><button type="button" disabled={storyStep === story.steps.length - 1} className="rounded border border-primary px-2 py-1 text-primary disabled:opacity-40" onClick={() => setStoryStep((n) => n + 1)}>{lang === 'de' ? 'Weiter' : 'Next'}</button></div>
             <p className="mt-3 font-medium">{story.question[lang]}</p>

@@ -26,6 +26,34 @@ authentication API and Spring Boot auth module.
 
 ## Historical scenarios
 
+### Changing borders: time machine
+
+The timeline (1886–2019) steps through the existing CShapes snapshots of 1 January; there are no
+interpolated intermediate borders. Controls, all keyboard-operable and labelled in German and English:
+
+- **Play/Pause** with speeds 0.5×, 1× and 2× (one year per 1.7 s, 850 ms or 425 ms). Playback stops by
+  itself at 2019; pressing Play at the end starts again at 1886.
+- **One year earlier/later**, the year slider (arrow keys or mouse wheel) and **Go to year** (Enter or
+  leaving the field; years outside 1886–2019 are rejected with a message). Any manual year change,
+  selecting an event or a load error pauses playback.
+- Playback schedules at most one next step, and only after the shown year is ready: the comparison
+  areas and, when enabled, the territory layers of the current years must have finished loading. If
+  the comparison or a layer cannot be updated, playback pauses and stays disabled until the year is
+  changed or the error is retried.
+- **Border events**: the existing dated events (`HISTORY_EVENTS`) appear as markers at their actual
+  date on the track and as selectable entries. Selecting one opens the existing guided lesson with
+  its before/after snapshot years, camera focus, steps, question and primary source. The lesson shows
+  the event date (for example 3 October 1990) separately from the map snapshot dates (1 January 1989
+  and 1 January 1991).
+- **Comparison**: the comparison year stays fixed while the main year plays; both globes keep sharing
+  one camera. **End comparison** closes it. The chosen presentation mode (political or satellite) is
+  kept while the year changes.
+- Camera flights to an event are instant when `prefers-reduced-motion` is set; the controls use no
+  motion beyond colour transitions, which are disabled with reduced motion.
+
+Covered by `src/components/__tests__/HistoricalTimeline.test.tsx`, `src/lib/__tests__/timeMachine.test.ts`
+and `npm run smoke:history`.
+
 The First World War view uses CShapes 2.0 boundaries at 1 January of the selected year and a small,
 curated set of dated event locations. A separate occupation layer adds schematic regional
 reconstructions with independent source dates and actor filters. Event locations are approximate map anchors; each event links to an archival or museum
